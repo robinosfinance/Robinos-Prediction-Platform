@@ -4,7 +4,7 @@ pragma solidity ^0.8.0;
 import "./IERC20.sol";
 import "./Context.sol";
 
-contract DBToken is IERC20, Context {
+contract DBToken is IERC20, IERC20Metadata, Ownable {
     address public _owner;
 
     mapping(address => uint256) private _balances;
@@ -18,10 +18,9 @@ contract DBToken is IERC20, Context {
     string private _teamName;
 
     /**
-     * @dev Next to the regular name and symbol params, constructor takes an event code and team which represent the team 
-     * the token is representing
+     * @dev Next to the regular name and symbol params, constructor takes an event code and team name
      * @param name_ Name of the token. Generally "DBToken"
-     * @param symbol_ Symbol of the toke. Generally "DBT"
+     * @param symbol_ Symbol of the token. Generally "DBT"
      * @param eventCode_ Event code of the token. Later could be used in the DBTokenSale contract to end the tokens under given event
      * @param teamName_ Name of the team the token is representing
      * @param totalSupply_ Initialy total supply of the tokens
@@ -32,41 +31,32 @@ contract DBToken is IERC20, Context {
         string memory eventCode_,
         string memory teamName_,
         uint256 totalSupply_
-    ) {
+    ) Ownable() {
         _name = name_;
         _symbol = symbol_;
         _eventCode = eventCode_;
         _teamName = teamName_;
         _totalSupply = totalSupply_;
-        _owner = _msgSender();
         _balances[_owner] = totalSupply_;
     }
 
-
-    modifier ownerOnly() {
-        require(_msgSender() == _owner, "DBToken: function can only be called by the owner");
-        _;
-    }
-
-
-
-    function getName() external view returns (string memory) {
+    function name() external view override returns (string memory) {
         return _name;
     }
 
-    function getSymbol() external view returns (string memory) {
+    function symbol() external view override returns (string memory) {
         return _symbol;
     }
 
-    function getEventCode() external view returns (string memory) {
+    function eventCode() external view returns (string memory) {
         return _eventCode;
     }
 
-    function getTeamName() external view returns (string memory) {
+    function teamName() external view returns (string memory) {
         return _teamName;
     }
 
-    function decimal() external pure returns (uint8) {
+    function decimals() external pure override returns (uint8) {
         return 18;
     }
 
@@ -132,7 +122,11 @@ contract DBToken is IERC20, Context {
         return true;
     }
 
-    function _mint(address account, uint256 amount) external returns (bool) {
+    function _mint(address account, uint256 amount)
+        external
+        onlyOwner
+        returns (bool)
+    {
         require(account != address(0), "DBToken: mint to the zero address");
 
         _totalSupply += amount;
@@ -180,5 +174,4 @@ contract DBToken is IERC20, Context {
         _allowances[owner][spender] = amount;
         emit Approval(owner, spender, amount);
     }
-
 }

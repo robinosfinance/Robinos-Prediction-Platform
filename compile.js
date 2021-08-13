@@ -33,5 +33,5 @@ files.forEach(file => {
 
 // console.log(input);
 const compiledInfo = JSON.parse(solc.compile(JSON.stringify(input)));
-// console.log(JSON.stringify(compiledInfo));
+// console.log(compiledInfo);
 module.exports = compiledInfo.contracts;

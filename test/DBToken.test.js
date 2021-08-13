@@ -14,8 +14,9 @@ const tether = require("./tether_compiled.json");
 
 
 let accounts;
+let rate;
 let DBTokenSale;
-let DBTokens;
+var DBTokens;
 
 // Teams and event code default info for testing
 let teams = [
@@ -25,11 +26,14 @@ let teams = [
 ];
 const eventCode = "EPL";
 const totalSupply = 1 * 10 ** 12;
+let minuteInTheFuture = Math.floor(Date.now() / 1000) + 60; // We just calculate the timestamp to give us enough time in the sale to finish all of the tests
 
 
 beforeEach(async () => {
     accounts = await web3.eth.getAccounts();
     DBTokens = [];
+
+
 
     /**
      *  @dev DBTokens for each team from the array is initialized. Only one Event code in the testing provided.
@@ -61,7 +65,6 @@ beforeEach(async () => {
             gas: '1000000000'
         });
 
-
     DBTokenSale = await new web3.eth.Contract(salesContract.abi)
         .deploy({
             data: salesContract.evm.bytecode.object,
@@ -71,12 +74,23 @@ beforeEach(async () => {
             from: accounts[0],
             gas: '1000000000'
         });
+
+    rate = await DBTokenSale.methods.rate().call({
+        from: accounts[0]
+    });
+
+    DBTokens.forEach(async DBToken => {
+        await DBToken.methods.transferOwnership(DBTokenSale.options.address).send({
+            from: accounts[0]
+        });
+    });
+
 });
 
 describe("DBTokens", () => {
-    it("all deployed successfully and have correct team names", () => {
+    it("all deployed successfully", () => {
         DBTokens.forEach(async (DBToken, index) => {
-            let tokenTeamName = await DBToken.methods.getTeamName().call({
+            let tokenTeamName = await DBToken.methods.teamName().call({
                 from: accounts[0]
             });
             assert.ok(DBToken.options.address); // Check the address
@@ -114,26 +128,59 @@ describe("DBTokenSale", () => {
 
 
     it("accepts DBToken references", async () => {
-        let teamName;
+        let tokenAddress;
         await DBTokens.forEach(async (DBToken, index) => {
 
             /**
              *  @dev Each DBToken instance is passed as a reference to the DBTokenSale contract. Arguments eventCode and teamName are used for security purposes
              */
-            await DBTokenSale.methods.addDBTokenReference(DBToken.options.address, eventCode, teams[index])
+            await DBTokenSale.methods.addDBTokenReference(DBToken.options.address, eventCode, teams[index], 0)
                 .send({
                     from: accounts[0],
                     gas: '10000000000'
                 });
 
-            teamName = await DBTokenSale.methods.getNameOfToken(eventCode, teams[index])
+            tokenAddress = await DBTokenSale.methods.getToken(eventCode, teams[index])
                 .call({
                     from: accounts[0],
                     gas: '10000000000'
                 });
-            // Check the name of the token from the DBTokenSale contract. This function is only used for testing purposes to make sure the reference is passed correcly
-            assert.strictEqual(teamName, teams[index])
+            assert.ok(tokenAddress);
         });
+    });
+
+    it("allows to start, end and read sale time", async () => {
+        /**
+         *  @dev We have 3 tests for checking the sale status. This functions are available for any account to use.
+         */
+        let futureTime = Math.floor(Date.now() / 1000) + 60;
+        let sale;
+
+        const isSaleOn = async () => {
+            return await DBTokenSale.methods.isSaleOn().call({
+                from: accounts[0]
+            });
+        };
+
+        // Sale start and end times have not yet been defined. We expect sale not to be active.
+        sale = await isSaleOn();
+        assert(!sale.saleActive);
+
+        // Sale start set as 0. This means the sale will start immediately and we expect the sale update time to be a timestamp in the future
+        await DBTokenSale.methods.setSaleStartEnd(0, futureTime).send({
+            from: accounts[0]
+        });
+        sale = await isSaleOn();
+        assert(sale.saleActive);
+        assert(parseInt(sale.saleUpdateTime) >= Math.floor(Date.now() / 1000));
+
+        // Sale has been prematurely ended by the owner of DBTokenSale contract. We expect the sale not to be active and saleUpdateTime to be 0 since there is not future sale update time
+        await DBTokenSale.methods.endSaleNow().send({
+            from: accounts[0]
+        });
+        sale = await isSaleOn();
+        assert(!sale.saleActive);
+        assert.strictEqual(sale.saleUpdateTime, '0');
     });
 
     it("allows exchange of DBTokens <> USDT and withdrawal of contract funds", async () => {
@@ -151,18 +198,13 @@ describe("DBTokenSale", () => {
          */
         let contractDBBalance, contractUSDTBalance;
         let userDBBalance, safeUSDTBalance;
-        
+
         let teamName = teams[0];
         let DBToken = DBTokens[0];
 
         let saleContractBalance = 10000000;
         let purchaseUSDTFunds = 200;
-
-
-        let rate = await DBTokenSale.methods.rate().call({ from: accounts[0] });
         let purchaseDBTfunds = purchaseUSDTFunds * rate;
-
-        let minuteInTheFuture = Math.floor(Date.now() / 1000) + 60; // We just calculate the timestamp to give us enough time in the sale to finish all of the tests
 
         const getTetherBalance = async address => {
             return await TetherToken.methods.balanceOf(address)
@@ -178,15 +220,10 @@ describe("DBTokenSale", () => {
                 });
         }
 
-        await DBTokenSale.methods.addDBTokenReference(DBToken.options.address, eventCode, teamName)
+        await DBTokenSale.methods.addDBTokenReference(DBToken.options.address, eventCode, teamName, saleContractBalance)
             .send({
                 from: accounts[0],
                 gas: '10000000000'
-            });
-
-        await DBToken.methods._mint(DBTokenSale.options.address, saleContractBalance)
-            .send({
-                from: accounts[0]
             });
 
 
@@ -217,7 +254,7 @@ describe("DBTokenSale", () => {
         // Variables purchaseUSDTFunds and purchaseDBTfunds can be different only if DBTokenSale.rate() != 1
         assert.strictEqual(contractUSDTBalance, purchaseUSDTFunds);
         assert.strictEqual(contractDBBalance, saleContractBalance - purchaseDBTfunds);
-        assert.strictEqual(userDBBalance, totalSupply + purchaseDBTfunds);
+        assert.strictEqual(userDBBalance, purchaseDBTfunds);
 
 
         await DBTokenSale.methods.withdraw(purchaseUSDTFunds)
@@ -229,37 +266,66 @@ describe("DBTokenSale", () => {
         // We expect the withdrawn funds to be on accounts[1] as that was set as the withdrawable address in the DBTokenSale constructor
         safeUSDTBalance = parseInt(await getTetherBalance(accounts[1]));
         assert.strictEqual(safeUSDTBalance, purchaseUSDTFunds);
-    
+
     });
 
+    it("allows owner to record sold supply and mint 1% at the end of sale", async () => {
+        let tokenInitialSupply = 100000000;
+        let tokenPurchaseAmount = 100000;
 
-    it("allows to start, end and read sale time", async () => {
-        /**
-         *  @dev We have 3 tests for checking the sale status. This functions are available for any account to use.
-         */
-        let futureTime = Math.floor(Date.now() / 1000) + 60;
-        let sale;
 
-        const isSaleOn = async () => {
-            return await DBTokenSale.methods.isSaleOn().call({ from: accounts[0] });
-        };
+        const tokenBalancesEqual = async (checkAmount = null) => {
+            let amount, previousAmount;
+            for (let i = 0; i < DBTokens.length; i++) {
+                amount = parseInt(await DBTokenSale.methods.balanceOf(eventCode, teams[i], accounts[0]).call({
+                    from: accounts[0]
+                }));
+                if (checkAmount && amount !== checkAmount) return null;
+                else if (previousAmount && amount !== previousAmount) return null;
+                previousAmount = amount;
+            }
+            return amount;
+        }
 
-        // Sale start and end times have not yet been defined. We expect sale not to be active.
-        sale = await isSaleOn();
-        assert(!sale.saleActive);
+        await TetherToken.methods.approve(DBTokenSale.options.address, tokenPurchaseAmount * DBTokens.length)
+            .send({
+                from: accounts[0]
+            });
 
-        // Sale start set as 0. This means the sale will start immediately and we expect the sale update time to be a timestamp in the future
-        await DBTokenSale.methods.setSaleStartEnd(0, futureTime).send({ from: accounts[0] });
-        sale = await isSaleOn();
-        assert(sale.saleActive);
-        assert(parseInt(sale.saleUpdateTime) >= Math.floor(Date.now() / 1000));
+        await DBTokenSale.methods.setSaleStartEnd(0, minuteInTheFuture)
+            .send({
+                from: accounts[0],
+                gas: '10000000000'
+            });
 
-        // Sale has been prematurely ended by the owner of DBTokenSale contract. We expect the sale not to be active and saleUpdateTime to be 0 since there is not future sale update time
-        await DBTokenSale.methods.endSaleNow().send({ from: accounts[0] });
-        sale = await isSaleOn();
-        assert(!sale.saleActive);
-        assert.strictEqual(sale.saleUpdateTime, '0');
+        for (let i = 0; i < DBTokens.length; i++) {
+            await DBTokenSale.methods.addDBTokenReference(DBTokens[i].options.address, eventCode, teams[i], tokenInitialSupply)
+                .send({
+                    from: accounts[0],
+                    gas: '10000000000'
+                });
+
+            await DBTokenSale.methods.buyTokens(eventCode, teams[i], tokenPurchaseAmount)
+                .send({
+                    from: accounts[0],
+                    gas: '10000000000'
+                });
+        }
+
+        let tokenBalances = await tokenBalancesEqual();
+
+        await DBTokenSale.methods.endSaleNow().send({
+            from: accounts[0]
+        });
+        await DBTokenSale.methods.mintOnePercentToOwner().send({
+            from: accounts[0],
+            gas: '10000000000'
+        });
+        let tokensSold = await DBTokenSale.methods.tokensSold().call({
+            from: accounts[0]
+        });
+        tokenBalances = await tokenBalancesEqual(tokenBalances + (tokenPurchaseAmount / 100));
+        assert.ok(tokenBalances);
+        assert(!tokensSold.length)
     });
-
-
 });
