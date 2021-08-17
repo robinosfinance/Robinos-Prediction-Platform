@@ -3,11 +3,14 @@ const fs = require("fs");
 const solc = require("solc");
 
 let files = [
-	"DBToken.sol",
+	// "DBToken.sol",
 	"DBTokenSale.sol",
-	"IERC20.sol",
-	"Context.sol",
-	"StandardToken.sol"
+	// "TradingPair.sol",
+	// "TradingFactory.sol",
+	// "SaleFactory.sol",
+	// "IERC20.sol",
+	// "Context.sol",
+	// "StandardToken.sol"
 ];
 
 let pathToFile, source;

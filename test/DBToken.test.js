@@ -6,8 +6,11 @@ const web3 = new Web3(ganache.provider({
 }));
 
 const contracts = require("../compile");
-const tokenContract = contracts["DBToken.sol"].DBToken;
+const tokenContract = contracts["DBTokenSale.sol"].DBToken;
 const salesContract = contracts["DBTokenSale.sol"].DBTokenSale;
+
+const tradingPairContract = contracts["DBTokenSale.sol"].TradingPair;
+const tradingFactoryContract = contracts["DBTokenSale.sol"].TradingFactory;
 
 // Local instance of the USDT contract used for testing
 const tether = require("./tether_compiled.json");
@@ -16,7 +19,9 @@ const tether = require("./tether_compiled.json");
 let accounts;
 let rate;
 let DBTokenSale;
-var DBTokens;
+let DBTokens;
+let TradingPair;
+let TradingFactory;
 
 // Teams and event code default info for testing
 let teams = [
@@ -26,7 +31,7 @@ let teams = [
 ];
 const eventCode = "EPL";
 const totalSupply = 1 * 10 ** 12;
-let minuteInTheFuture = Math.floor(Date.now() / 1000) + 60; // We just calculate the timestamp to give us enough time in the sale to finish all of the tests
+let secondsInTheFuture = seconds => Math.floor(Date.now() / 1000) + seconds; // We just calculate the timestamp to give us enough time in the sale to finish all of the tests
 
 
 beforeEach(async () => {
@@ -75,6 +80,19 @@ beforeEach(async () => {
             gas: '1000000000'
         });
 
+
+
+    TradingFactory = await new web3.eth.Contract(tradingFactoryContract.abi)
+        .deploy({
+            data: tradingFactoryContract.evm.bytecode.object
+        })
+        .send({
+            from: accounts[0],
+            gas: '1000000000'
+        });
+
+    
+
     rate = await DBTokenSale.methods.rate().call({
         from: accounts[0]
     });
@@ -84,6 +102,11 @@ beforeEach(async () => {
             from: accounts[0]
         });
     });
+
+
+    
+
+    
 
 });
 
@@ -96,6 +119,66 @@ describe("DBTokens", () => {
             assert.ok(DBToken.options.address); // Check the address
             assert.strictEqual(tokenTeamName, teams[index]); // Compare the team names from the tokens with the given team names in the array above
         });
+    });
+});
+
+describe("Trading Factory", () => {
+    it("allows trading of 2 ERC20 tokens", async () => {
+
+        /**
+         * In this test environment,Trading factory is being deployed as a standalone contract, but it can be inherited by DBTokenSale contract
+         */
+
+        let USDTAddress = TetherToken.options.address;
+        let DBTAddress = DBTokens[0].options.address;
+        let initialBalance = 50; // Initial amount of tokens given to each account
+        let swapAmount = [20, 30]; // Amounts sent for swapping. [0] is amount sent, [1] is amount received
+
+        // Function retreives balances of 2 currencies of 2 accounts which are performing a swap.
+        const getAccountBalances = async () => {
+            let acc1usdtBalance = await TetherToken.methods.balanceOf(accounts[1]).call({ from: accounts[0], gas: '1000000000' });
+            let acc1dbBalance = await DBTokens[0].methods.balanceOf(accounts[1]).call({ from: accounts[0], gas: '1000000000' });
+            let acc2usdtBalance = await TetherToken.methods.balanceOf(accounts[2]).call({ from: accounts[0], gas: '1000000000' });
+            let acc2dbBalance = await DBTokens[0].methods.balanceOf(accounts[2]).call({ from: accounts[0], gas: '1000000000' });
+            return { acc1: { usdt: acc1usdtBalance, dbt: acc1dbBalance }, acc2: { usdt: acc2usdtBalance, dbt: acc2dbBalance } };
+        };
+
+        // We first register the trading pair
+        await TradingFactory.methods.addTradingPair(USDTAddress, DBTAddress).send({ from: accounts[0], gas: '1000000000' });
+        // Then we get the pair node address, to which we approve the funds for transfer
+        let TPAdress = await TradingFactory.methods.tradingPairAddress(USDTAddress, DBTAddress).call({ from: accounts[0], gas: '1000000000' });
+
+        // We send the initial balance to each account. We are using accounts [1] and [2] to have a fresh initial supply
+        await DBTokens[0].methods.transfer(accounts[2], initialBalance).send({ from: accounts[0], gas: '1000000000' });
+        // Then we approve the funds for transfer for TPAdress
+        await DBTokens[0].methods.approve(TPAdress, initialBalance).send({ from: accounts[2], gas: '1000000000' });
+
+        // Same process with second token
+        await TetherToken.methods.transfer(accounts[1], initialBalance).send({ from: accounts[0], gas: '1000000000' });
+        await TetherToken.methods.approve(TPAdress, initialBalance).send({ from: accounts[1], gas: '1000000000' });
+
+
+        let { acc1, acc2 } = await getAccountBalances();
+
+        assert(acc1.usdt == initialBalance);
+        assert(acc1.dbt == 0);
+
+        assert(acc2.usdt == 0);
+        assert(acc2.dbt == initialBalance);
+
+
+        // Perform the swap
+        await TradingFactory.methods.swap(DBTAddress, USDTAddress, swapAmount[0], swapAmount[1], accounts[1]).send({ from: accounts[2], gas: '1000000000' });
+
+
+        ({ acc1, acc2 } = await getAccountBalances());
+
+        assert(acc1.usdt == initialBalance - swapAmount[1]);
+        assert(acc1.dbt == swapAmount[0]);
+
+        assert(acc2.usdt == swapAmount[1]);
+        assert(acc2.dbt == initialBalance - swapAmount[0]);
+        
     });
 });
 
@@ -156,31 +239,91 @@ describe("DBTokenSale", () => {
         let futureTime = Math.floor(Date.now() / 1000) + 60;
         let sale;
 
-        const isSaleOn = async () => {
-            return await DBTokenSale.methods.isSaleOn().call({
+        const isSaleOn = async eventCode => {
+            return await DBTokenSale.methods.isSaleOn(eventCode).call({
                 from: accounts[0]
             });
         };
 
         // Sale start and end times have not yet been defined. We expect sale not to be active.
-        sale = await isSaleOn();
-        assert(!sale.saleActive);
+        try {
+            sale = await isSaleOn(eventCode);
+        } catch (error) {
+            assert.ok(error);
+        }
 
         // Sale start set as 0. This means the sale will start immediately and we expect the sale update time to be a timestamp in the future
-        await DBTokenSale.methods.setSaleStartEnd(0, futureTime).send({
-            from: accounts[0]
+        await DBTokenSale.methods.setSaleStartEnd(eventCode, 0, futureTime).send({
+            from: accounts[0],
+            gas: '10000000000'
         });
-        sale = await isSaleOn();
+        
+        sale = await isSaleOn(eventCode);
         assert(sale.saleActive);
         assert(parseInt(sale.saleUpdateTime) >= Math.floor(Date.now() / 1000));
 
         // Sale has been prematurely ended by the owner of DBTokenSale contract. We expect the sale not to be active and saleUpdateTime to be 0 since there is not future sale update time
-        await DBTokenSale.methods.endSaleNow().send({
+        await DBTokenSale.methods.endSaleNow(eventCode).send({
             from: accounts[0]
         });
-        sale = await isSaleOn();
+        sale = await isSaleOn(eventCode);
         assert(!sale.saleActive);
         assert.strictEqual(sale.saleUpdateTime, '0');
+    });
+
+    it("allows having multiple sales", async () => {
+
+        const randomInt = () => {
+            return Math.ceil(Math.random() * 20);
+        };
+
+        let eventCodes = [
+            "EPL",
+            "Champs",
+            "Fifa",
+            "Junior",
+            "Senior",
+            "London"
+        ];
+
+        
+
+        (() => {
+            // We first make sure to go through all the events and start their sales from the list above
+            return Promise.resolve(eventCodes.forEach(async (code, index) => {
+                DBTokenSale.methods.setSaleStartEnd(code, 0, secondsInTheFuture(randomInt() * 30))
+                .send({
+                    from: accounts[0],
+                    gas: '10000000000'
+                });
+            }));
+        })()
+        .then(() => {
+            // Then we end each sale as the owner
+            eventCodes.forEach(async (code, index) => {
+                DBTokenSale.methods.endSaleNow(code)
+                .send({
+                    from: accounts[0],
+                    gas: '10000000000'
+                });
+                
+            });
+        })
+        .then(async () => {
+            // Resulting sales array should have 0 entries
+            let sales = await DBTokenSale.methods.getAllSales().call({
+                from: accounts[0]
+            });
+            assert.strictEqual(sales.length, 0);
+        });
+
+        
+
+       
+
+        
+
+
     });
 
     it("allows exchange of DBTokens <> USDT and withdrawal of contract funds", async () => {
@@ -233,7 +376,7 @@ describe("DBTokenSale", () => {
             });
 
         // If we set start argument to 0, the sale will start immediately.
-        await DBTokenSale.methods.setSaleStartEnd(0, minuteInTheFuture)
+        await DBTokenSale.methods.setSaleStartEnd(eventCode, 0, secondsInTheFuture(60))
             .send({
                 from: accounts[0],
                 gas: '10000000000'
@@ -254,7 +397,7 @@ describe("DBTokenSale", () => {
         // Variables purchaseUSDTFunds and purchaseDBTfunds can be different only if DBTokenSale.rate() != 1
         assert.strictEqual(contractUSDTBalance, purchaseUSDTFunds);
         assert.strictEqual(contractDBBalance, saleContractBalance - purchaseDBTfunds);
-        assert.strictEqual(userDBBalance, purchaseDBTfunds);
+        assert.strictEqual(userDBBalance, totalSupply + purchaseDBTfunds);
 
 
         await DBTokenSale.methods.withdraw(purchaseUSDTFunds)
@@ -292,7 +435,7 @@ describe("DBTokenSale", () => {
                 from: accounts[0]
             });
 
-        await DBTokenSale.methods.setSaleStartEnd(0, minuteInTheFuture)
+        await DBTokenSale.methods.setSaleStartEnd(eventCode, 0, secondsInTheFuture(60))
             .send({
                 from: accounts[0],
                 gas: '10000000000'
@@ -314,18 +457,27 @@ describe("DBTokenSale", () => {
 
         let tokenBalances = await tokenBalancesEqual();
 
-        await DBTokenSale.methods.endSaleNow().send({
+        DBTokenSale.methods.endSaleNow(eventCode)
+        .send({
             from: accounts[0]
+        })
+        .then(async () => {
+            // While there are no sales active, the owner can use mintOnePercentToOwner() function to withdraw tokens received
+            DBTokenSale.methods.mintOnePercentToOwner().send({
+                from: accounts[0],
+                gas: '10000000000'
+            })
+            .then(async () => {
+                let tokensSold = await DBTokenSale.methods.tokensSold().call({
+                    from: accounts[0]
+                });
+                tokenBalances = await tokenBalancesEqual(tokenBalances + (tokenPurchaseAmount / 100));
+                assert.ok(tokenBalances);
+                assert(!tokensSold.length)
+            });
         });
-        await DBTokenSale.methods.mintOnePercentToOwner().send({
-            from: accounts[0],
-            gas: '10000000000'
-        });
-        let tokensSold = await DBTokenSale.methods.tokensSold().call({
-            from: accounts[0]
-        });
-        tokenBalances = await tokenBalancesEqual(tokenBalances + (tokenPurchaseAmount / 100));
-        assert.ok(tokenBalances);
-        assert(!tokensSold.length)
+        
     });
+
+    
 });
