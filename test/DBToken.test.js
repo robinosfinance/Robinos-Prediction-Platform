@@ -9,9 +9,6 @@ const contracts = require("../compile");
 const tokenContract = contracts["DBTokenSale.sol"].DBToken;
 const salesContract = contracts["DBTokenSale.sol"].DBTokenSale;
 
-const tradingPairContract = contracts["DBTokenSale.sol"].TradingPair;
-const tradingFactoryContract = contracts["DBTokenSale.sol"].TradingFactory;
-
 // Local instance of the USDT contract used for testing
 const tether = require("./tether_compiled.json");
 
@@ -20,8 +17,6 @@ let accounts;
 let rate;
 let DBTokenSale;
 let DBTokens;
-let TradingPair;
-let TradingFactory;
 
 // Teams and event code default info for testing
 let teams = [
@@ -47,7 +42,7 @@ beforeEach(async () => {
         let token = await new web3.eth.Contract(tokenContract.abi)
             .deploy({
                 data: tokenContract.evm.bytecode.object,
-                arguments: ["DBToken", "DBT", eventCode, team, totalSupply]
+                arguments: ["DBToken", "DBT", eventCode, team]
             })
             .send({
                 from: accounts[0],
@@ -78,20 +73,7 @@ beforeEach(async () => {
         .send({
             from: accounts[0],
             gas: '1000000000'
-        });
-
-
-
-    TradingFactory = await new web3.eth.Contract(tradingFactoryContract.abi)
-        .deploy({
-            data: tradingFactoryContract.evm.bytecode.object
-        })
-        .send({
-            from: accounts[0],
-            gas: '1000000000'
-        });
-
-    
+        });    
 
     rate = await DBTokenSale.methods.rate().call({
         from: accounts[0]
@@ -122,65 +104,6 @@ describe("DBTokens", () => {
     });
 });
 
-describe("Trading Factory", () => {
-    it("allows trading of 2 ERC20 tokens", async () => {
-
-        /**
-         * In this test environment,Trading factory is being deployed as a standalone contract, but it can be inherited by DBTokenSale contract
-         */
-
-        let USDTAddress = TetherToken.options.address;
-        let DBTAddress = DBTokens[0].options.address;
-        let initialBalance = 50; // Initial amount of tokens given to each account
-        let swapAmount = [20, 30]; // Amounts sent for swapping. [0] is amount sent, [1] is amount received
-
-        // Function retreives balances of 2 currencies of 2 accounts which are performing a swap.
-        const getAccountBalances = async () => {
-            let acc1usdtBalance = await TetherToken.methods.balanceOf(accounts[1]).call({ from: accounts[0], gas: '1000000000' });
-            let acc1dbBalance = await DBTokens[0].methods.balanceOf(accounts[1]).call({ from: accounts[0], gas: '1000000000' });
-            let acc2usdtBalance = await TetherToken.methods.balanceOf(accounts[2]).call({ from: accounts[0], gas: '1000000000' });
-            let acc2dbBalance = await DBTokens[0].methods.balanceOf(accounts[2]).call({ from: accounts[0], gas: '1000000000' });
-            return { acc1: { usdt: acc1usdtBalance, dbt: acc1dbBalance }, acc2: { usdt: acc2usdtBalance, dbt: acc2dbBalance } };
-        };
-
-        // We first register the trading pair
-        await TradingFactory.methods.addTradingPair(USDTAddress, DBTAddress).send({ from: accounts[0], gas: '1000000000' });
-        // Then we get the pair node address, to which we approve the funds for transfer
-        let TPAdress = await TradingFactory.methods.tradingPairAddress(USDTAddress, DBTAddress).call({ from: accounts[0], gas: '1000000000' });
-
-        // We send the initial balance to each account. We are using accounts [1] and [2] to have a fresh initial supply
-        await DBTokens[0].methods.transfer(accounts[2], initialBalance).send({ from: accounts[0], gas: '1000000000' });
-        // Then we approve the funds for transfer for TPAdress
-        await DBTokens[0].methods.approve(TPAdress, initialBalance).send({ from: accounts[2], gas: '1000000000' });
-
-        // Same process with second token
-        await TetherToken.methods.transfer(accounts[1], initialBalance).send({ from: accounts[0], gas: '1000000000' });
-        await TetherToken.methods.approve(TPAdress, initialBalance).send({ from: accounts[1], gas: '1000000000' });
-
-
-        let { acc1, acc2 } = await getAccountBalances();
-
-        assert(acc1.usdt == initialBalance);
-        assert(acc1.dbt == 0);
-
-        assert(acc2.usdt == 0);
-        assert(acc2.dbt == initialBalance);
-
-
-        // Perform the swap
-        await TradingFactory.methods.swap(DBTAddress, USDTAddress, swapAmount[0], swapAmount[1], accounts[1]).send({ from: accounts[2], gas: '1000000000' });
-
-
-        ({ acc1, acc2 } = await getAccountBalances());
-
-        assert(acc1.usdt == initialBalance - swapAmount[1]);
-        assert(acc1.dbt == swapAmount[0]);
-
-        assert(acc2.usdt == swapAmount[1]);
-        assert(acc2.dbt == initialBalance - swapAmount[0]);
-        
-    });
-});
 
 describe("TetherToken", () => {
     it("deploys successfully", () => {
@@ -217,7 +140,7 @@ describe("DBTokenSale", () => {
             /**
              *  @dev Each DBToken instance is passed as a reference to the DBTokenSale contract. Arguments eventCode and teamName are used for security purposes
              */
-            await DBTokenSale.methods.addDBTokenReference(DBToken.options.address, eventCode, teams[index], 0)
+            await DBTokenSale.methods.addDBTokenReference(DBToken.options.address, eventCode, teams[index])
                 .send({
                     from: accounts[0],
                     gas: '10000000000'
@@ -363,7 +286,7 @@ describe("DBTokenSale", () => {
                 });
         }
 
-        await DBTokenSale.methods.addDBTokenReference(DBToken.options.address, eventCode, teamName, saleContractBalance)
+        await DBTokenSale.methods.addDBTokenReference(DBToken.options.address, eventCode, teamName)
             .send({
                 from: accounts[0],
                 gas: '10000000000'
@@ -396,8 +319,8 @@ describe("DBTokenSale", () => {
 
         // Variables purchaseUSDTFunds and purchaseDBTfunds can be different only if DBTokenSale.rate() != 1
         assert.strictEqual(contractUSDTBalance, purchaseUSDTFunds);
-        assert.strictEqual(contractDBBalance, saleContractBalance - purchaseDBTfunds);
-        assert.strictEqual(userDBBalance, totalSupply + purchaseDBTfunds);
+        assert.strictEqual(contractDBBalance, 0);
+        assert.strictEqual(userDBBalance, purchaseDBTfunds);
 
 
         await DBTokenSale.methods.withdraw(purchaseUSDTFunds)
@@ -442,7 +365,7 @@ describe("DBTokenSale", () => {
             });
 
         for (let i = 0; i < DBTokens.length; i++) {
-            await DBTokenSale.methods.addDBTokenReference(DBTokens[i].options.address, eventCode, teams[i], tokenInitialSupply)
+            await DBTokenSale.methods.addDBTokenReference(DBTokens[i].options.address, eventCode, teams[i])
                 .send({
                     from: accounts[0],
                     gas: '10000000000'
