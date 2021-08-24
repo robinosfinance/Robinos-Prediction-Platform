@@ -231,6 +231,35 @@ abstract contract Ownable is Context {
     }
 }
 
+abstract contract Pausable {
+    bool private _paused = false;
+
+    modifier whileNotPaused() {
+        require(!_paused, "Pausable: contract must be paused");
+        _;
+    }
+
+    modifier whilePaused() {
+        require(_paused, "Pausable: contract must not be paused");
+        _;
+    }
+
+    function pause() public virtual whileNotPaused returns (bool) {
+        _paused = true;
+        return _paused;
+    }
+
+    function unPause() public virtual whileNotPaused returns (bool) {
+        _paused = true;
+        return _paused;
+    }
+
+    function isPaused() public view returns (bool) {
+        return _paused;
+    }
+
+}
+
 contract DBToken is IERC20, IERC20Metadata, Ownable {
     mapping(address => uint256) private _balances;
     mapping(address => mapping(address => uint256)) private _allowances;
@@ -629,6 +658,17 @@ abstract contract SaleFactory is Ownable {
     }
 }
 
+abstract contract TokenHash is Ownable {
+    function getTokenHash(string memory _eventCode, string memory _teamName)
+        internal
+        pure
+        returns (bytes32)
+    {
+        return keccak256(bytes(abi.encodePacked(_eventCode, _teamName)));
+    }
+
+}
+
 abstract contract RecordingTradePairs is Ownable {
     address[] private _allTradingPairs;
     mapping(address => ArrayElRef) _tradingPairMapping;
@@ -703,7 +743,7 @@ abstract contract RecordingTradePairs is Ownable {
     }
 }
 
-abstract contract RecordingTokensSold is Ownable {
+abstract contract RecordingTokensSold is TokenHash {
     
     struct TokensSold {
         bytes32 eventHash;
@@ -733,13 +773,6 @@ abstract contract RecordingTokensSold is Ownable {
         return _currentEventSale;
     }
 
-    function getTokenHash(string memory _eventCode, string memory _teamName)
-        internal
-        pure
-        returns (bytes32)
-    {
-        return keccak256(bytes(abi.encodePacked(_eventCode, _teamName)));
-    }
 
     function initTokensSold(
         bytes32 tokenHash,
@@ -838,25 +871,15 @@ abstract contract RecordingTokensSold is Ownable {
     }
 }
 
-contract DBTokenSale is 
-    RecordingTradePairs,
-    RecordingTokensSold,
-    SaleFactory 
-    {
+contract StoringDBTokens is TokenHash, Pausable {
+    mapping(bytes32 => DBToken) internal _dbtokens;
 
-    address private _owner;
-    address private _withrawable;
+    function pause() public override onlyOwner whileNotPaused returns (bool) {
+        return super.pause();
+    }
 
-    StandardToken private _standardToken;
-    mapping(bytes32 => DBToken) private _dbtokens;
-
-    /**
-     * @param standardToken_ Standard token is the USDT contract from which the sale contract will allow income of funds from. The contract should extend the StandardToken interface
-     * @param withrawable Address where the funds can be withdrawn to
-     */
-    constructor(StandardToken standardToken_, address withrawable) Ownable() {
-        _standardToken = standardToken_;
-        _withrawable = withrawable;
+    function unPause() public override onlyOwner whilePaused returns (bool) {
+        return super.unPause();
     }
 
     /**
@@ -870,7 +893,7 @@ contract DBTokenSale is
         DBToken _token,
         string memory _eventCode,
         string memory _teamName
-    ) public onlyOwner returns (bool) {
+    ) public virtual onlyOwner returns (bool) {
         bytes32 tokenEventCode = keccak256(bytes(_token.eventCode()));
         bytes32 tokenTeamName = keccak256(bytes(_token.teamName()));
         bytes32 givenEventCode = keccak256(bytes(_eventCode));
@@ -906,6 +929,31 @@ contract DBTokenSale is
         );
         return _dbtokens[tokenHash];
     }
+
+}
+
+contract DBTokenSale is 
+    StoringDBTokens,
+    RecordingTradePairs,
+    RecordingTokensSold,
+    SaleFactory
+    {
+
+    address private _owner;
+    address private _withrawable;
+
+    StandardToken private _standardToken;
+    
+
+    /**
+     * @param standardToken_ Standard token is the USDT contract from which the sale contract will allow income of funds from. The contract should extend the StandardToken interface
+     * @param withrawable Address where the funds can be withdrawn to
+     */
+    constructor(StandardToken standardToken_, address withrawable) Ownable() {
+        _standardToken = standardToken_;
+        _withrawable = withrawable;
+    }
+
 
     // High level call. Function will revert if token not found.
     function calculateCirculatingSupply(
@@ -1000,4 +1048,80 @@ contract DBTokenSale is
     function rate() public pure returns (uint256) {
         return 1;
     }
+}
+
+contract DBTokenReward is 
+    StoringDBTokens,
+    SaleFactory 
+{
+
+    /**
+     * The DBTokenReward shares a lot of similarities with DBTokenSale contract. Notable differences are:
+     * 1) This contract uses SaleFactory in the same way DBTokenSale does, but the sale here signifies when the tokens for the given event can be sold to this contract. DBTokenSale uses it for other way around.
+     * 2) Rate for each token can be set individually by the owner. Has to be >= 1. This means that the value of a DBToken will always be equal or greater than any standard token provided.
+     *    If the contrary can be true (Standard token given is more valuable than any DBToken), the structure should be changed here
+     * 3) Instead of buyTokens, we have a sellTokens function which performs an immediate exchange taking in DBTokens from the user and providing Standard Tokens
+     */
+
+    StandardToken private _standardToken;
+
+    constructor(StandardToken standardToken_) Ownable() {
+        _standardToken = standardToken_;
+    }
+    // getRate(eventCode, teamName) returns a positive integer which represents
+    // how many exchange tokens you receive for 1 getToken(eventCode, teamName) 
+    mapping(bytes32 => uint256) private _rates;
+
+    // Allows the owner to set a rate for specific token. Must be greater than 0
+    function setRate(string memory eventCode, string memory teamName, uint256 rate) public onlyOwner returns (bool) {
+        require(rate > 0, "DBTokenReward: rate must be larger than 0");
+        bytes32 tokenHash = getTokenHash(eventCode, teamName);
+        
+        _rates[tokenHash] = rate;
+        return true;
+    }
+
+    // Each token has a specific rate. If rate is 0, token has not been initialized
+    function getRate(string memory eventCode, string memory teamName) public view returns (uint256) {
+        bytes32 tokenHash = getTokenHash(eventCode, teamName);
+        require(_rates[tokenHash] != 0, "DBTokenReward: rate not initialized");
+
+        return _rates[tokenHash];
+    }
+
+    // We override the function so we can set the rate for the token to one immediately
+    function addDBTokenReference(
+        DBToken _token,
+        string memory _eventCode,
+        string memory _teamName
+    ) public override onlyOwner returns (bool) {
+        super.addDBTokenReference(_token, _eventCode, _teamName);
+        setRate(_eventCode, _teamName, 1);
+
+        return true;
+    }
+
+    // Function is basically the same as buyTokens from DBTokenSale contract, except the transfer is done the other way around
+    // Contract has to have at least the given amount of standardToken tokens for this function to work
+    function sellTokens(string memory eventCode, string memory teamName, uint256 amount) public duringSale(eventCode) returns (bool) {
+        DBToken token = getToken(eventCode, teamName);
+
+        uint256 allowance = token.allowance(_msgSender(), address(this));
+        require(allowance >= amount, "DBTokenReward: insufficient token allowance");
+
+        uint256 rate = getRate(eventCode, teamName);
+        uint256 standardTokenAmount = amount * rate;
+        uint256 standardTokenBalance = _standardToken.balanceOf(address(this));
+
+        require(standardTokenBalance >= standardTokenAmount, "DBTokenReward: insufficient contract reward token balance");
+
+        token.transferFrom(_msgSender(), address(this), amount);
+        _standardToken.transfer(_msgSender(), standardTokenAmount);
+
+
+        
+        return true;
+    }
+
+
 }
