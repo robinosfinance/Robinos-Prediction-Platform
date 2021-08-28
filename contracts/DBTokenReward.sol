@@ -932,14 +932,9 @@ contract StoringDBTokens is TokenHash, Pausable {
 
 
 
-
-
-
-
-
  /**********************************************************************
  ***********************************************************************
- ********************      DB TOKEN SALE        ************************
+ ********************      DB TOKEN REWARD      ************************
  ***********************************************************************
  **********************************************************************/
 
@@ -947,124 +942,78 @@ contract StoringDBTokens is TokenHash, Pausable {
 
 
 
-
-
-
-
-contract DBTokenSale is
+contract DBTokenReward is 
     StoringDBTokens,
-    RecordingTradePairs,
-    RecordingTokensSold,
-    SaleFactory
-    {
+    SaleFactory 
+{
 
-    address private _owner;
-    address private _withrawable;
+    /**
+     * The DBTokenReward shares a lot of similarities with DBTokenSale contract. Notable differences are:
+     * 1) This contract uses SaleFactory in the same way DBTokenSale does, but the sale here signifies when the tokens for the given event can be sold to this contract. DBTokenSale uses it for other way around.
+     * 2) Rate for each token can be set individually by the owner. Has to be >= 1. This means that the value of a DBToken will always be equal or greater than any standard token provided.
+     *    If the contrary can be true (Standard token given is more valuable than any DBToken), the structure should be changed here
+     * 3) Instead of buyTokens, we have a sellTokens function which performs an immediate exchange taking in DBTokens from the user and providing Standard Tokens
+     */
 
     StandardToken private _standardToken;
-    
 
-    /**
-     * @param standardToken_ Standard token is the USDT contract from which the sale contract will allow income of funds from. The contract should extend the StandardToken interface
-     * @param withrawable Address where the funds can be withdrawn to
-     */
-    constructor(StandardToken standardToken_, address withrawable) Ownable() {
+    constructor(StandardToken standardToken_) Ownable() {
         _standardToken = standardToken_;
-        _withrawable = withrawable;
+    }
+    // getRate(eventCode, teamName) returns a positive integer which represents
+    // how many exchange tokens you receive for 1 getToken(eventCode, teamName) 
+    mapping(bytes32 => uint256) private _rates;
+
+    // Allows the owner to set a rate for specific token. Must be greater than 0
+    function setRate(string memory eventCode, string memory teamName, uint256 rate) public onlyOwner returns (bool) {
+        require(rate > 0, "DBTokenReward: rate must be larger than 0");
+        bytes32 tokenHash = getTokenHash(eventCode, teamName);
+        
+        _rates[tokenHash] = rate;
+        return true;
     }
 
+    // Each token has a specific rate. If rate is 0, token has not been initialized
+    function getRate(string memory eventCode, string memory teamName) public view returns (uint256) {
+        bytes32 tokenHash = getTokenHash(eventCode, teamName);
+        require(_rates[tokenHash] != 0, "DBTokenReward: rate not initialized");
 
-    // High level call. Function will revert if token not found.
-    function calculateCirculatingSupply(
+        return _rates[tokenHash];
+    }
+
+    // We override the function so we can set the rate for the token to one immediately
+    function addDBTokenReference(
+        DBToken _token,
         string memory _eventCode,
         string memory _teamName
-    ) public view returns (uint256) {
-        DBToken token = getToken(_eventCode, _teamName);
-        return _calculateCirculatingSupply(token);
-    }
-
-    /**
-     * @dev Public function from which users can buy token from. A requirement for this purchase is that the user has approved
-     * at least the given amount of standardToken funds for transfer to contract address. The user has to input the event code
-     * and the team name of the token they are looking to purchase and the amount of tokens they are looking to purchase.
-     * @param _eventCode Event code of the DBToken
-     * @param _teamName Team name of the DBToken
-     * @param amount Amount of tokens the user wants to purchase. Has to have pre-approved amount of USDT tokens for transfer.
-     */
-    function buyTokens(
-        string memory _eventCode,
-        string memory _teamName,
-        uint256 amount
-    ) public duringSale(_eventCode) returns (bool) {
-        DBToken dbtoken = getToken(_eventCode, _teamName);
-
-        uint256 senderAllowance = _standardToken.allowance(
-            _msgSender(),
-            address(this)
-        );
-        require(
-            senderAllowance >= amount,
-            "DBTokenSale: insufficient allowance for standard token transaction"
-        );
-
-        uint256 dbtokenAmount = amount * rate();
-        _standardToken.transferFrom(_msgSender(), address(this), amount);
-        dbtoken._mint(_msgSender(), dbtokenAmount);
-
-        recordTokensSold(_eventCode, _teamName, dbtokenAmount);
+    ) public override onlyOwner returns (bool) {
+        super.addDBTokenReference(_token, _eventCode, _teamName);
+        setRate(_eventCode, _teamName, 1);
 
         return true;
     }
 
-    function mintOnePercentToOwner()
-        public
-        onlyOwner
-        noActiveSale
-        returns (bool)
-    {
-        bytes32 tokenHash;
-        uint256 amountToMint;
+    // Function is basically the same as buyTokens from DBTokenSale contract, except the transfer is done the other way around
+    // Contract has to have at least the given amount of standardToken tokens for this function to work
+    function sellTokens(string memory eventCode, string memory teamName, uint256 amount) public duringSale(eventCode) returns (bool) {
+        DBToken token = getToken(eventCode, teamName);
 
-        for (uint256 i; i < _currentSale.length; i++) {
-            tokenHash = _currentSale[i].tokenHash;
-            amountToMint = _currentSale[i].amountSold / 100;
+        uint256 allowance = token.allowance(_msgSender(), address(this));
+        require(allowance >= amount, "DBTokenReward: insufficient token allowance");
 
-            _dbtokens[tokenHash]._mint(owner(), amountToMint);
-        }
+        uint256 rate = getRate(eventCode, teamName);
+        uint256 standardTokenAmount = amount * rate;
+        uint256 standardTokenBalance = _standardToken.balanceOf(address(this));
 
-        delete _currentSale;
+        require(standardTokenBalance >= standardTokenAmount, "DBTokenReward: insufficient contract reward token balance");
+
+        token.transferFrom(_msgSender(), address(this), amount);
+        _standardToken.transfer(_msgSender(), standardTokenAmount);
+
+
+        
         return true;
     }
 
-    function balanceOf(
-        string memory _eventCode,
-        string memory _teamName,
-        address _account
-    ) public view returns (uint256) {
-        DBToken dbtoken = getToken(_eventCode, _teamName);
-        return dbtoken.balanceOf(_account);
-    }
 
-    /**
-     * @dev Allows the owner of the contract to withdraw the funds from to contract to the address in the variable withdrawable
-     * @param amount Amount of tokens standardTokens the owner wants to withdraw. If the amount is more than the current balance, all tokens are withdrawn.
-     */
-    function withdraw(uint256 amount) public onlyOwner returns (bool) {
-        require(
-            _withrawable != address(0),
-            "DBTokenSale: withdrawable address is zero address"
-        );
-        uint256 tokenBalance = _standardToken.balanceOf(address(this));
-        if (amount > tokenBalance) {
-            amount = tokenBalance;
-        }
-
-        _standardToken.transfer(_withrawable, amount);
-        return true;
-    }
-
-    // Rate represents how many DBTokens can be purchased with 1 USDT
-    function rate() public pure returns (uint256) {
-        return 1;
-    }
 }
