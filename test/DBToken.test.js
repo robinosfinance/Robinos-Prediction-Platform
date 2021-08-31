@@ -6,9 +6,9 @@ const web3 = new Web3(ganache.provider({
 }));
 
 const contracts = require("../compile");
-const tokenContract = contracts["DBTokenSale.sol"].DBToken;
+const tokenContract = contracts["DBToken.sol"].DBToken;
 const salesContract = contracts["DBTokenSale.sol"].DBTokenSale;
-const rewardContract = contracts["DBTokenSale.sol"].DBTokenReward;
+const rewardContract = contracts["DBTokenReward.sol"].DBTokenReward;
 
 // Local instance of the USDT contract used for testing
 const tether = require("./tether_compiled.json");
@@ -172,7 +172,6 @@ describe("DBTokenSale", () => {
         /**
          *  @dev We have 3 tests for checking the sale status. This functions are available for any account to use.
          */
-        let futureTime = Math.floor(Date.now() / 1000) + 60;
         let sale;
 
         const isSaleOn = async eventCode => {
@@ -189,14 +188,14 @@ describe("DBTokenSale", () => {
         }
 
         // Sale start set as 0. This means the sale will start immediately and we expect the sale update time to be a timestamp in the future
-        await DBTokenSale.methods.setSaleStartEnd(eventCode, 0, futureTime).send({
+        await DBTokenSale.methods.setSaleStartEnd(eventCode, 0, secondsInTheFuture(60)).send({
             from: accounts[0],
             gas: '10000000000'
         });
         
         sale = await isSaleOn(eventCode);
         assert(sale.saleActive);
-        assert(parseInt(sale.saleUpdateTime) >= Math.floor(Date.now() / 1000));
+        assert(parseInt(sale.saleEnd) >= secondsInTheFuture(0));
 
         // Sale has been prematurely ended by the owner of DBTokenSale contract. We expect the sale not to be active and saleUpdateTime to be 0 since there is not future sale update time
         await DBTokenSale.methods.endSaleNow(eventCode).send({
@@ -204,7 +203,7 @@ describe("DBTokenSale", () => {
         });
         sale = await isSaleOn(eventCode);
         assert(!sale.saleActive);
-        assert.strictEqual(sale.saleUpdateTime, '0');
+        assert(parseInt(sale.saleEnd) <= secondsInTheFuture(0));
     });
 
     it("allows having multiple sales", async () => {
@@ -419,6 +418,37 @@ describe("DBTokenSale", () => {
 });
 
 describe("DBTokenReward", () => {
+    it("allows dynamic rates", async () => {
+
+        let DBToken = DBTokens[0];
+        let teamName = teams[0];
+        let DBtokenAmount = 10000;
+        let ratio = [5, 2]; // You can play with different ratios here. ratio[0] is numerator, ratio[1] is denominator
+
+        DBTokenReward.methods.addDBTokenReference(DBToken.options.address, eventCode, teamName)
+            .send({
+                from: accounts[0],
+                gas: '10000000000'
+            });
+        
+
+        DBTokenReward.methods.setRate(eventCode, teamName, ratio[0], ratio[1])
+            .send({
+                from: accounts[0],
+                gas: '10000000000'
+            })
+            .then(async () => {
+                let standardTokenAmount = await DBTokenReward.methods.standardTokensFor(DBtokenAmount, eventCode, teamName)
+                    .call({
+                        from: accounts[0],
+                        gas: '10000000000'
+                    });
+                assert.strictEqual(parseInt(standardTokenAmount), parseInt(DBtokenAmount * (ratio[0] / ratio[1])));
+                
+            });
+    });
+
+
     it("allows rewards", async () => {
         let DBToken = DBTokens[0];
         let teamName = teams[0];

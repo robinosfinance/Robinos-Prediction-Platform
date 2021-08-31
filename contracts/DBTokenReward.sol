@@ -633,25 +633,24 @@ abstract contract SaleFactory is Ownable {
 
     /**
      * @dev Public function which provides info if there is currently any active sale and when the sale status will update.
-     * There are 3 possible return patterns:
-     * 1) Sale isn't active and sale start time is in the future => saleActive: false, saleUpdateTime: _saleStart
-     * 2) Sale is active => saleActive: true, saleUpdateTime: _saleEnd
-     * 3) Sale isn't active and _saleStart isn't a timestamp in the future => saleActive: false, saleUpdateTime: 0
+     * Value saleActive represents if sale is active at the current moment.
+     * If sale has been initialized, saleStart and saleEnd will return UNIX timestampts
+     * If sale has not been initialized, function will revert.
      * @param eventCode string code of event
      */
     function isSaleOn(string memory eventCode)
         public
         view
-        returns (bool saleActive, uint256 saleUpdateTime)
+        returns (bool saleActive, uint256 saleStart, uint256 saleEnd)
     {
         Sale storage eventSale = getEventSale(eventCode);
 
         if (eventSale.saleStart > time()) {
-            return (false, eventSale.saleStart);
+            return (false, eventSale.saleStart, eventSale.saleEnd);
         } else if (eventSale.saleEnd > time()) {
-            return (true, eventSale.saleEnd);
+            return (true, eventSale.saleStart, eventSale.saleEnd);
         } else {
-            return (false, 0);
+            return (false, eventSale.saleStart, eventSale.saleEnd);
         }
     }
 }
@@ -950,8 +949,7 @@ contract DBTokenReward is
     /**
      * The DBTokenReward shares a lot of similarities with DBTokenSale contract. Notable differences are:
      * 1) This contract uses SaleFactory in the same way DBTokenSale does, but the sale here signifies when the tokens for the given event can be sold to this contract. DBTokenSale uses it for other way around.
-     * 2) Rate for each token can be set individually by the owner. Has to be >= 1. This means that the value of a DBToken will always be equal or greater than any standard token provided.
-     *    If the contrary can be true (Standard token given is more valuable than any DBToken), the structure should be changed here
+     * 2) Rate for each token can be set individually by the owner. Rate is a ratio between getToken(eventCode, teamName)/standard token
      * 3) Instead of buyTokens, we have a sellTokens function which performs an immediate exchange taking in DBTokens from the user and providing Standard Tokens
      */
 
@@ -960,25 +958,48 @@ contract DBTokenReward is
     constructor(StandardToken standardToken_) Ownable() {
         _standardToken = standardToken_;
     }
-    // getRate(eventCode, teamName) returns a positive integer which represents
-    // how many exchange tokens you receive for 1 getToken(eventCode, teamName) 
-    mapping(bytes32 => uint256) private _rates;
+    /**
+     * @dev getRate(eventCode, teamName) returns a ratio between getToken(eventCode, teamName)/standard token
+     * Examples:
+     * 1) getToken(eventCode, teamName) is 2x the value of standard token (or for each DBToken you receive 2 standard tokens) getRate(eventCode, teamName) => (numerator 2, denominator 1)
+     * 2) getToken(eventCode, teamName) is 0.75x the value of standard token (or for 4 DBTokens you receive 3 standard tokens) getRate(eventCode, teamName) => (numerator 3, denominator 4)
+     * 3) getToken(eventCode, teamName) is 0.125x the value of standard token (or for 8 DBTokens you receive 1 standard tokens) getRate(eventCode, teamName) => (numerator 1, denominator 8)
+     * 4) getToken(eventCode, teamName) is 2.5x the value of standard token (or for 2 DBTokens you receive 5 standard tokens) getRate(eventCode, teamName) => (numerator 5, denominator 2)
+     * 5) getToken(eventCode, teamName) is 1x the value of standard token (or for 2 DBTokens you receive 5 standard tokens) getRate(eventCode, teamName) => (numerator 1, denominator 1) [This is initially set for each new token reference added]
+     */
+    struct Ratio {
+        uint256 numerator;
+        uint256 denominator;
+    }
+    mapping(bytes32 => Ratio) private _rates;
 
-    // Allows the owner to set a rate for specific token. Must be greater than 0
-    function setRate(string memory eventCode, string memory teamName, uint256 rate) public onlyOwner returns (bool) {
-        require(rate > 0, "DBTokenReward: rate must be larger than 0");
+
+    /**
+     * @dev Allows the owner to set a rate for specific token. Numerator and denominator must be greater than 0
+     * Please use the smallest possible numerator and denominator. So instead of (6/8) use (3/4). Check not included in function to save gas
+     */
+    function setRate(string memory eventCode, string memory teamName, uint256 numerator, uint256 denominator) public onlyOwner returns (bool) {
+        require(numerator > 0, "DBTokenReward: numerator must be larger than 0");
+        require(denominator > 0, "DBTokenReward: denominator must be larger than 0");
         bytes32 tokenHash = getTokenHash(eventCode, teamName);
         
-        _rates[tokenHash] = rate;
+        _rates[tokenHash] = Ratio(numerator, denominator);
         return true;
     }
 
     // Each token has a specific rate. If rate is 0, token has not been initialized
-    function getRate(string memory eventCode, string memory teamName) public view returns (uint256) {
+    function getRate(string memory eventCode, string memory teamName) public view returns (Ratio memory) {
         bytes32 tokenHash = getTokenHash(eventCode, teamName);
-        require(_rates[tokenHash] != 0, "DBTokenReward: rate not initialized");
+        require(_rates[tokenHash].denominator != 0, "DBTokenReward: rate not initialized");
 
         return _rates[tokenHash];
+    }
+
+    // Function calculates how many standard tokens you will receive for getToken(eventCode, teamName) based on the rate of the token
+    function standardTokensFor(uint256 amount, string memory eventCode, string memory teamName) public view returns (uint256) {
+        require(amount != 0, "DBTokenReward: amount cannot be 0");
+        Ratio memory rate = getRate(eventCode, teamName);
+        return uint((amount * rate.numerator) / rate.denominator);
     }
 
     // We override the function so we can set the rate for the token to one immediately
@@ -988,7 +1009,7 @@ contract DBTokenReward is
         string memory _teamName
     ) public override onlyOwner returns (bool) {
         super.addDBTokenReference(_token, _eventCode, _teamName);
-        setRate(_eventCode, _teamName, 1);
+        setRate(_eventCode, _teamName, 1, 1);
 
         return true;
     }
@@ -1001,8 +1022,7 @@ contract DBTokenReward is
         uint256 allowance = token.allowance(_msgSender(), address(this));
         require(allowance >= amount, "DBTokenReward: insufficient token allowance");
 
-        uint256 rate = getRate(eventCode, teamName);
-        uint256 standardTokenAmount = amount * rate;
+        uint256 standardTokenAmount = standardTokensFor(amount, eventCode, teamName);
         uint256 standardTokenBalance = _standardToken.balanceOf(address(this));
 
         require(standardTokenBalance >= standardTokenAmount, "DBTokenReward: insufficient contract reward token balance");

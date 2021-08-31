@@ -633,25 +633,24 @@ abstract contract SaleFactory is Ownable {
 
     /**
      * @dev Public function which provides info if there is currently any active sale and when the sale status will update.
-     * There are 3 possible return patterns:
-     * 1) Sale isn't active and sale start time is in the future => saleActive: false, saleUpdateTime: _saleStart
-     * 2) Sale is active => saleActive: true, saleUpdateTime: _saleEnd
-     * 3) Sale isn't active and _saleStart isn't a timestamp in the future => saleActive: false, saleUpdateTime: 0
+     * Value saleActive represents if sale is active at the current moment.
+     * If sale has been initialized, saleStart and saleEnd will return UNIX timestampts
+     * If sale has not been initialized, function will revert.
      * @param eventCode string code of event
      */
     function isSaleOn(string memory eventCode)
         public
         view
-        returns (bool saleActive, uint256 saleUpdateTime)
+        returns (bool saleActive, uint256 saleStart, uint256 saleEnd)
     {
         Sale storage eventSale = getEventSale(eventCode);
 
         if (eventSale.saleStart > time()) {
-            return (false, eventSale.saleStart);
+            return (false, eventSale.saleStart, eventSale.saleEnd);
         } else if (eventSale.saleEnd > time()) {
-            return (true, eventSale.saleEnd);
+            return (true, eventSale.saleStart, eventSale.saleEnd);
         } else {
-            return (false, 0);
+            return (false, eventSale.saleStart, eventSale.saleEnd);
         }
     }
 }
@@ -929,10 +928,6 @@ contract StoringDBTokens is TokenHash, Pausable {
     }
 
 }
-
-
-
-
 
 
 
