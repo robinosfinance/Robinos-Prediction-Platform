@@ -1,12 +1,3 @@
-/**
- *Submitted for verification at BscScan.com on 2021-07-01
-*/
-
-// Sources flattened with hardhat v2.4.1 https://hardhat.org
-
-// File @openzeppelin/contracts-upgradeable/utils/AddressUpgradeable.sol@v3.4.1
-
-//
 
 pragma solidity >=0.6.2 <0.8.0;
 
