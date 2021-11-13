@@ -510,6 +510,18 @@ contract DBTokenEvent is Ownable {
         teamTokens.push(new DBToken(name, symbol, _eventCode, teamName));
     }
 
+    function transferOwnershipOfEventAndTokens(address newOwner)
+        public
+        onlyOwner
+        returns (bool)
+    {
+        transferOwnership(newOwner);
+        for (uint256 i = 0; i < numOfTeamTokens(); i++) {
+            teamTokens[i].transferOwnership(newOwner);
+        }
+        return true;
+    }
+
     function mintTeamToken(
         string memory teamName,
         address account,
