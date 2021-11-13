@@ -4,6 +4,7 @@ const solc = require("solc");
 
 let files = [
 	"DBToken.sol",
+	"DBTokenEvent.sol",
 	"DBTokenSale.sol",
 	"DBTokenReward.sol",
 ];
@@ -12,7 +13,9 @@ let pathToFile, source;
 
 let input = {
 	language: 'Solidity',
-	sources: {/** Add file names in files array */},
+	sources: {
+		/** Add file names in files array */
+	},
 	settings: {
 		outputSelection: {
 			'*': {
@@ -25,8 +28,10 @@ let input = {
 files.forEach(file => {
 	pathToFile = path.resolve(__dirname, "contracts", file);
 	source = fs.readFileSync(pathToFile, "utf8");
-	
-	input.sources[file] = { content: source };
+
+	input.sources[file] = {
+		content: source
+	};
 });
 
 // console.log(input);
