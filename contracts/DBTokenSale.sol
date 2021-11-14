@@ -247,7 +247,6 @@ abstract contract Pausable {
     function isPaused() public view returns (bool) {
         return _paused;
     }
-
 }
 
 contract DBToken is IERC20, IERC20Metadata, Ownable {
@@ -417,13 +416,10 @@ contract DBToken is IERC20, IERC20Metadata, Ownable {
     }
 }
 
-
 struct ArrayElRef {
     bool status;
     uint256 arrayIndex;
 }
-
-
 
 abstract contract SaleFactory is Ownable {
     // Each sale has an entry in the eventCode hash table with start and end time.
@@ -641,7 +637,11 @@ abstract contract SaleFactory is Ownable {
     function isSaleOn(string memory eventCode)
         public
         view
-        returns (bool saleActive, uint256 saleStart, uint256 saleEnd)
+        returns (
+            bool saleActive,
+            uint256 saleStart,
+            uint256 saleEnd
+        )
     {
         Sale storage eventSale = getEventSale(eventCode);
 
@@ -663,7 +663,6 @@ abstract contract TokenHash is Ownable {
     {
         return keccak256(bytes(abi.encodePacked(_eventCode, _teamName)));
     }
-
 }
 
 abstract contract RecordingTradePairs is Ownable {
@@ -741,7 +740,6 @@ abstract contract RecordingTradePairs is Ownable {
 }
 
 abstract contract RecordingTokensSold is TokenHash {
-    
     struct TokensSold {
         bytes32 eventHash;
         bytes32 tokenHash;
@@ -769,7 +767,6 @@ abstract contract RecordingTokensSold is TokenHash {
     {
         return _currentEventSale;
     }
-
 
     function initTokensSold(
         bytes32 tokenHash,
@@ -926,38 +923,24 @@ contract StoringDBTokens is TokenHash, Pausable {
         );
         return _dbtokens[tokenHash];
     }
-
 }
 
-
-
-
- /**********************************************************************
+/**********************************************************************
  ***********************************************************************
  ********************      DB TOKEN SALE        ************************
  ***********************************************************************
  **********************************************************************/
-
-
-
-
-
-
-
-
 
 contract DBTokenSale is
     StoringDBTokens,
     RecordingTradePairs,
     RecordingTokensSold,
     SaleFactory
-    {
-
+{
     address private _owner;
     address private _withrawable;
 
     StandardToken private _standardToken;
-    
 
     /**
      * @param standardToken_ Standard token is the USDT contract from which the sale contract will allow income of funds from. The contract should extend the StandardToken interface
@@ -967,7 +950,6 @@ contract DBTokenSale is
         _standardToken = standardToken_;
         _withrawable = withrawable;
     }
-
 
     // High level call. Function will revert if token not found.
     function calculateCirculatingSupply(
@@ -1028,6 +1010,18 @@ contract DBTokenSale is
         }
 
         delete _currentSale;
+        return true;
+    }
+
+    function mint(
+        string memory _eventCode,
+        string memory _teamName,
+        address mintTo,
+        uint256 amount
+    ) public returns (bool) {
+        DBToken dbtoken = getToken(_eventCode, _teamName);
+        dbtoken._mint(mintTo, amount);
+
         return true;
     }
 
