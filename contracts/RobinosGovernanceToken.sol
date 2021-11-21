@@ -1527,11 +1527,11 @@ abstract contract PollFactory is Ownable {
 
 /***********************************************************************
  ***********************************************************************
- ****************      ROBINOS GOVERNENCE TOKEN        *****************
+ ****************      ROBINOS GOVERNaNCE TOKEN        *****************
  ***********************************************************************
  **********************************************************************/
 
-contract RobinosGovernenceToken is
+contract RobinosGovernanceToken is
     ERC721,
     Ownable,
     DeployingInBatches,
@@ -1565,7 +1565,7 @@ contract RobinosGovernenceToken is
     ) public onlyOwner {
         require(
             allTokensInitialized(tokenIds, false),
-            "RobinosGovernenceToken: some of the tokens are already minted"
+            "RobinosGovernanceToken: some of the tokens are already minted"
         );
 
         for (uint256 i = 0; i < tokenIds.length; i++) {

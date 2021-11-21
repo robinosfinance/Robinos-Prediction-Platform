@@ -7,18 +7,18 @@ const web3 = new Web3(ganache.provider({
 
 const contracts = require("../compile");
 
-const tokenContract = contracts["RobinosGovernenceToken.sol"].RobinosGovernenceToken;
+const tokenContract = contracts["RobinosGovernanceToken.sol"].RobinosGovernanceToken;
 
-let RobinosGovernenceToken, accounts;
+let RobinosGovernanceToken, accounts;
 
-const tokenName = "RobinosGovernenceToken";
-const baseURI = "http://robinos_governence_token/";
+const tokenName = "RobinosGovernanceToken";
+const baseURI = "http://robinos_governance_token/";
 const tokenSymbol = "RGT";
 const batchName = "TestBatchOfNFTs";
 
 beforeEach(async () => {
     accounts = await web3.eth.getAccounts();
-    RobinosGovernenceToken = await new web3.eth.Contract(tokenContract.abi)
+    RobinosGovernanceToken = await new web3.eth.Contract(tokenContract.abi)
         .deploy({
             data: tokenContract.evm.bytecode.object,
             arguments: [tokenName, tokenSymbol, baseURI]
@@ -29,18 +29,18 @@ beforeEach(async () => {
         });
 });
 
-describe("RobinosGovernenceToken", () => {
+describe("RobinosGovernanceToken", () => {
     it("deployed successfully", () => {
-        assert.ok(RobinosGovernenceToken.options.address); // Check the address
+        assert.ok(RobinosGovernanceToken.options.address); // Check the address
     });
 
     it("has name and symbol", async () => {
-        const deployedName = await RobinosGovernenceToken.methods.name()
+        const deployedName = await RobinosGovernanceToken.methods.name()
             .call({
                 from: accounts[0],
                 gas: '1000000000'
             });
-        const deployedSymbol = await RobinosGovernenceToken.methods.symbol()
+        const deployedSymbol = await RobinosGovernanceToken.methods.symbol()
             .call({
                 from: accounts[0],
                 gas: '1000000000'
@@ -52,19 +52,19 @@ describe("RobinosGovernenceToken", () => {
     it("mints NFT tokens", async () => {
         const account = accounts[0];
         const tokenId = 1;
-        RobinosGovernenceToken.methods.mint(account, tokenId, batchName)
+        RobinosGovernanceToken.methods.mint(account, tokenId, batchName)
             .send({
                 from: accounts[0],
                 gas: '1000000000'
             })
             .then(async () => {
-                const owner = await RobinosGovernenceToken.methods.ownerOf(tokenId)
+                const owner = await RobinosGovernanceToken.methods.ownerOf(tokenId)
                     .call({
                         from: accounts[0],
                         gas: '1000000000'
                     });
 
-                const tokenURI = await RobinosGovernenceToken.methods.tokenURI(tokenId)
+                const tokenURI = await RobinosGovernanceToken.methods.tokenURI(tokenId)
                     .call({
                         from: accounts[0],
                         gas: '1000000000'
@@ -103,7 +103,7 @@ describe("RobinosGovernenceToken", () => {
 
         Promise.all(
                 // First we wait until all batches are fully minted
-                batches.map(batch => Promise.resolve(RobinosGovernenceToken.methods
+                batches.map(batch => Promise.resolve(RobinosGovernanceToken.methods
                     .mintBatch(account, batch.tokenIds, batch.name)
                     .send({
                         from: accounts[0],
@@ -112,7 +112,7 @@ describe("RobinosGovernenceToken", () => {
             )
             // After all promises are finished, we will inspect contract storage
             .then(async () => {
-                const numOfBatches = await RobinosGovernenceToken.methods.numOfBatches()
+                const numOfBatches = await RobinosGovernanceToken.methods.numOfBatches()
                     .call({
                         from: accounts[0],
                         gas: '1000000000'
@@ -121,7 +121,7 @@ describe("RobinosGovernenceToken", () => {
                 assert.strictEqual(parseInt(numOfBatches), batches.length);
 
                 batches.forEach(async batch => {
-                    const batchData = await RobinosGovernenceToken.methods
+                    const batchData = await RobinosGovernanceToken.methods
                         .getBatchData(batch.name)
                         .call({
                             from: accounts[0],
@@ -150,14 +150,14 @@ describe("RobinosGovernenceToken", () => {
 
         polls.forEach(async poll => {
             // As the owner we will create a new poll with given question and array of answers
-            RobinosGovernenceToken.methods
+            RobinosGovernanceToken.methods
                 .createNewPoll(poll.question, poll.answers)
                 .send({
                     from: accounts[0],
                     gas: '1000000000'
                 })
                 .then(async () => {
-                    const pollData = await RobinosGovernenceToken.methods
+                    const pollData = await RobinosGovernanceToken.methods
                         .getPoll(poll.question, poll.answers)
                         .call({
                             from: accounts[0],
@@ -172,7 +172,7 @@ describe("RobinosGovernenceToken", () => {
                 });
         });
 
-        RobinosGovernenceToken.methods
+        RobinosGovernanceToken.methods
             // For any user to be able to vote, they have to be whitelisted by the owner of the contract
             .whitelistAddress(accounts[1])
             .send({
@@ -181,7 +181,7 @@ describe("RobinosGovernenceToken", () => {
             })
             .then(() => {
                 polls.forEach(poll => {
-                    RobinosGovernenceToken.methods
+                    RobinosGovernanceToken.methods
                         // Now that user has been whitelisted, they can vote by selecting poll question and poll answers
                         // to match the poll signature and they need to select the index of the correct answer which is
                         // within the poll answers array
@@ -191,7 +191,7 @@ describe("RobinosGovernenceToken", () => {
                             gas: '1000000000'
                         })
                         .then(async () => {
-                            const pollData = await RobinosGovernenceToken.methods
+                            const pollData = await RobinosGovernanceToken.methods
                                 .getPoll(poll.question, poll.answers)
                                 .call({
                                     from: accounts[0],

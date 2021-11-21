@@ -7,7 +7,7 @@ const files = [
 	"DBTokenEvent.sol",
 	"DBTokenSale.sol",
 	"DBTokenReward.sol",
-	"RobinosGovernenceToken.sol",
+	"RobinosGovernanceToken.sol",
 ];
 
 let pathToFile, source;
