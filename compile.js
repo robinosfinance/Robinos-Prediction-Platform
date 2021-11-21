@@ -2,11 +2,12 @@ const path = require("path");
 const fs = require("fs");
 const solc = require("solc");
 
-let files = [
+const files = [
 	"DBToken.sol",
 	"DBTokenEvent.sol",
 	"DBTokenSale.sol",
 	"DBTokenReward.sol",
+	"RobinosGovernenceToken.sol",
 ];
 
 let pathToFile, source;
