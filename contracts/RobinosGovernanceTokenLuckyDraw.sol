@@ -53,6 +53,25 @@ abstract contract ERC165 is IERC165 {
     }
 }
 
+interface StandardToken {
+    function transferFrom(
+        address _from,
+        address _to,
+        uint256 _value
+    ) external;
+
+    function transfer(address _to, uint256 _value) external;
+
+    function approve(address _spender, uint256 _value) external;
+
+    function allowance(address _owner, address _spender)
+        external
+        view
+        returns (uint256);
+
+    function balanceOf(address _owner) external returns (uint256);
+}
+
 /**
  * @dev Required interface of an ERC721 compliant contract.
  */
@@ -229,6 +248,20 @@ interface IERC721Receiver {
         uint256 tokenId,
         bytes calldata data
     ) external returns (bytes4);
+}
+
+abstract contract ERC721Receiver {
+    function onERC721Received(
+        address,
+        address,
+        uint256,
+        bytes calldata
+    ) external pure returns (bytes4) {
+        return
+            bytes4(
+                keccak256("onERC721Received(address,address,uint256,bytes)")
+            );
+    }
 }
 
 /**
@@ -1525,11 +1558,239 @@ abstract contract PollFactory is Ownable {
     }
 }
 
-/***********************************************************************
- ***********************************************************************
- ****************      ROBINOS GOVERNANCE TOKEN        *****************
- ***********************************************************************
- **********************************************************************/
+abstract contract SaleFactory is Ownable {
+    // Each sale has an entry in the eventCode hash table with start and end time.
+    // If both saleStart and saleEnd are 0, sale is not initialized
+    struct Sale {
+        uint256 saleStart;
+        uint256 saleEnd;
+    }
+    mapping(bytes32 => Sale) private _eventSale;
+    bytes32[] private _allSales;
+
+    // Modifier allowing a call if and only if there are no active sales at the moment
+    modifier noActiveSale() {
+        for (uint256 i; i < _allSales.length; i++) {
+            require(
+                saleIsActive(false, _eventSale[_allSales[i]]),
+                "SaleFactory: unavailable while a sale is active"
+            );
+        }
+        _;
+    }
+
+    // Modifier allowing a call only if event by eventCode is currently active
+    modifier duringSale(string memory eventCode) {
+        Sale storage eventSale = getEventSale(eventCode);
+        require(
+            saleIsActive(true, eventSale),
+            "SaleFactory: function can only be called during sale"
+        );
+        _;
+        clearExpiredSales();
+    }
+
+    // Modifier allowing a call only if event by eventCode is currently inactive
+    modifier outsideOfSale(string memory eventCode) {
+        // We are fetching the event directly through a hash, since getEventSale reverts if sale is not initialized
+        Sale storage eventSale = _eventSale[hashStr(eventCode)];
+        require(
+            saleIsActive(false, eventSale),
+            "SaleFactory: function can only be called outside of sale"
+        );
+
+        _;
+    }
+
+    /**
+     * @dev Function returns true if our expectations on status of sale is correct
+     * @param expectActive If we expect the sale to be active set to true
+     * @param sale Sale that is being inspected
+     */
+    function saleIsActive(bool expectActive, Sale memory sale)
+        private
+        view
+        returns (bool)
+    {
+        if (expectActive) {
+            return (time() >= sale.saleStart) && (time() < sale.saleEnd);
+        } else {
+            return (time() < sale.saleStart) || (time() >= sale.saleEnd);
+        }
+    }
+
+    // Returns all active or soon-to-be active sales in an array ordered by sale end time
+    function getAllSales() public view returns (Sale[] memory) {
+        uint256 length = _allSales.length;
+
+        Sale[] memory sales = new Sale[](length);
+
+        for (uint256 i; i < length; i++) {
+            sales[i] = _eventSale[_allSales[i]];
+        }
+        return sales;
+    }
+
+    // Clears all sales from the _allSales array who's saleEnd time is in the past
+    function clearExpiredSales() private returns (bool) {
+        uint256 length = _allSales.length;
+        if (length > 0 && _eventSale[_allSales[0]].saleEnd <= time()) {
+            uint256 endDelete = 1;
+
+            bytes32[] memory copyAllSales = _allSales;
+
+            uint256 i = 1;
+            while (i < length) {
+                if (_eventSale[_allSales[i]].saleEnd > time()) {
+                    endDelete = i;
+                    i = length; // Break from while loop
+                }
+                i++;
+            }
+
+            for (i = 0; i < length; i++) {
+                if (i < length - endDelete) {
+                    _allSales[i] = copyAllSales[i + endDelete];
+                } else {
+                    _allSales.pop();
+                }
+            }
+        }
+        return true;
+    }
+
+    // Return current timestamp
+    function time() public view returns (uint256) {
+        return block.timestamp;
+    }
+
+    function hashStr(string memory str) internal pure returns (bytes32) {
+        return bytes32(keccak256(bytes(str)));
+    }
+
+    /**
+     * @dev Function inserts a sale reference in the _allSales array and orders it by saleEnd time
+     * in ascending order. This means the first sale in the array will expire first.
+     * @param saleHash hash reference to the sale mapping structure
+     */
+    function insertSale(bytes32 saleHash) private returns (bool) {
+        uint256 length = _allSales.length;
+
+        bytes32 unorderedSale = saleHash;
+        bytes32 tmpSale;
+
+        for (uint256 i; i <= length; i++) {
+            if (i == length) {
+                _allSales.push(unorderedSale);
+            } else {
+                if (
+                    _eventSale[_allSales[i]].saleEnd >
+                    _eventSale[unorderedSale].saleEnd
+                ) {
+                    tmpSale = _allSales[i];
+                    _allSales[i] = unorderedSale;
+                    unorderedSale = tmpSale;
+                }
+            }
+        }
+        return true;
+    }
+
+    /**
+     * @dev Function returns Sale struct with saleEnd and saleStart. Function reverts if event is not initialized
+     * @param eventCode string code of event
+     */
+    function getEventSale(string memory eventCode)
+        private
+        view
+        returns (Sale storage)
+    {
+        Sale storage eventSale = _eventSale[hashStr(eventCode)];
+        require(
+            eventSale.saleStart > 0 || eventSale.saleEnd > 0,
+            "SaleFactory: sale not initialized"
+        );
+        return eventSale;
+    }
+
+    /**
+     * @dev Function to set the start and end time of the next sale.
+     * Can only be called if there is currently no active sale and needs to be called by the owner of the contract.
+     * @param start Unix time stamp of the start of sale. Needs to be a timestamp in the future. If the start is 0, the sale will start immediately.
+     * @param end Unix time stamp of the end of sale. Needs to be a timestamp after the start
+     */
+    function setSaleStartEnd(
+        string memory eventCode,
+        uint256 start,
+        uint256 end
+    ) public onlyOwner outsideOfSale(eventCode) returns (bool) {
+        bool initialized;
+        bytes32 saleHash = hashStr(eventCode);
+        Sale storage eventSale = _eventSale[saleHash];
+        if (eventSale.saleStart == 0 && eventSale.saleEnd == 0) {
+            initialized = false;
+        }
+
+        if (start != 0) {
+            require(start > time(), "SaleFactory: given past sale start time");
+        } else {
+            start = time();
+        }
+        require(
+            end > start,
+            "SaleFactory: sale end time needs to be greater than start time"
+        );
+
+        eventSale.saleStart = start;
+        eventSale.saleEnd = end;
+
+        if (!initialized) {
+            insertSale(saleHash);
+        }
+
+        return true;
+    }
+
+    // Function can be called by the owner during a sale to end it prematurely
+    function endSaleNow(string memory eventCode)
+        public
+        onlyOwner
+        duringSale(eventCode)
+        returns (bool)
+    {
+        Sale storage eventSale = getEventSale(eventCode);
+
+        eventSale.saleEnd = time();
+        return true;
+    }
+
+    /**
+     * @dev Public function which provides info if there is currently any active sale and when the sale status will update.
+     * Value saleActive represents if sale is active at the current moment.
+     * If sale has been initialized, saleStart and saleEnd will return UNIX timestampts
+     * If sale has not been initialized, function will revert.
+     * @param eventCode string code of event
+     */
+    function isSaleOn(string memory eventCode)
+        public
+        view
+        returns (
+            bool saleActive,
+            uint256 saleStart,
+            uint256 saleEnd
+        )
+    {
+        Sale storage eventSale = getEventSale(eventCode);
+
+        if (eventSale.saleStart > time()) {
+            return (false, eventSale.saleStart, eventSale.saleEnd);
+        } else if (eventSale.saleEnd > time()) {
+            return (true, eventSale.saleStart, eventSale.saleEnd);
+        } else {
+            return (false, eventSale.saleStart, eventSale.saleEnd);
+        }
+    }
+}
 
 contract RobinosGovernanceToken is
     ERC721,
@@ -1576,5 +1837,79 @@ contract RobinosGovernanceToken is
 
     function _baseURI() internal view override returns (string memory) {
         return baseURI;
+    }
+}
+
+/***********************************************************************
+ ***********************************************************************
+ ***********      ROBINOS GOVERNANCE TOKEN LUCKY DRAW        ***********
+ ***********************************************************************
+ **********************************************************************/
+
+contract RobinosGovernanceTokenLuckyDraw is SaleFactory, ERC721Receiver {
+    RobinosGovernanceToken private nftInstance;
+    StandardToken private standardToken;
+    mapping(bytes32 => uint256) private totalStakedPerEvent;
+    mapping(bytes32 => mapping(address => uint256)) private userStakedPerEvent;
+
+    constructor(
+        RobinosGovernanceToken nftInstance_,
+        StandardToken standardToken_
+    ) Ownable() {
+        nftInstance = nftInstance_;
+        standardToken = standardToken_;
+    }
+
+    modifier notZeroAddress(address sender) {
+        require(
+            sender != address(0),
+            "RobinosGovernanceTokenLuckyDraw: zero address not allowed"
+        );
+        _;
+    }
+
+    function availableTokens() public view returns (uint256) {
+        return nftInstance.balanceOf(address(this));
+    }
+
+    function getTotalStaked(string memory eventCode)
+        public
+        view
+        returns (uint256)
+    {
+        // Function used to revert in case the event has not been initialized yet
+        isSaleOn(eventCode);
+        bytes32 eventHash = hashStr(eventCode);
+        return totalStakedPerEvent[eventHash];
+    }
+
+    function getUserStaked(string memory eventCode, address user)
+        public
+        view
+        notZeroAddress(user)
+        returns (uint256)
+    {
+        isSaleOn(eventCode);
+        bytes32 eventHash = hashStr(eventCode);
+        return userStakedPerEvent[eventHash][user];
+    }
+
+    function addStakedAmount(
+        string memory eventCode,
+        address user,
+        uint256 amount
+    ) private notZeroAddress(user) {
+        isSaleOn(eventCode);
+        bytes32 eventHash = hashStr(eventCode);
+        totalStakedPerEvent[eventHash] += amount;
+        userStakedPerEvent[eventHash][user] += amount;
+    }
+
+    function stake(string memory eventCode, uint256 amount)
+        public
+        duringSale(eventCode)
+    {
+        addStakedAmount(eventCode, _msgSender(), amount);
+        standardToken.transferFrom(_msgSender(), address(this), amount);
     }
 }
