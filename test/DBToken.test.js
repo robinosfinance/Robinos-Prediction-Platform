@@ -6,6 +6,10 @@ const web3 = new Web3(ganache.provider({
 }));
 
 const contracts = require("../compile");
+const {
+    secondsInTheFuture
+} = require("../helper");
+
 const tokenContract = contracts["DBToken.sol"].DBToken;
 const eventContract = contracts["DBTokenEvent.sol"].DBTokenEvent;
 const salesContract = contracts["DBTokenSale.sol"].DBTokenSale;
@@ -13,7 +17,6 @@ const rewardContract = contracts["DBTokenReward.sol"].DBTokenReward;
 
 // Local instance of the USDT contract used for testing
 const tether = require("./tether_compiled.json");
-
 
 let accounts;
 let rate;
@@ -42,7 +45,7 @@ let teamTokenParams = [{
 ];
 const eventCode = "EPL";
 const totalSupply = 1 * 10 ** 12;
-let secondsInTheFuture = seconds => Math.floor(Date.now() / 1000) + seconds; // We just calculate the timestamp to give us enough time in the sale to finish all of the tests
+
 
 
 beforeEach(async () => {
