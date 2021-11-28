@@ -1196,7 +1196,17 @@ contract ERC721 is Context, ERC165, IERC721, IERC721Metadata {
     ) internal virtual {}
 }
 
-abstract contract DeployingInBatches is ERC721, Ownable {
+abstract contract MatchingStrings {
+    function matchStrings(string memory a, string memory b)
+        internal
+        pure
+        returns (bool)
+    {
+        return keccak256(bytes(a)) == keccak256(bytes(b));
+    }
+}
+
+abstract contract DeployingInBatches is ERC721, Ownable, MatchingStrings {
     struct BatchData {
         string name;
         uint256 numOfTokens;
@@ -1248,14 +1258,6 @@ abstract contract DeployingInBatches is ERC721, Ownable {
     {
         BatchData storage batchData = getBatch(batchName);
         return (batchData.name, batchData.numOfTokens);
-    }
-
-    function matchStrings(string memory a, string memory b)
-        private
-        pure
-        returns (bool)
-    {
-        return keccak256(bytes(a)) == keccak256(bytes(b));
     }
 
     function createBatch(string memory batchName)
@@ -1558,7 +1560,14 @@ abstract contract PollFactory is Ownable {
     }
 }
 
-abstract contract SaleFactory is Ownable {
+abstract contract ReadingTime {
+    // Return current timestamp
+    function time() internal view returns (uint256) {
+        return block.timestamp;
+    }
+}
+
+abstract contract SaleFactory is Ownable, ReadingTime {
     // Each sale has an entry in the eventCode hash table with start and end time.
     // If both saleStart and saleEnd are 0, sale is not initialized
     struct Sale {
@@ -1657,11 +1666,6 @@ abstract contract SaleFactory is Ownable {
             }
         }
         return true;
-    }
-
-    // Return current timestamp
-    function time() public view returns (uint256) {
-        return block.timestamp;
     }
 
     function hashStr(string memory str) internal pure returns (bytes32) {
@@ -1840,38 +1844,171 @@ contract RobinosGovernanceToken is
     }
 }
 
+contract Period {
+    string private _label;
+    uint256 private _multiplier;
+
+    constructor(string memory label_, uint256 multiplier_) {
+        _label = label_;
+        _multiplier = multiplier_;
+    }
+
+    function label() external view returns (string memory) {
+        return _label;
+    }
+
+    function multiplier() external view returns (uint256) {
+        return _multiplier;
+    }
+}
+
+abstract contract HandlingTime is MatchingStrings {
+    Period[5] private periods = [
+        new Period("seconds", 1),
+        new Period("minutes", 60),
+        new Period("hours", 60),
+        new Period("days", 24),
+        new Period("weeks", 7)
+    ];
+
+    function periodLabels() private view returns (string[] memory) {
+        uint256 length = periods.length;
+        string[] memory periodLabelsArray = new string[](length);
+        for (uint256 i = 0; i < length; i++) {
+            periodLabelsArray[i] = periods[i].label();
+        }
+        return periodLabelsArray;
+    }
+
+    function getArrayIndexOf(string[] memory array, string memory str)
+        private
+        pure
+        returns (uint256)
+    {
+        for (uint256 i = 0; i < array.length; i++) {
+            if (matchStrings(str, array[i])) {
+                return i;
+            }
+        }
+        require(false, "HandlingTime: undefined period passed");
+        return 0;
+    }
+
+    function toUnixTime(string memory period, uint256 amount)
+        internal
+        view
+        returns (uint256)
+    {
+        uint256 periodIndex = getArrayIndexOf(periodLabels(), period);
+        uint256 totalAmount = amount;
+        for (uint256 i = periodIndex; i > 0; i--) {
+            totalAmount *= periods[i].multiplier();
+        }
+        return totalAmount;
+    }
+}
+
 /***********************************************************************
  ***********************************************************************
  ***********      ROBINOS GOVERNANCE TOKEN LUCKY DRAW        ***********
  ***********************************************************************
  **********************************************************************/
 
-contract RobinosGovernanceTokenLuckyDraw is SaleFactory, ERC721Receiver {
+contract RobinosGovernanceTokenLuckyDraw is
+    SaleFactory,
+    ERC721Receiver,
+    HandlingTime
+{
     RobinosGovernanceToken private nftInstance;
     StandardToken private standardToken;
-    mapping(bytes32 => uint256) private totalStakedPerEvent;
-    mapping(bytes32 => mapping(address => uint256)) private userStakedPerEvent;
 
+    uint256 constant maxRandom = 1000000000000;
+
+    struct UserStake {
+        uint256 totalStaked;
+        uint256 stakedAt;
+        uint256 unstakedAt;
+    }
+    mapping(bytes32 => uint256) private totalStakedPerEvent;
+    mapping(bytes32 => mapping(address => UserStake))
+        private userStakedPerEvent;
+    mapping(bytes32 => address[]) private usersPerEventArrayMapping;
+    uint256 private stakeDurationTime;
+
+    /**
+     * @param nftInstance_ address to the ERC721 token which will be given as a reward
+     * @param standardToken_ standard token used for staking
+     * @param period_ the chosen period to multiply with the stake duration. One of the options given in the HandlingTime contract
+     * @param stakeDuration_ number to multiply the period by, gives the total stake duration time
+     */
     constructor(
         RobinosGovernanceToken nftInstance_,
-        StandardToken standardToken_
+        StandardToken standardToken_,
+        string memory period_,
+        uint256 stakeDuration_
     ) Ownable() {
         nftInstance = nftInstance_;
         standardToken = standardToken_;
+        stakeDurationTime = toUnixTime(period_, stakeDuration_);
     }
 
-    modifier notZeroAddress(address sender) {
+    modifier notZeroAddress(address user) {
         require(
-            sender != address(0),
+            user != address(0),
             "RobinosGovernanceTokenLuckyDraw: zero address not allowed"
         );
         _;
     }
 
+    modifier userStakedLongEnough(string memory eventCode, address user) {
+        (uint256 totalUserStaked, uint256 stakedAt, ) = getUserStaked(
+            eventCode,
+            user
+        );
+        require(
+            totalUserStaked > 0,
+            "RobinosGovernanceTokenLuckyDraw: user has no stake for this event"
+        );
+        require(
+            stakedAt > 0 && stakedAt + stakeDurationTime < time(),
+            "RobinosGovernanceTokenLuckyDraw: too early to unstake, please try again later"
+        );
+        _;
+    }
+
+    modifier userNotUnstaked(string memory eventCode, address user) {
+        (
+            uint256 totalUserStaked,
+            uint256 stakedAt,
+            uint256 unstakedAt
+        ) = getUserStaked(eventCode, user);
+        require(
+            unstakedAt == 0,
+            "RobinosGovernanceTokenLuckyDraw: user already unstaked in this event"
+        );
+        _;
+    }
+
+    /**
+     * Actually a pseudo-random number generator. Should not be open to public, only to owner
+     */
+    function randomNumber() private view returns (uint256) {
+        bytes32 hashedString = keccak256(
+            abi.encodePacked(block.timestamp, block.difficulty)
+        );
+        return uint256(hashedString) % maxRandom;
+    }
+
+    /**
+     * Retreives a total number of NFTs on this contract
+     */
     function availableTokens() public view returns (uint256) {
         return nftInstance.balanceOf(address(this));
     }
 
+    /**
+     * Total amount of staked standardTokens during particular event
+     */
     function getTotalStaked(string memory eventCode)
         public
         view
@@ -1884,14 +2021,79 @@ contract RobinosGovernanceTokenLuckyDraw is SaleFactory, ERC721Receiver {
     }
 
     function getUserStaked(string memory eventCode, address user)
-        public
+        private
         view
         notZeroAddress(user)
-        returns (uint256)
+        returns (
+            uint256,
+            uint256,
+            uint256
+        )
     {
         isSaleOn(eventCode);
         bytes32 eventHash = hashStr(eventCode);
-        return userStakedPerEvent[eventHash][user];
+        UserStake storage userStake = userStakedPerEvent[eventHash][user];
+        return (
+            userStake.totalStaked,
+            userStake.stakedAt,
+            userStake.unstakedAt
+        );
+    }
+
+    /**
+     * Get user stake amount for particular event
+     */
+    function getUserStakeAmount(string memory eventCode, address user)
+        public
+        view
+        returns (uint256)
+    {
+        (uint256 totalUserStaked, , ) = getUserStaked(eventCode, user);
+        return totalUserStaked;
+    }
+
+
+    /**
+     * Retrevies an array of addresses of all users that staked during this event
+     */
+    function getUsersStaked(string memory eventCode)
+        public
+        view
+        returns (address[] memory)
+    {
+        isSaleOn(eventCode);
+        bytes32 eventHash = hashStr(eventCode);
+        return usersPerEventArrayMapping[eventHash];
+    }
+
+    /**
+     * Retrevies an array of addresses of all users that staked during this event;
+     * How much each user staked;
+     * Total amount staked during this event;
+     * Total number of tokens on this contract
+     */
+    function getEventStakeData(string memory eventCode)
+        public
+        view
+        returns (
+            address[] memory usersStaked,
+            uint256[] memory stakePerUser,
+            uint256 totalStaked,
+            uint256 numOfTokens
+        )
+    {
+        usersStaked = getUsersStaked(eventCode);
+        uint256 numOfUsers = usersStaked.length;
+
+        stakePerUser = new uint256[](numOfUsers);
+        for (uint256 i = 0; i < numOfUsers; i++) {
+            stakePerUser[i] = getUserStakeAmount(eventCode, usersStaked[i]);
+        }
+
+        totalStaked = getTotalStaked(eventCode);
+        numOfTokens = availableTokens();
+
+        return (usersStaked, stakePerUser, totalStaked, numOfTokens);
     }
 
     function addStakedAmount(
@@ -1901,15 +2103,51 @@ contract RobinosGovernanceTokenLuckyDraw is SaleFactory, ERC721Receiver {
     ) private notZeroAddress(user) {
         isSaleOn(eventCode);
         bytes32 eventHash = hashStr(eventCode);
+
         totalStakedPerEvent[eventHash] += amount;
-        userStakedPerEvent[eventHash][user] += amount;
+
+        UserStake storage userStake = userStakedPerEvent[eventHash][user];
+        userStake.totalStaked += amount;
+        if (userStake.stakedAt == 0) {
+            usersPerEventArrayMapping[eventHash].push(user);
+        }
+        userStake.stakedAt = time();
     }
 
+    /**
+     * Staking function. This endpoint has a number of requirements listed below:
+     * 1) User must approve enough standard tokens for this transaction;
+     * 2) User must call this function while a sale is active;
+     * 3) User cannot stake in this event if they already unstaked at least once during this event;
+     * 4) User must stake at least one token
+     */
     function stake(string memory eventCode, uint256 amount)
         public
         duringSale(eventCode)
+        userNotUnstaked(eventCode, _msgSender())
     {
+        require(
+            amount > 0,
+            "RobinosGovernanceTokenLuckyDraw: stake amount of 0 not allowed"
+        );
+
         addStakedAmount(eventCode, _msgSender(), amount);
         standardToken.transferFrom(_msgSender(), address(this), amount);
+    }
+
+    /**
+     * Unstaking function. This endpoint has a number of requirements listed below:
+     * 1) User cannot unstake more than once during a single event;
+     * 2) User must wait for the staking duration time to pass after their LAST STAKE to be able to unstake;
+     * 3) User must unstake while the sale is active
+     */
+    function unstake(string memory eventCode)
+        public
+        userNotUnstaked(eventCode, _msgSender())
+        userStakedLongEnough(eventCode, _msgSender())
+        duringSale(eventCode)
+    {
+        (uint256 totalUserStaked, , ) = getUserStaked(eventCode, _msgSender());
+        standardToken.transfer(_msgSender(), totalUserStaked);
     }
 }

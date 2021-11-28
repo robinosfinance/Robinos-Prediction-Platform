@@ -1,3 +1,4 @@
+const { doesNotMatch } = require("assert");
 const assert = require("assert");
 const ganache = require("ganache-cli");
 const Web3 = require("web3");
@@ -7,7 +8,8 @@ const web3 = new Web3(ganache.provider({
 
 const contracts = require("../compile");
 const {
-    secondsInTheFuture
+    secondsInTheFuture,
+    randomInt,
 } = require("../helper");
 
 const tokenContract = contracts["RobinosGovernanceToken.sol"].RobinosGovernanceToken;
@@ -23,6 +25,11 @@ const baseURI = "http://robinos_governance_token/";
 const tokenSymbol = "RGT";
 const batchName = "TestBatchOfNFTs";
 const totalSupply = 1 * 10 ** 12;
+// Stake period can be any of the following ["seconds", "minutes", "hours", "days", "weeks"]
+// The stake period is multiplied by stake duration when deploying the lucky draw contract to get the stake cool-off period
+// For the sake of testing we will use small periods, but should work the same way with longer periods
+const stakeDuration = 2;
+const stakePeriod = "seconds";
 
 beforeEach(async () => {
     accounts = await web3.eth.getAccounts();
@@ -53,7 +60,7 @@ beforeEach(async () => {
     RobinosGovernanceTokenLuckyDraw = await new web3.eth.Contract(luckyDrawContract.abi)
         .deploy({
             data: luckyDrawContract.evm.bytecode.object,
-            arguments: [RobinosGovernanceToken.options.address, TetherToken.options.address]
+            arguments: [RobinosGovernanceToken.options.address, TetherToken.options.address, stakePeriod, stakeDuration]
         })
         .send({
             from: accounts[0],
@@ -254,9 +261,6 @@ describe("RobinosGovernanceTokenLuckyDraw", () => {
     it("allows having multiple sales", async () => {
         let userStaked, errorMessage;
         const expectedError = "SaleFactory: sale not initialized";
-        const randomInt = () => {
-            return Math.ceil(Math.random() * 20);
-        };
 
         const eventCodes = [
             "EPL",
@@ -274,7 +278,7 @@ describe("RobinosGovernanceTokenLuckyDraw", () => {
         (() => {
             // We first make sure to go through all the events and start their sales from the list above
             return Promise.resolve(eventCodes.forEach(async (code, index) => {
-                RobinosGovernanceTokenLuckyDraw.methods.setSaleStartEnd(code, 0, secondsInTheFuture(randomInt() * 30))
+                RobinosGovernanceTokenLuckyDraw.methods.setSaleStartEnd(code, 0, secondsInTheFuture(randomInt(20, 100) * 30))
                     .send({
                         from: accounts[0],
                         gas: '10000000000'
@@ -315,6 +319,7 @@ describe("RobinosGovernanceTokenLuckyDraw", () => {
         const tokenIds = [1, 2, 3, 4, 5];
 
         RobinosGovernanceToken.methods
+            // We mint the tokens in one batch
             .mintBatch(account, tokenIds, batchName)
             .send({
                 from: accounts[0],
@@ -323,6 +328,7 @@ describe("RobinosGovernanceTokenLuckyDraw", () => {
             .then(() => {
                 return Promise.all(tokenIds.map(id =>
                     Promise.resolve(
+                        // Transfer each token to the lucky draw contract address
                         RobinosGovernanceToken.methods
                         .safeTransferFrom(account, RobinosGovernanceTokenLuckyDraw.options.address, id)
                         .send({
@@ -335,51 +341,105 @@ describe("RobinosGovernanceTokenLuckyDraw", () => {
                 const availableTokens = await RobinosGovernanceTokenLuckyDraw.methods.availableTokens().call({
                     from: accounts[0]
                 });
+                // We read the total number of tokens in the contract and compare the amount
                 assert.strictEqual(parseInt(availableTokens), tokenIds.length);
             });
     });
 
-    it("allows users to stake standard token", () => {
-        const account = accounts[0];
+    it("allows users to stake standard token & unstake after a certain period of time", () => {
+        const accountsSliced =
+            accounts.slice(1, 7)
+            .map(account => ({
+                address: account,
+                stakeAmount: randomInt(100, 250),
+            }));
         const eventName = "tokenSale";
-        const usdtAmount = 250;
 
         RobinosGovernanceTokenLuckyDraw.methods
-            .setSaleStartEnd(usdtAmount, 0, secondsInTheFuture(120))
+            // The owner must first initialize a sale for users to be able to stake their tokens
+            .setSaleStartEnd(eventName, 0, secondsInTheFuture(120))
             .send({
                 from: accounts[0],
                 gas: '10000000000'
             })
             .then(() => {
-                return TetherToken.methods.approve(RobinosGovernanceTokenLuckyDraw.options.address, usdtAmount)
-                    .send({
-                        from: accounts[0]
-                    });
+                return Promise.all(
+                    accountsSliced.map(account => Promise.resolve(
+                        TetherToken.methods
+                        // We send a random number of tokens to a number of accounts
+                        .transfer(account.address, account.stakeAmount)
+                        .send({
+                            from: accounts[0]
+                        })
+                    ))
+                );
             })
             .then(() => {
-                return RobinosGovernanceTokenLuckyDraw.methods
-                    .stake(eventName, usdtAmount)
-                    .send({
-                        from: accounts[0],
-                        gas: '10000000000'
-                    });
+                return Promise.all(
+                    accountsSliced.map(account => Promise.resolve(
+                        TetherToken.methods
+                        // Each account must approve their standard tokens to be transfered by the lucky draw contract
+                        .approve(RobinosGovernanceTokenLuckyDraw.options.address, account.stakeAmount)
+                        .send({
+                            from: account.address,
+                            gas: '10000000000'
+                        })
+                    ))
+                );
+            })
+            .then(() => {
+                return Promise.all(
+                    accountsSliced.map(account => Promise.resolve(
+                        RobinosGovernanceTokenLuckyDraw.methods
+                        // Each user will call the stake function on the lucky draw contract
+                        .stake(eventName, account.stakeAmount)
+                        .send({
+                            from: account.address,
+                            gas: '10000000000'
+                        })
+                    ))
+                );
             })
             .then(async () => {
-                const userStaked = await RobinosGovernanceTokenLuckyDraw.methods
-                    .getUserStaked(eventName, accounts[0])
-                    .call({
-                        from: accounts[0],
-                        gas: '10000000000'
-                    });
+                accountsSliced.map(async account => {
+                    const userStaked = await RobinosGovernanceTokenLuckyDraw.methods
+                        // We read the amount staked by each user and compare the numbers to local variables
+                        .getUserStakeAmount(eventName, account.address)
+                        .call({
+                            from: accounts[0],
+                            gas: '10000000000'
+                        });
 
-                const tetherBalance = await TetherToken.methods
-                    .balanceOf(RobinosGovernanceTokenLuckyDraw.options.address)
-                    .call({
-                        from: accounts[0]
-                    });
 
-                assert.strictEqual(parseInt(userStaked), usdtAmount);
-                assert.strictEqual(parseInt(tetherBalance), usdtAmount);
+                    assert.strictEqual(parseInt(userStaked), account.stakeAmount);
+                });
+            })
+            .then(async () => {
+                // For now we just get the amount of ms from stakeDuration and multiply by 1.5 just to be safe
+                // The JS and Solidity timestampts don't always match 100%
+                const waitDuration = stakeDuration * 1000 * 1.5;
+                setTimeout(() => {
+                    return Promise.all(
+                            accountsSliced.map(account => Promise.resolve(
+                                RobinosGovernanceTokenLuckyDraw.methods
+                                // After the stake duration has passed, the users can all safely unstake their standard tokens
+                                .unstake(eventName)
+                                .send({
+                                    from: account.address,
+                                    gas: '10000000000'
+                                })
+                            ))
+                        )
+                        .then(async () => {
+                            const tetherBalance = await TetherToken.methods
+                                // Since all users have unstaked their standard tokens, we excpect to have a balance of 0 standard tokens
+                                .balanceOf(RobinosGovernanceTokenLuckyDraw.options.address)
+                                .call({
+                                    from: accounts[0]
+                                });
+                            assert.strictEqual(parseInt(tetherBalance), 0);
+                        });
+                }, waitDuration);
             });
     });
 });
