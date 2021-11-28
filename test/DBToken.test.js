@@ -7,7 +7,7 @@ const web3 = new Web3(ganache.provider({
 
 const contracts = require("../compile");
 const {
-    secondsInTheFuture
+    secondsInTheFuture, randomInt
 } = require("../helper");
 
 const tokenContract = contracts["DBToken.sol"].DBToken;
@@ -55,7 +55,7 @@ beforeEach(async () => {
     DBTokenEvent = await new web3.eth.Contract(eventContract.abi)
         .deploy({
             data: eventContract.evm.bytecode.object,
-            arguments: [teamTokenParams, eventCode]
+            arguments: [teamTokenParams.map(params => params.teamName), eventCode]
         })
         .send({
             from: accounts[0],
@@ -224,10 +224,6 @@ describe("DBTokenSale", () => {
 
     it("allows having multiple sales", async () => {
 
-        const randomInt = () => {
-            return Math.ceil(Math.random() * 20);
-        };
-
         let eventCodes = [
             "EPL",
             "Champs",
@@ -242,7 +238,7 @@ describe("DBTokenSale", () => {
         (() => {
             // We first make sure to go through all the events and start their sales from the list above
             return Promise.resolve(eventCodes.forEach(async (code, index) => {
-                DBTokenSale.methods.setSaleStartEnd(code, 0, secondsInTheFuture(randomInt() * 30))
+                DBTokenSale.methods.setSaleStartEnd(code, 0, secondsInTheFuture(randomInt(20, 100) * 30))
                     .send({
                         from: accounts[0],
                         gas: '10000000000'
