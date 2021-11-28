@@ -433,20 +433,14 @@ contract DBTokenEvent is Ownable {
     }
     mapping(bytes32 => tokenReference) private teamTokensArrayMapping;
 
-    struct tokenParams {
-        string name;
-        string symbol;
-        string teamName;
-    }
-
-    constructor(tokenParams[] memory tokenParamsArray, string memory eventCode_)
+    constructor(string[] memory tokenNames, string memory eventCode_)
         Ownable()
     {
-        tokenParams memory params;
+        string memory tokenName;
         _eventCode = eventCode_;
-        for (uint256 i = 0; i < tokenParamsArray.length; i++) {
-            params = tokenParamsArray[i];
-            addTeamToken(params.name, params.symbol, params.teamName);
+        for (uint256 i = 0; i < tokenNames.length; i++) {
+            tokenName = tokenNames[i];
+            addTeamToken(tokenName, tokenName, tokenName);
         }
     }
 
