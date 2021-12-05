@@ -251,16 +251,16 @@ interface IERC721Receiver {
 }
 
 abstract contract ERC721Receiver {
+    bytes4 constant receiverSignature =
+        bytes4(keccak256("onERC721Received(address,address,uint256,bytes)"));
+
     function onERC721Received(
         address,
         address,
         uint256,
         bytes calldata
-    ) external pure returns (bytes4) {
-        return
-            bytes4(
-                keccak256("onERC721Received(address,address,uint256,bytes)")
-            );
+    ) external virtual returns (bytes4) {
+        return receiverSignature;
     }
 }
 
@@ -1908,6 +1908,201 @@ abstract contract HandlingTime is MatchingStrings {
     }
 }
 
+abstract contract GeneratingRandomNumbers {
+    // This constant directly defines the minimum amount of contestants in the stake pool
+    // for the selectWinners function to be called
+    uint256 constant minAddressesForRandomSequence = 5;
+    uint256 constant maxSequenceCount = 70;
+    uint256 constant minCountForRandomNumber = 5;
+
+    function simpleRandom(uint256 max) private view returns (uint256) {
+        bytes32 hashedString = keccak256(
+            abi.encodePacked(block.timestamp, block.difficulty)
+        );
+        return uint256(hashedString) % max;
+    }
+
+    function getRandomSequence(address[] memory addresses, uint256 count)
+        public
+        view
+        returns (uint256[] memory)
+    {
+        uint256 length = addresses.length;
+
+        require(
+            count <= maxSequenceCount,
+            "Cannot generate a sequence with so many numbers"
+        );
+        require(
+            length >= minAddressesForRandomSequence,
+            "More addresses required to generate random sequence"
+        );
+
+        uint256[] memory randomSequence = new uint256[](count);
+        uint256 base = addressToUint(addresses[simpleRandom(length)]);
+        for (uint256 i = 1; i <= count; i++) {
+            randomSequence[i - 1] =
+                ((base % (10**i)) - (base % (10**(i - 1)))) /
+                10**(i - 1);
+        }
+        return randomSequence;
+    }
+
+    function _randomNumber(address[] memory addresses, uint256 count)
+        private
+        view
+        returns (uint256)
+    {
+        require(
+            count > minCountForRandomNumber,
+            "Insufficient count for a random number"
+        );
+        uint256[] memory sequence = getRandomSequence(addresses, count);
+        uint256 rand = 1;
+        for (uint256 i = 0; i < count / 2; i++) {
+            rand += sequence[i]**sequence[count - (i + 1)];
+        }
+        return rand;
+    }
+
+    function randomNumber(
+        address[] memory addresses,
+        uint256 count,
+        uint256 max
+    ) internal view returns (uint256) {
+        return _randomNumber(addresses, count) % max;
+    }
+
+    function randomNumber(address[] memory addresses, uint256 count)
+        internal
+        view
+        returns (uint256)
+    {
+        return _randomNumber(addresses, count);
+    }
+
+    function randomNumbers(
+        address[] memory addresses,
+        uint256 count,
+        uint256 max
+    ) internal view returns (uint256[] memory) {
+        uint256[] memory numbers = new uint256[](count);
+        uint256 sequenceCount;
+        for (uint256 i = 0; i < count; i++) {
+            sequenceCount = maxSequenceCount - (i + 1);
+            numbers[i] = randomNumber(addresses, sequenceCount, max);
+        }
+        return numbers;
+    }
+
+    function addressToUint(address _address) private pure returns (uint256) {
+        return uint256(bytes32(abi.encodePacked(_address)));
+    }
+}
+
+contract RewardingNFTs is ERC721Receiver, Ownable {
+    ERC721 private nftInstance;
+
+    mapping(address => uint256[]) private tokenIds;
+    mapping(bytes32 => bool) private tokenSold;
+
+    constructor(ERC721 nftInstance_) Ownable() {
+        _updateERC721Instance(nftInstance_);
+    }
+
+    function _updateERC721Instance(ERC721 nftInstance_) internal {
+        nftInstance = nftInstance_;
+    }
+
+    function getERC721Tokens(ERC721 nftInstance_)
+        private
+        view
+        returns (uint256[] memory)
+    {
+        return tokenIds[address(nftInstance_)];
+    }
+
+    function hashERC721token(ERC721 nftInstance_, uint256 tokenId)
+        internal
+        pure
+        returns (bytes32)
+    {
+        return keccak256(abi.encodePacked(address(nftInstance_), tokenId));
+    }
+
+    function markTokenSold(ERC721 nftInstance_, uint256 tokenId)
+        private
+        returns (bool)
+    {
+        bytes32 tokenHash = hashERC721token(nftInstance_, tokenId);
+        require(
+            !tokenSold[tokenHash],
+            "RewardingNFTs: token already marked as sold"
+        );
+        tokenSold[tokenHash] = true;
+        return tokenSold[tokenHash];
+    }
+
+    function markTokenSold(uint256 tokenId) internal returns (bool) {
+        return markTokenSold(nftInstance, tokenId);
+    }
+
+    function getAvailableERC721Tokens(ERC721 nftInstance_)
+        private
+        view
+        returns (uint256[] memory)
+    {
+        uint256[] storage contractTokenIds = tokenIds[address(nftInstance_)];
+        uint256 countAvailableTokens = 0;
+        bytes32 tokenHash;
+        for (uint256 i = 0; i < contractTokenIds.length; i++) {
+            tokenHash = hashERC721token(nftInstance_, contractTokenIds[i]);
+            if (!tokenSold[tokenHash]) countAvailableTokens++;
+        }
+
+        uint256[] memory availableTokens = new uint256[](countAvailableTokens);
+        uint256 availableTokenIndex = 0;
+        for (uint256 i = 0; i < contractTokenIds.length; i++) {
+            tokenHash = hashERC721token(nftInstance_, contractTokenIds[i]);
+            if (!tokenSold[tokenHash]) {
+                availableTokens[availableTokenIndex] = contractTokenIds[i];
+                availableTokenIndex++;
+            }
+        }
+        return availableTokens;
+    }
+
+    // Retreives only the available tokens in an array
+    function getAvailableTokens() public view returns (uint256[] memory) {
+        return getAvailableERC721Tokens(nftInstance);
+    }
+
+    // Retreives the number of available tokens
+    function numOfAvailableTokens() public view returns (uint256) {
+        uint256[] memory tokens = getAvailableTokens();
+        return tokens.length;
+    }
+
+    function transferToken(uint256 tokenId, address to) internal {
+        nftInstance.transferFrom(address(this), to, tokenId);
+    }
+
+    // Function will revert in case the wrong NFT contract is sending tokens to this address
+    function onERC721Received(
+        address,
+        address,
+        uint256 tokenId,
+        bytes calldata
+    ) external override returns (bytes4) {
+        require(
+            _msgSender() == address(nftInstance),
+            "RewardingNFTs: incorrect ERC721 contract call"
+        );
+        tokenIds[address(nftInstance)].push(tokenId);
+        return receiverSignature;
+    }
+}
+
 /***********************************************************************
  ***********************************************************************
  ***********      ROBINOS GOVERNANCE TOKEN LUCKY DRAW        ***********
@@ -1916,13 +2111,11 @@ abstract contract HandlingTime is MatchingStrings {
 
 contract RobinosGovernanceTokenLuckyDraw is
     SaleFactory,
-    ERC721Receiver,
-    HandlingTime
+    RewardingNFTs,
+    HandlingTime,
+    GeneratingRandomNumbers
 {
-    RobinosGovernanceToken private nftInstance;
     StandardToken private standardToken;
-
-    uint256 constant maxRandom = 1000000000000;
 
     struct UserStake {
         uint256 totalStaked;
@@ -1935,6 +2128,9 @@ contract RobinosGovernanceTokenLuckyDraw is
     mapping(bytes32 => address[]) private usersPerEventArrayMapping;
     uint256 private stakeDurationTime;
 
+    // For each event, we record which tokens each user won
+    mapping(bytes32 => mapping(address => uint256[])) private rewardWinners;
+
     /**
      * @param nftInstance_ address to the ERC721 token which will be given as a reward
      * @param standardToken_ standard token used for staking
@@ -1942,12 +2138,11 @@ contract RobinosGovernanceTokenLuckyDraw is
      * @param stakeDuration_ number to multiply the period by, gives the total stake duration time
      */
     constructor(
-        RobinosGovernanceToken nftInstance_,
+        ERC721 nftInstance_,
         StandardToken standardToken_,
         string memory period_,
         uint256 stakeDuration_
-    ) Ownable() {
-        nftInstance = nftInstance_;
+    ) RewardingNFTs(nftInstance_) {
         standardToken = standardToken_;
         stakeDurationTime = toUnixTime(period_, stakeDuration_);
     }
@@ -1990,20 +2185,74 @@ contract RobinosGovernanceTokenLuckyDraw is
     }
 
     /**
-     * Actually a pseudo-random number generator. Should not be open to public, only to owner
+     * Powered by GeneratingRandomNumbers contract, this function will generate a sequence of random numbers.
+     * It will automatically send all the addresses that staked during this event as seeds to create a random number
+     * @param eventCode code of the event for which you wish to create random numbers for
+     * @param count amount of random numbers returned in the array
      */
-    function randomNumber() private view returns (uint256) {
-        bytes32 hashedString = keccak256(
-            abi.encodePacked(block.timestamp, block.difficulty)
-        );
-        return uint256(hashedString) % maxRandom;
+    function getRandomNumbers(string memory eventCode, uint256 count)
+        private
+        view
+        returns (uint256[] memory)
+    {
+        address[] memory addresses = getUsersNotUnstaked(eventCode);
+        uint256 totalStaked = getTotalStaked(eventCode);
+        return randomNumbers(addresses, count, totalStaked);
+    }
+
+    function pickWinners(string memory eventCode, uint256 count)
+        private
+        view
+        returns (address[] memory)
+    {
+        address[] memory contestants = getUsersNotUnstaked(eventCode);
+        uint256[] memory amountStaked = getStakesPerUser(eventCode);
+        uint256 numOfContestants = contestants.length;
+        uint256 accumulateStakedAmount;
+        address[] memory chosenWinners = new address[](count);
+        uint256[] memory randomNumbers = getRandomNumbers(eventCode, count);
+
+        for (uint256 j = 0; j < count; j++) {
+            accumulateStakedAmount = 0;
+            for (uint256 i = 0; i < numOfContestants; i++) {
+                accumulateStakedAmount += amountStaked[i];
+                if (randomNumbers[j] < accumulateStakedAmount) {
+                    chosenWinners[j] = contestants[i];
+                    break;
+                }
+            }
+        }
+
+        return chosenWinners;
+    }
+
+    function getTokensWon(string memory eventCode, address user)
+        private
+        view
+        notZeroAddress(user)
+        returns (uint256[] storage)
+    {
+        isSaleOn(eventCode);
+        return rewardWinners[hashStr(eventCode)][user];
     }
 
     /**
-     * Retreives a total number of NFTs on this contract
+     * Allows the owner to select the winners of the current event. The function will select
+     * winners for each token. One user can win multiple tokens, but no token go undistributed.
+     * For any user to be drafted for the reward, they mustn't have unstaked their standard
+     * token during this event yet
+     * @param eventCode code of the event for which you wish select the winners for
      */
-    function availableTokens() public view returns (uint256) {
-        return nftInstance.balanceOf(address(this));
+    function selectWinners(string memory eventCode) public onlyOwner {
+        uint256 numOfTokens = numOfAvailableTokens();
+        address[] memory winners = pickWinners(eventCode, numOfTokens);
+        uint256[] memory tokens = getAvailableTokens();
+        uint256[] storage userTokensWon;
+        for (uint256 i = 0; i < numOfTokens; i++) {
+            userTokensWon = getTokensWon(eventCode, winners[i]);
+            userTokensWon.push(tokens[i]);
+            markTokenSold(tokens[i]);
+        }
     }
 
     /**
@@ -2052,7 +2301,6 @@ contract RobinosGovernanceTokenLuckyDraw is
         return totalUserStaked;
     }
 
-
     /**
      * Retrevies an array of addresses of all users that staked during this event
      */
@@ -2067,6 +2315,49 @@ contract RobinosGovernanceTokenLuckyDraw is
     }
 
     /**
+     * Retrevies an array of addresses of all users that staked during this event and have not unstaked yet
+     */
+    function getUsersNotUnstaked(string memory eventCode)
+        public
+        view
+        returns (address[] memory)
+    {
+        address[] memory usersStaked = getUsersStaked(eventCode);
+        uint256 usersNotUnstakedCount = 0;
+        uint256 unstakedAt;
+        for (uint256 i = 0; i < usersStaked.length; i++) {
+            (, , unstakedAt) = getUserStaked(eventCode, usersStaked[i]);
+            if (unstakedAt == 0) usersNotUnstakedCount++;
+        }
+        address[] memory usersNotUnstaked = new address[](
+            usersNotUnstakedCount
+        );
+        uint256 index = 0;
+        for (uint256 i = 0; i < usersStaked.length; i++) {
+            (, , unstakedAt) = getUserStaked(eventCode, usersStaked[i]);
+            if (unstakedAt == 0) {
+                usersNotUnstaked[index] = usersStaked[i];
+                index++;
+            }
+        }
+        return usersNotUnstaked;
+    }
+
+    function getStakesPerUser(string memory eventCode)
+        public
+        view
+        returns (uint256[] memory)
+    {
+        address[] memory usersStaked = getUsersStaked(eventCode);
+        uint256[] memory stakePerUser = new uint256[](usersStaked.length);
+        for (uint256 i = 0; i < usersStaked.length; i++) {
+            stakePerUser[i] = getUserStakeAmount(eventCode, usersStaked[i]);
+        }
+
+        return stakePerUser;
+    }
+
+    /**
      * Retrevies an array of addresses of all users that staked during this event;
      * How much each user staked;
      * Total amount staked during this event;
@@ -2076,24 +2367,25 @@ contract RobinosGovernanceTokenLuckyDraw is
         public
         view
         returns (
-            address[] memory usersStaked,
-            uint256[] memory stakePerUser,
-            uint256 totalStaked,
-            uint256 numOfTokens
+            address[] memory,
+            uint256[] memory,
+            uint256,
+            uint256
         )
     {
-        usersStaked = getUsersStaked(eventCode);
-        uint256 numOfUsers = usersStaked.length;
+        address[] memory usersNotUnstaked = getUsersNotUnstaked(eventCode);
+        uint256[] memory stakePerUser = getStakesPerUser(eventCode);
+        uint256 totalStaked = getTotalStaked(eventCode);
+        uint256 numOfTokens = numOfAvailableTokens();
 
-        stakePerUser = new uint256[](numOfUsers);
-        for (uint256 i = 0; i < numOfUsers; i++) {
-            stakePerUser[i] = getUserStakeAmount(eventCode, usersStaked[i]);
+        return (usersNotUnstaked, stakePerUser, totalStaked, numOfTokens);
+    }
+
+    function claimRewards(string memory eventCode) private {
+        uint256[] memory tokensWon = getTokensWon(eventCode, _msgSender());
+        for (uint256 i = 0; i < tokensWon.length; i++) {
+            transferToken(tokensWon[i], _msgSender());
         }
-
-        totalStaked = getTotalStaked(eventCode);
-        numOfTokens = availableTokens();
-
-        return (usersStaked, stakePerUser, totalStaked, numOfTokens);
     }
 
     function addStakedAmount(
@@ -2112,6 +2404,26 @@ contract RobinosGovernanceTokenLuckyDraw is
             usersPerEventArrayMapping[eventHash].push(user);
         }
         userStake.stakedAt = time();
+    }
+
+    function removeStakedAmount(
+        string memory eventCode,
+        address user,
+        uint256 amount
+    ) private notZeroAddress(user) {
+        isSaleOn(eventCode);
+        bytes32 eventHash = hashStr(eventCode);
+        UserStake storage userStake = userStakedPerEvent[eventHash][user];
+
+        require(
+            userStake.totalStaked >= amount,
+            "RobinosGovernanceTokenLuckyDraw: insufficient amount for unstaking"
+        );
+        unchecked {
+            totalStakedPerEvent[eventHash] -= amount;
+            userStake.totalStaked -= amount;
+        }
+        userStake.unstakedAt = time();
     }
 
     /**
@@ -2148,6 +2460,8 @@ contract RobinosGovernanceTokenLuckyDraw is
         duringSale(eventCode)
     {
         (uint256 totalUserStaked, , ) = getUserStaked(eventCode, _msgSender());
+        removeStakedAmount(eventCode, _msgSender(), totalUserStaked);
+        claimRewards(eventCode);
         standardToken.transfer(_msgSender(), totalUserStaked);
     }
 }
