@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.0;
+pragma solidity ^0.8.10;
 
 /**
  * @dev Interface of the ERC20 standard as defined in the EIP.
@@ -247,7 +247,6 @@ abstract contract Pausable {
     function isPaused() public view returns (bool) {
         return _paused;
     }
-
 }
 
 contract DBToken is IERC20, IERC20Metadata, Ownable {
@@ -417,13 +416,10 @@ contract DBToken is IERC20, IERC20Metadata, Ownable {
     }
 }
 
-
 struct ArrayElRef {
     bool status;
     uint256 arrayIndex;
 }
-
-
 
 abstract contract SaleFactory is Ownable {
     // Each sale has an entry in the eventCode hash table with start and end time.
@@ -641,7 +637,11 @@ abstract contract SaleFactory is Ownable {
     function isSaleOn(string memory eventCode)
         public
         view
-        returns (bool saleActive, uint256 saleStart, uint256 saleEnd)
+        returns (
+            bool saleActive,
+            uint256 saleStart,
+            uint256 saleEnd
+        )
     {
         Sale storage eventSale = getEventSale(eventCode);
 
@@ -663,7 +663,6 @@ abstract contract TokenHash is Ownable {
     {
         return keccak256(bytes(abi.encodePacked(_eventCode, _teamName)));
     }
-
 }
 
 abstract contract RecordingTradePairs is Ownable {
@@ -741,7 +740,6 @@ abstract contract RecordingTradePairs is Ownable {
 }
 
 abstract contract RecordingTokensSold is TokenHash {
-    
     struct TokensSold {
         bytes32 eventHash;
         bytes32 tokenHash;
@@ -769,7 +767,6 @@ abstract contract RecordingTokensSold is TokenHash {
     {
         return _currentEventSale;
     }
-
 
     function initTokensSold(
         bytes32 tokenHash,
@@ -926,26 +923,15 @@ contract StoringDBTokens is TokenHash, Pausable {
         );
         return _dbtokens[tokenHash];
     }
-
 }
 
-
-
- /**********************************************************************
+/**********************************************************************
  ***********************************************************************
  ********************      DB TOKEN REWARD      ************************
  ***********************************************************************
  **********************************************************************/
 
-
-
-
-
-contract DBTokenReward is 
-    StoringDBTokens,
-    SaleFactory 
-{
-
+contract DBTokenReward is StoringDBTokens, SaleFactory {
     /**
      * The DBTokenReward shares a lot of similarities with DBTokenSale contract. Notable differences are:
      * 1) This contract uses SaleFactory in the same way DBTokenSale does, but the sale here signifies when the tokens for the given event can be sold to this contract. DBTokenSale uses it for other way around.
@@ -958,6 +944,7 @@ contract DBTokenReward is
     constructor(StandardToken standardToken_) Ownable() {
         _standardToken = standardToken_;
     }
+
     /**
      * @dev getRate(eventCode, teamName) returns a ratio between getToken(eventCode, teamName)/standard token
      * Examples:
@@ -973,33 +960,54 @@ contract DBTokenReward is
     }
     mapping(bytes32 => Ratio) private _rates;
 
-
     /**
      * @dev Allows the owner to set a rate for specific token. Numerator and denominator must be greater than 0
      * Please use the smallest possible numerator and denominator. So instead of (6/8) use (3/4). Check not included in function to save gas
      */
-    function setRate(string memory eventCode, string memory teamName, uint256 numerator, uint256 denominator) public onlyOwner returns (bool) {
-        require(numerator > 0, "DBTokenReward: numerator must be larger than 0");
-        require(denominator > 0, "DBTokenReward: denominator must be larger than 0");
+    function setRate(
+        string memory eventCode,
+        string memory teamName,
+        uint256 numerator,
+        uint256 denominator
+    ) public onlyOwner returns (bool) {
+        require(
+            numerator > 0,
+            "DBTokenReward: numerator must be larger than 0"
+        );
+        require(
+            denominator > 0,
+            "DBTokenReward: denominator must be larger than 0"
+        );
         bytes32 tokenHash = getTokenHash(eventCode, teamName);
-        
+
         _rates[tokenHash] = Ratio(numerator, denominator);
         return true;
     }
 
     // Each token has a specific rate. If rate is 0, token has not been initialized
-    function getRate(string memory eventCode, string memory teamName) public view returns (Ratio memory) {
+    function getRate(string memory eventCode, string memory teamName)
+        public
+        view
+        returns (Ratio memory)
+    {
         bytes32 tokenHash = getTokenHash(eventCode, teamName);
-        require(_rates[tokenHash].denominator != 0, "DBTokenReward: rate not initialized");
+        require(
+            _rates[tokenHash].denominator != 0,
+            "DBTokenReward: rate not initialized"
+        );
 
         return _rates[tokenHash];
     }
 
     // Function calculates how many standard tokens you will receive for getToken(eventCode, teamName) based on the rate of the token
-    function standardTokensFor(uint256 amount, string memory eventCode, string memory teamName) public view returns (uint256) {
+    function standardTokensFor(
+        uint256 amount,
+        string memory eventCode,
+        string memory teamName
+    ) public view returns (uint256) {
         require(amount != 0, "DBTokenReward: amount cannot be 0");
         Ratio memory rate = getRate(eventCode, teamName);
-        return uint((amount * rate.numerator) / rate.denominator);
+        return uint256((amount * rate.numerator) / rate.denominator);
     }
 
     // We override the function so we can set the rate for the token to one immediately
@@ -1016,24 +1024,34 @@ contract DBTokenReward is
 
     // Function is basically the same as buyTokens from DBTokenSale contract, except the transfer is done the other way around
     // Contract has to have at least the given amount of standardToken tokens for this function to work
-    function sellTokens(string memory eventCode, string memory teamName, uint256 amount) public duringSale(eventCode) returns (bool) {
+    function sellTokens(
+        string memory eventCode,
+        string memory teamName,
+        uint256 amount
+    ) public duringSale(eventCode) returns (bool) {
         DBToken token = getToken(eventCode, teamName);
 
         uint256 allowance = token.allowance(_msgSender(), address(this));
-        require(allowance >= amount, "DBTokenReward: insufficient token allowance");
+        require(
+            allowance >= amount,
+            "DBTokenReward: insufficient token allowance"
+        );
 
-        uint256 standardTokenAmount = standardTokensFor(amount, eventCode, teamName);
+        uint256 standardTokenAmount = standardTokensFor(
+            amount,
+            eventCode,
+            teamName
+        );
         uint256 standardTokenBalance = _standardToken.balanceOf(address(this));
 
-        require(standardTokenBalance >= standardTokenAmount, "DBTokenReward: insufficient contract reward token balance");
+        require(
+            standardTokenBalance >= standardTokenAmount,
+            "DBTokenReward: insufficient contract reward token balance"
+        );
 
         token.transferFrom(_msgSender(), address(this), amount);
         _standardToken.transfer(_msgSender(), standardTokenAmount);
 
-
-        
         return true;
     }
-
-
 }

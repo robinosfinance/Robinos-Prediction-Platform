@@ -5,7 +5,16 @@ const randomInt = (min, max) => {
     return Math.ceil(Math.random() * diff) + min;
 };
 
+const idsFrom = (fromId, length) => {
+    const idsArray = [];
+    for (let i = 0; i < length; i++) {
+        idsArray.push(fromId + i);
+    }
+    return idsArray;
+};
+
 module.exports = {
     secondsInTheFuture,
     randomInt,
+    idsFrom,
 };

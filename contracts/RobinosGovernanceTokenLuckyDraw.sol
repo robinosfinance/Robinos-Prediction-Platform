@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 // OpenZeppelin Contracts v4.3.2 (token/ERC721/ERC721.sol)
 
-pragma solidity ^0.8.0;
+pragma solidity ^0.8.10;
 
 /**
  * @dev Interface of the ERC165 standard, as defined in the
@@ -1914,6 +1914,8 @@ abstract contract GeneratingRandomNumbers {
     uint256 constant minAddressesForRandomSequence = 5;
     uint256 constant maxSequenceCount = 70;
     uint256 constant minCountForRandomNumber = 5;
+    uint256 private maxCountOfRandomNumbers =
+        maxSequenceCount - minCountForRandomNumber;
 
     function simpleRandom(uint256 max) private view returns (uint256) {
         bytes32 hashedString = keccak256(
@@ -1986,6 +1988,10 @@ abstract contract GeneratingRandomNumbers {
         uint256 count,
         uint256 max
     ) internal view returns (uint256[] memory) {
+        require(
+            count < maxCountOfRandomNumbers,
+            "Cannot produce so many random numbers"
+        );
         uint256[] memory numbers = new uint256[](count);
         uint256 sequenceCount;
         for (uint256 i = 0; i < count; i++) {

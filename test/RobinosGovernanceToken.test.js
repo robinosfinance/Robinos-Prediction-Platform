@@ -1,6 +1,3 @@
-const {
-    doesNotMatch
-} = require("assert");
 const assert = require("assert");
 const ganache = require("ganache-cli");
 const Web3 = require("web3");
@@ -12,6 +9,7 @@ const contracts = require("../compile");
 const {
     secondsInTheFuture,
     randomInt,
+    idsFrom
 } = require("../helper");
 
 const tokenContract = contracts["RobinosGovernanceToken.sol"].RobinosGovernanceToken;
@@ -71,7 +69,7 @@ beforeEach(async () => {
 });
 
 describe("RobinosGovernanceToken", () => {
-    it("deployes successfully", () => {
+    it("deploys successfully", () => {
         assert.ok(RobinosGovernanceToken.options.address); // Check the address
     });
 
@@ -123,14 +121,6 @@ describe("RobinosGovernanceToken", () => {
 
 
         const account = accounts[0];
-        // Creates array of IDs: [fromId, fromId + 1, fromId + 2 ... fromId + length - 1]
-        const idsFrom = (fromId, length) => {
-            const idsArray = [];
-            for (let i = 0; i < length; i++) {
-                idsArray.push(fromId + i);
-            }
-            return idsArray;
-        };
         const batches = (() => {
             const array = [];
             for (let i = 0; i < totalBatches; i++) {
@@ -318,7 +308,7 @@ describe("RobinosGovernanceTokenLuckyDraw", () => {
 
     it("allows owner to transfer NFTs", () => {
         const account = accounts[0];
-        const tokenIds = [1, 2, 3, 4, 5];
+        const tokenIds = idsFrom(1, 5);
 
         RobinosGovernanceToken.methods
             // We mint the tokens in one batch
@@ -351,10 +341,10 @@ describe("RobinosGovernanceTokenLuckyDraw", () => {
     it("allows users to stake standard token & unstake to receive awards", () => {
         const minimumStake = 100;
         const maximumStake = 100000;
-        const numOfRewardTokens = 3;
+        const numOfRewardTokens = 64;
         // Minimum number of contestants should match minAddressesForRandomSequence constant
         // in the GeneratingRandomNumbers contract
-        const numOfContestants = 5;
+        const numOfContestants = 10;
         const eventName = "tokenSale";
 
         const accountsSliced =
@@ -363,19 +353,11 @@ describe("RobinosGovernanceTokenLuckyDraw", () => {
                 address: account,
                 stakeAmount: randomInt(minimumStake, maximumStake),
             }));
-
-        const idsFrom = (fromId, length) => {
-            const idsArray = [];
-            for (let i = 0; i < length; i++) {
-                idsArray.push(fromId + i);
-            }
-            return idsArray;
-        };
         const tokenIds = idsFrom(1, numOfRewardTokens);
 
         RobinosGovernanceTokenLuckyDraw.methods
             // The owner must first initialize a sale for users to be able to stake their tokens
-            .setSaleStartEnd(eventName, 0, secondsInTheFuture(120))
+            .setSaleStartEnd(eventName, 0, secondsInTheFuture(1200))
             .send({
                 from: accounts[0],
                 gas: '10000000000'
