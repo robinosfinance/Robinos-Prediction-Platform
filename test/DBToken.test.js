@@ -7,7 +7,8 @@ const web3 = new Web3(ganache.provider({
 
 const contracts = require("../compile");
 const {
-    secondsInTheFuture, randomInt
+    secondsInTheFuture,
+    randomInt
 } = require("../helper");
 
 const tokenContract = contracts["DBToken.sol"].DBToken;
@@ -18,13 +19,7 @@ const rewardContract = contracts["DBTokenReward.sol"].DBTokenReward;
 // Local instance of the USDT contract used for testing
 const tether = require("./tether_compiled.json");
 
-let accounts;
-let rate;
-let DBTokenSale;
-let DBTokenEvent;
-let DBTokens;
-let TetherToken;
-let DBTokenReward;
+let accounts, rate, DBTokenSale, DBTokenEvent, DBTokens, TetherToken, DBTokenReward;
 
 // Teams and event code default info for testing
 let teamTokenParams = [{
@@ -296,19 +291,15 @@ describe("DBTokenSale", () => {
         let purchaseUSDTFunds = 200;
         let purchaseDBTfunds = purchaseUSDTFunds * rate;
 
-        const getTetherBalance = async address => {
-            return await TetherToken.methods.balanceOf(address)
-                .call({
-                    from: accounts[0]
-                });
-        }
+        const getTetherBalance = async address => await TetherToken.methods.balanceOf(address)
+            .call({
+                from: accounts[0]
+            });
 
-        const getDBTokenBalance = async address => {
-            return await DBToken.methods.balanceOf(address)
-                .call({
-                    from: accounts[0]
-                });
-        }
+        const getDBTokenBalance = async address => await DBToken.methods.balanceOf(address)
+            .call({
+                from: accounts[0]
+            });
 
         await DBTokenSale.methods.addDBTokenReference(DBToken.options.address, eventCode, teamName)
             .send({
