@@ -13,8 +13,11 @@ const idsFrom = (fromId, length) => {
     return idsArray;
 };
 
+const timeInSecs = () => Math.round(Date.now() / 1000);
+
 module.exports = {
     secondsInTheFuture,
     randomInt,
     idsFrom,
+    timeInSecs,
 };
