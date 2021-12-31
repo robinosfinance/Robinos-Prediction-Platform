@@ -9,16 +9,20 @@ const contracts = require("../compile");
 const {
     secondsInTheFuture,
     randomInt,
-    idsFrom
+    idsFrom,
+    timeInSecs
 } = require("../helper");
 
 const tokenContract = contracts["RobinosGovernanceToken.sol"].RobinosGovernanceToken;
 const luckyDrawContract = contracts["RobinosGovernanceTokenLuckyDraw.sol"].RobinosGovernanceTokenLuckyDraw;
+const nftStakeContract = contracts["RobinosGovernanceTokenNFTStake.sol"].RobinosGovernanceTokenNFTStake;
+const dbTokenContract = contracts["DBToken.sol"].DBToken;
+const dbTokenEventContract = contracts["DBTokenEvent.sol"].DBTokenEvent;
 
 // Local instance of the USDT contract used for testing
 const tether = require("./tether_compiled.json");
 
-let RobinosGovernanceToken, RobinosGovernanceTokenLuckyDraw, TetherToken, accounts;
+let RobinosGovernanceToken, RobinosGovernanceTokenLuckyDraw, RobinosGovernanceTokenNFTStake, DBToken, DBTokenEvent, TetherToken, accounts;
 
 const tokenName = "RobinosGovernanceToken";
 const baseURI = "http://robinos_governance_token/";
@@ -31,8 +35,13 @@ const totalSupply = 1 * 10 ** 12;
 const stakeDuration = 2;
 const stakePeriod = "seconds";
 
+const dbTokenTeamName = "Manchester";
+const dbTokenEventName = "EPL";
+const dbTokenTotalSupply = 2 * 10 ** 12;
+
 beforeEach(async () => {
     accounts = await web3.eth.getAccounts();
+
     RobinosGovernanceToken = await new web3.eth.Contract(tokenContract.abi)
         .deploy({
             data: tokenContract.evm.bytecode.object,
@@ -61,6 +70,41 @@ beforeEach(async () => {
         .deploy({
             data: luckyDrawContract.evm.bytecode.object,
             arguments: [RobinosGovernanceToken.options.address, TetherToken.options.address, stakePeriod, stakeDuration]
+        })
+        .send({
+            from: accounts[0],
+            gas: '1000000000'
+        });
+
+    DBTokenEvent = await new web3.eth.Contract(dbTokenEventContract.abi)
+        .deploy({
+            data: dbTokenEventContract.evm.bytecode.object,
+            arguments: [
+                [dbTokenTeamName], dbTokenEventName
+            ]
+        })
+        .send({
+            from: accounts[0],
+            gas: '1000000000'
+        });
+
+    const tokenAddress = await DBTokenEvent.methods.getTeamTokenAddress(dbTokenTeamName).call({
+        from: accounts[0],
+        gas: '10000000000'
+    });
+    DBToken = new web3.eth.Contract(tokenContract.abi, tokenAddress);
+
+    DBTokenEvent.methods
+        .mintTeamToken(dbTokenTeamName, accounts[0], dbTokenTotalSupply)
+        .send({
+            from: accounts[0],
+            gas: '1000000000'
+        });
+
+    RobinosGovernanceTokenNFTStake = await new web3.eth.Contract(nftStakeContract.abi)
+        .deploy({
+            data: nftStakeContract.evm.bytecode.object,
+            arguments: [RobinosGovernanceToken.options.address, DBToken.options.address, stakePeriod, stakeDuration]
         })
         .send({
             from: accounts[0],
@@ -485,6 +529,116 @@ describe("RobinosGovernanceTokenLuckyDraw", () => {
                             assert.strictEqual(totalTokensWon, tokenIds.length);
                             assert.strictEqual(parseInt(availableTokens), 0);
                         })), waitDuration);
+            });
+    });
+});
+
+describe("RobinosGovernanceTokenNFTStake", () => {
+    it("deploys successfully", () => {
+        assert.ok(RobinosGovernanceTokenNFTStake.options.address); // Check the address
+    });
+
+    it("allows staking and unstaking", () => {
+        const tokensPerUser = 5;
+        const numOfUsers = 3;
+        const userToUnstake = 1;
+        const totalReward = 100000;
+        const tokensForStakingPerUser = (() => {
+            const arr = [];
+            for (let i = 0; i < numOfUsers; i++)
+                arr.push(idsFrom(i * tokensPerUser + 1, tokensPerUser));
+
+            return arr;
+        })();
+        const eventName = "tokenSale";
+
+        Promise.all(tokensForStakingPerUser.map((tokenIds, index) =>
+                Promise.resolve(RobinosGovernanceToken.methods
+                    .mintBatch(accounts[index], tokenIds, batchName)
+                    .send({
+                        from: accounts[0],
+                        gas: '1000000000'
+                    }))))
+            .then(() =>
+                DBToken.methods
+                .approve(RobinosGovernanceTokenNFTStake.options.address, totalReward)
+                .send({
+                    from: accounts[0],
+                    gas: '1000000000'
+                }))
+            .then(() =>
+                RobinosGovernanceTokenNFTStake.methods
+                .setSaleStartEnd(eventName, 0, secondsInTheFuture(120))
+                .send({
+                    from: accounts[0],
+                    gas: '1000000000'
+                }))
+            .then(() =>
+                RobinosGovernanceTokenNFTStake.methods
+                .depositEventReward(eventName, totalReward)
+                .send({
+                    from: accounts[0],
+                    gas: '1000000000'
+                }))
+            .then(() =>
+                Promise.all(tokensForStakingPerUser.map((tokenIds, userIndex) =>
+                    tokenIds.map(tokenId => Promise.resolve(RobinosGovernanceToken.methods
+                        .approve(RobinosGovernanceTokenNFTStake.options.address, tokenId)
+                        .send({
+                            from: accounts[userIndex],
+                            gas: '1000000000'
+                        })))).flat()))
+            .then(() =>
+                Promise.all(tokensForStakingPerUser.map((tokenIds, userIndex) =>
+                    tokenIds.map(tokenId => Promise.resolve(RobinosGovernanceTokenNFTStake.methods
+                        .stake(eventName, tokenId)
+                        .send({
+                            from: accounts[userIndex],
+                            gas: '1000000000'
+                        })))).flat()))
+            .then(async () => {
+                const stakedTokens = await RobinosGovernanceTokenNFTStake.methods
+                    .getEventStakedTokens(eventName)
+                    .call({
+                        from: accounts[0],
+                        gas: '1000000000'
+                    });
+                assert.deepStrictEqual(stakedTokens.map(token => parseInt(token)), tokensForStakingPerUser.flat());
+            })
+            .then(async () => {
+                const waitDuration = stakeDuration * 1000 * 1.5;
+                setTimeout(() => {
+                    RobinosGovernanceTokenNFTStake.methods
+                        .unstake(eventName)
+                        .send({
+                            from: accounts[userToUnstake],
+                            gas: '1000000000'
+                        })
+                        .then(async () => {
+                            const stakedTokens = await RobinosGovernanceTokenNFTStake.methods
+                                .getEventStakedTokens(eventName)
+                                .call({
+                                    from: accounts[0],
+                                    gas: '1000000000'
+                                });
+                            const expectedTokens = tokensForStakingPerUser.reduce(
+                                (expected, current, index) =>
+                                index != userToUnstake ?
+                                expected.concat(current) :
+                                expected,
+                                []
+                            );
+
+                            const rewardBalance = await DBToken.methods
+                                .balanceOf(accounts[userToUnstake])
+                                .call({
+                                    from: accounts[0],
+                                    gas: '1000000000'
+                                });
+                            console.log(`Reward: ${rewardBalance}`);
+                            assert.deepStrictEqual(stakedTokens.map(token => parseInt(token)), expectedTokens);
+                        });
+                }, waitDuration);
             });
     });
 });

@@ -9,15 +9,14 @@ const files = [
 	"DBTokenReward.sol",
 	"RobinosGovernanceToken.sol",
 	"RobinosGovernanceTokenLuckyDraw.sol",
+	"RobinosGovernanceTokenNFTStake.sol",
 ];
 
 let pathToFile, source;
 
 let input = {
 	language: 'Solidity',
-	sources: {
-		/** Add file names in files array */
-	},
+	sources: {},
 	settings: {
 		outputSelection: {
 			'*': {
