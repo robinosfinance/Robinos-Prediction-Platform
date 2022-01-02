@@ -1587,6 +1587,7 @@ contract RobinosGovernanceTokenNFTStake is
 {
     ERC721 private stakingToken;
     IERC20 private rewardToken;
+    // Minimum period of time after staking when a user can unstake
     uint256 private minUserStakeDuration;
 
     struct UserStaked {
@@ -1654,6 +1655,8 @@ contract RobinosGovernanceTokenNFTStake is
         baseReward[hashStr(eventCode)] = amount;
     }
 
+    // Allows the owner to deposit tokens to this contract for rewards. Can only deposit once per event.
+    // Do not transfer tokens manually to the contract, tokens will not be recorded and total reward will not be correct
     function depositEventReward(string memory eventCode, uint256 amount)
         public
         onlyOwner
@@ -1682,6 +1685,7 @@ contract RobinosGovernanceTokenNFTStake is
         return eventUserStakeData[hashStr(eventCode)][user];
     }
 
+    // Total seconds the user has staked during the event
     function getUserStakedSecs(string memory eventCode, address user)
         public
         view
@@ -1702,6 +1706,7 @@ contract RobinosGovernanceTokenNFTStake is
         return eventStakedTokens[hashStr(eventCode)];
     }
 
+    // Returns a list of all token IDs currently staked in this event
     function getEventStakedTokens(string memory eventCode)
         public
         view
@@ -1710,10 +1715,12 @@ contract RobinosGovernanceTokenNFTStake is
         return _getEventStakedTokens(eventCode);
     }
 
+    // Total number of reward tokens on the contract address
     function availableRewardTokens() public view returns (uint256) {
         return rewardToken.balanceOf(address(this));
     }
 
+    // Transfers all user staked tokens back to the original user
     function transferUserStakedTokens(string memory eventCode, address user)
         private
     {
@@ -1735,6 +1742,7 @@ contract RobinosGovernanceTokenNFTStake is
         eventStakedTokens[hashStr(eventCode)].push(tokenId);
     }
 
+    // Removes tokenIds from the appropriate eventStakedTokens array
     function removeEventStakedTokens(
         string memory eventCode,
         uint256[] memory tokenIds
@@ -1757,6 +1765,7 @@ contract RobinosGovernanceTokenNFTStake is
         }
     }
 
+    // Remove all user staked tokens from records
     function removeUserStakedTokenRecords(string memory eventCode, address user)
         private
     {
@@ -1803,14 +1812,27 @@ contract RobinosGovernanceTokenNFTStake is
             eventTotalStakedTokens;
     }
 
+    /**
+     * Allows users to stake during an ongoing sale. The user must pre-approve funds towards this contract before staking.
+     * The user cannot have unstaked in this event to be able to stake again.
+     * @param eventCode of the sale you want to stake for
+     * @param tokenId of the token you want to stake. Must pre-approve the token for transfer before staking
+     */
     function stake(string memory eventCode, uint256 tokenId)
         public
         duringSale(eventCode)
+        userNotUnstaked(eventCode, _msgSender())
     {
         recordStakedToken(eventCode, _msgSender(), tokenId);
         stakingToken.transferFrom(_msgSender(), address(this), tokenId);
     }
 
+    /**
+     * Transfers staked tokens, removes token IDs from records and transfers any reward to the user.
+     * The user must wait at least minUserStakeDuration amount of secs after their FIRST stake in the 
+     * event before they can unstake. And the user can only unstake once during the same event.
+     * @param eventCode of the sale from which you want to unstake
+     */
     function unstake(string memory eventCode)
         public
         userStakedLongEnough(eventCode, _msgSender())

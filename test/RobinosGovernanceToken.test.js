@@ -382,7 +382,7 @@ describe("RobinosGovernanceTokenLuckyDraw", () => {
             });
     });
 
-    it("allows users to stake standard token & unstake to receive awards", () => {
+    it("allows users to stake standard token & unstake to receive awards", (done) => {
         const minimumStake = 100;
         const maximumStake = 100000;
         const numOfRewardTokens = 64;
@@ -528,6 +528,7 @@ describe("RobinosGovernanceTokenLuckyDraw", () => {
                             // of available tokens to be 0, since they were all marked as sold
                             assert.strictEqual(totalTokensWon, tokenIds.length);
                             assert.strictEqual(parseInt(availableTokens), 0);
+                            done();
                         })), waitDuration);
             });
     });
@@ -538,11 +539,18 @@ describe("RobinosGovernanceTokenNFTStake", () => {
         assert.ok(RobinosGovernanceTokenNFTStake.options.address); // Check the address
     });
 
-    it("allows staking and unstaking", () => {
-        const tokensPerUser = 5;
-        const numOfUsers = 3;
-        const userToUnstake = 1;
+    it("allows staking and unstaking", (done) => {
+        const tokensPerUser = 5; // Num of tokens each user will stake
+        const numOfUsers = 3; // Total users to stake
+        const userToUnstake = 1; // Index of the user which will unstake at the end of test
         const totalReward = 100000;
+        /* Returns an array of arrays of token IDs for each user
+         * e.g. numOfUsers = 3 & tokensPerUser = 5: [
+         *        [1, 2, 3, 4, 5],
+         *        [6, 7, 8, 9, 10],
+         *        [11, 12, 13, 14, 15],
+         *      ]
+         */
         const tokensForStakingPerUser = (() => {
             const arr = [];
             for (let i = 0; i < numOfUsers; i++)
@@ -554,6 +562,7 @@ describe("RobinosGovernanceTokenNFTStake", () => {
 
         Promise.all(tokensForStakingPerUser.map((tokenIds, index) =>
                 Promise.resolve(RobinosGovernanceToken.methods
+                    // First the owner will mint a batch for each of the prepared users and directly deposit them to their address
                     .mintBatch(accounts[index], tokenIds, batchName)
                     .send({
                         from: accounts[0],
@@ -561,6 +570,7 @@ describe("RobinosGovernanceTokenNFTStake", () => {
                     }))))
             .then(() =>
                 DBToken.methods
+                // The owner then approves their ERC20 tokens for the NFT stake contract to be able to deposit them later
                 .approve(RobinosGovernanceTokenNFTStake.options.address, totalReward)
                 .send({
                     from: accounts[0],
@@ -568,6 +578,7 @@ describe("RobinosGovernanceTokenNFTStake", () => {
                 }))
             .then(() =>
                 RobinosGovernanceTokenNFTStake.methods
+                // The owner initiates a sale on the NFT stake contract
                 .setSaleStartEnd(eventName, 0, secondsInTheFuture(120))
                 .send({
                     from: accounts[0],
@@ -575,6 +586,7 @@ describe("RobinosGovernanceTokenNFTStake", () => {
                 }))
             .then(() =>
                 RobinosGovernanceTokenNFTStake.methods
+                // The owner deposits the pre-approved ERC20 tokens which will serve as a reward for staking users
                 .depositEventReward(eventName, totalReward)
                 .send({
                     from: accounts[0],
@@ -583,6 +595,7 @@ describe("RobinosGovernanceTokenNFTStake", () => {
             .then(() =>
                 Promise.all(tokensForStakingPerUser.map((tokenIds, userIndex) =>
                     tokenIds.map(tokenId => Promise.resolve(RobinosGovernanceToken.methods
+                        // Each of the users must individually approve their ERC721 tokens for transfer to the staking contract
                         .approve(RobinosGovernanceTokenNFTStake.options.address, tokenId)
                         .send({
                             from: accounts[userIndex],
@@ -591,6 +604,7 @@ describe("RobinosGovernanceTokenNFTStake", () => {
             .then(() =>
                 Promise.all(tokensForStakingPerUser.map((tokenIds, userIndex) =>
                     tokenIds.map(tokenId => Promise.resolve(RobinosGovernanceTokenNFTStake.methods
+                        // Each of the users stakes their tokens individually
                         .stake(eventName, tokenId)
                         .send({
                             from: accounts[userIndex],
@@ -598,17 +612,21 @@ describe("RobinosGovernanceTokenNFTStake", () => {
                         })))).flat()))
             .then(async () => {
                 const stakedTokens = await RobinosGovernanceTokenNFTStake.methods
+                    // We retrive a list of all the staked token IDs for this event
                     .getEventStakedTokens(eventName)
                     .call({
                         from: accounts[0],
                         gas: '1000000000'
                     });
+                // We assert that all the available tokens are staked and retreived in a list in the previous call
                 assert.deepStrictEqual(stakedTokens.map(token => parseInt(token)), tokensForStakingPerUser.flat());
             })
             .then(async () => {
                 const waitDuration = stakeDuration * 1000 * 1.5;
+                // After the min staking period has passed, the users are free to unstake their tokens
                 setTimeout(() => {
                     RobinosGovernanceTokenNFTStake.methods
+                        // Only one user marked with userToUnstake will unstake their tokens
                         .unstake(eventName)
                         .send({
                             from: accounts[userToUnstake],
@@ -628,15 +646,10 @@ describe("RobinosGovernanceTokenNFTStake", () => {
                                 expected,
                                 []
                             );
-
-                            const rewardBalance = await DBToken.methods
-                                .balanceOf(accounts[userToUnstake])
-                                .call({
-                                    from: accounts[0],
-                                    gas: '1000000000'
-                                });
-                            console.log(`Reward: ${rewardBalance}`);
+                            // We then assert that all the tokens are still staked on the stake contract except the 
+                            // tokens belonging to the user which just unstaked
                             assert.deepStrictEqual(stakedTokens.map(token => parseInt(token)), expectedTokens);
+                            done();
                         });
                 }, waitDuration);
             });
