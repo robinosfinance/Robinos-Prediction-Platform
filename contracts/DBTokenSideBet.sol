@@ -890,11 +890,39 @@ contract DBTokenSideBet is SaleFactory {
         setUserStaked(eventCode, user, teamToken, userStakedTokens);
     }
 
+    /**
+     * Distributes the left over reward after dividing by total staked
+     * The algorithm favors the earlier users in the array, but the amounts will
+     * usually be very small to be inconsiderable
+     * @param eventCode of the sale for which the reward is being distributed
+     * @param leftOverReward to distribute
+     * @param users to which the left overs will be distributed
+     */
+    function distributeLeftOverReward(
+        string memory eventCode,
+        uint256 leftOverReward,
+        address[] memory users
+    ) private {
+        uint256 userIndex = 0;
+        for (uint256 i = 0; i < leftOverReward; i++) {
+            uint256 userReward = getUserReward(eventCode, users[userIndex]);
+            setUserReward(eventCode, users[userIndex], userReward + 1);
+            userIndex = userIndex == users.length - 1 ? 0 : userIndex + 1;
+        }
+    }
+
+    /**
+     * Allows owner to deposit the standard token reward for the sale.
+     * Reward can be deposited multiple times as long as the winner has not been selected
+     * @param eventCode of the sale you want to deposit for
+     * @param amount of standard token you want to deposit
+     */
     function depositReward(string memory eventCode, uint256 amount)
         public
         onlyOwner
         rewardNotDistributed(eventCode)
     {
+        isSaleOn(eventCode);
         uint256 allowance = standardToken.allowance(
             _msgSender(),
             address(this)
@@ -908,6 +936,26 @@ contract DBTokenSideBet is SaleFactory {
         setTotalReward(eventCode, totalReward + amount);
     }
 
+    /**
+     * Allows owner to refund all the rewards deposited for the event and allow users to unstake
+     * @param eventCode of the sale you finilize
+     */
+    function refundReward(string memory eventCode)
+        public
+        onlyOwner
+        outsideOfSale(eventCode)
+        rewardNotDistributed(eventCode)
+    {
+        uint256 totalReward = getTotalReward(eventCode);
+        standardToken.transfer(_msgSender(), totalReward);
+        setRewardDistributed(eventCode, true);
+    }
+
+    /**
+     * Allows owner to select a winning team only once after the sale ends
+     * @param eventCode of the sale you finilize
+     * @param winningTeam address of the DBToken proclaimed as a winner
+     */
     function selectWinningTeam(string memory eventCode, DBToken winningTeam)
         public
         onlyOwner
@@ -921,23 +969,33 @@ contract DBTokenSideBet is SaleFactory {
         );
         uint256 totalReward = getTotalReward(eventCode);
         uint256 totalStaked = getTotalStaked(eventCode, winningTeam);
+        uint256 totalRewardDistributed = 0;
 
         for (uint256 i = 0; i < _eventStakingUsers.length; i++) {
             uint256 userStaked = getUserStaked(
                 eventCode,
-                _msgSender(),
+                _eventStakingUsers[i],
                 winningTeam
             );
-            uint256 userReward;
-            unchecked {
-                // Test !!!
-                userReward = (userStaked / totalStaked) * totalReward;
-            }
-            setUserReward(eventCode, _msgSender(), userReward);
+            uint256 userReward = (userStaked * totalReward) / totalStaked;
+            totalRewardDistributed += userReward;
+            setUserReward(eventCode, _eventStakingUsers[i], userReward);
         }
+        distributeLeftOverReward(
+            eventCode,
+            totalReward - totalRewardDistributed,
+            _eventStakingUsers
+        );
+
         setRewardDistributed(eventCode, true);
     }
 
+    /**
+     * Allows users to stake during a sale from one of the 2 given teamTokens
+     * @param eventCode of the sale you want to stake for
+     * @param teamToken address of the DBToken you are staking
+     * @param amount of DBTokens you want to stake
+     */
     function stake(
         string memory eventCode,
         DBToken teamToken,
@@ -955,6 +1013,12 @@ contract DBTokenSideBet is SaleFactory {
         teamToken.transferFrom(_msgSender(), address(this), amount);
     }
 
+    /**
+     * Allows users unstake their DBTokens only once the reward has been distributed.
+     * The users which staked towards the winning team will receive rewards
+     * @param eventCode of the sale you want to unstake from
+     * @param teamToken address of the DBToken you want to unstake
+     */
     function unstake(string memory eventCode, DBToken teamToken)
         public
         rewardIsDistributed(eventCode)
