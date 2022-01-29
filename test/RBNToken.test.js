@@ -130,20 +130,22 @@ describe("RBNV2Token", () => {
 
                 console.log(`originalBalance ${originalBalance}`);
 
-                RBNToken.methods
-                    .addLiquidity(
-                        TetherToken.options.address,
-                        rbnAmountDesired,
-                        tetherAmountDesired,
-                        rbnAmountMin,
-                        tetherAmountMin,
-                        accounts[0],
-                        deadline
-                    )
-                    .send({
-                        from: accounts[0],
-                        gas: '10000000000'
-                    });
+                // Currently method is in online testing !!!
+
+                // RBNToken.methods
+                //     .addLiquidity(
+                //         TetherToken.options.address,
+                //         rbnAmountDesired,
+                //         tetherAmountDesired,
+                //         rbnAmountMin,
+                //         tetherAmountMin,
+                //         accounts[0],
+                //         deadline
+                //     )
+                //     .send({
+                //         from: accounts[0],
+                //         gas: '10000000000'
+                //     });
             });
 
 
