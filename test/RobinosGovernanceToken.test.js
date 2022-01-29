@@ -382,7 +382,7 @@ describe("RobinosGovernanceTokenLuckyDraw", () => {
             });
     });
 
-    it("allows users to stake standard token & unstake to receive awards", (done) => {
+    it("allows users to stake standard token & unstake to receive awards", () => {
         const minimumStake = 100;
         const maximumStake = 100000;
         const numOfRewardTokens = 64;
@@ -528,7 +528,6 @@ describe("RobinosGovernanceTokenLuckyDraw", () => {
                             // of available tokens to be 0, since they were all marked as sold
                             assert.strictEqual(totalTokensWon, tokenIds.length);
                             assert.strictEqual(parseInt(availableTokens), 0);
-                            done();
                         })), waitDuration);
             });
     });
