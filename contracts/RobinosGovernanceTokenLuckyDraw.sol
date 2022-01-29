@@ -2463,7 +2463,6 @@ contract RobinosGovernanceTokenLuckyDraw is
         public
         userNotUnstaked(eventCode, _msgSender())
         userStakedLongEnough(eventCode, _msgSender())
-        duringSale(eventCode)
     {
         (uint256 totalUserStaked, , ) = getUserStaked(eventCode, _msgSender());
         removeStakedAmount(eventCode, _msgSender(), totalUserStaked);
