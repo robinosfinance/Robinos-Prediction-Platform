@@ -982,7 +982,7 @@ contract RBNV2Token is ERC20PresetFixedSupply, Ownable {
         );
         require(
             success && (data.length == 0 || abi.decode(data, (bool))),
-            "TransferHelper: TRANSFER_FROM_FAILED"
+            "RBNV2Token: TRANSFER_FROM_FAILED"
         );
     }
 
