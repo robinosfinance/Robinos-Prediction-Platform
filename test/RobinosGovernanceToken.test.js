@@ -20,7 +20,7 @@ const dbTokenContract = contracts["DBToken.sol"].DBToken;
 const dbTokenEventContract = contracts["DBTokenEvent.sol"].DBTokenEvent;
 
 // Local instance of the USDT contract used for testing
-const tether = require("./tether_compiled.json");
+const tether = require("../compiled/tether.json");
 
 let RobinosGovernanceToken, RobinosGovernanceTokenLuckyDraw, RobinosGovernanceTokenNFTStake, DBToken, DBTokenEvent, TetherToken, accounts;
 

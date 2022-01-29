@@ -11,6 +11,7 @@ const files = [
 	"RobinosGovernanceToken.sol",
 	"RobinosGovernanceTokenLuckyDraw.sol",
 	"RobinosGovernanceTokenNFTStake.sol",
+	"RBNV2Token.sol",
 ];
 
 let pathToFile, source;

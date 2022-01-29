@@ -18,7 +18,7 @@ const rewardContract = contracts["DBTokenReward.sol"].DBTokenReward;
 const sideBetContract = contracts["DBTokenSideBet.sol"].DBTokenSideBet;
 
 // Local instance of the USDT contract used for testing
-const tether = require("./tether_compiled.json");
+const tether = require("../compiled/tether.json");
 
 let accounts, rate, DBTokenSale, DBTokenEvent, DBTokens, TetherToken, DBTokenReward, DBTokenSideBet;
 
@@ -575,11 +575,11 @@ describe("DBTokenSideBet", () => {
                 });
         };
         const randTeamIndex = () => randomInt(0, 2) - 1;
-        const saleDuration = 5;
+        const saleDuration = 15;
         const minStake = 500;
         const maxStake = 150000;
         const winningTeamIndex = randTeamIndex();
-        const numOfUsers = 6;
+        const numOfUsers = 10;
         const eventName = "Man vs. Liv";
         const totalReward = randomInt(10000, 100000);
         const stakingParams = (() => {
