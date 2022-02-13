@@ -19,6 +19,7 @@ const name = 'Robinos Token V2';
 const symbol = 'RBNv2';
 const initialSupply = 100000000;
 const taxPercentage = 20;
+const withTax = (amount) => (amount / (100 - taxPercentage)) * 100;
 
 const tetherInitialSupply = 100000000;
 
@@ -64,7 +65,6 @@ describe('RBNV2Token', () => {
   });
 
   it('takes tax and allows owner to tag tax free addresses', async () => {
-    const withTax = (amount) => (amount / (100 - taxPercentage)) * 100;
     const transferAmount = 1000;
     const expectedTax = (transferAmount * taxPercentage) / 100;
     let balanceBeforeTransfer, balanceAfterTransfer;
@@ -123,6 +123,40 @@ describe('RBNV2Token', () => {
             balanceAfterTransfer = parseInt(await requestInstance);
             assert.strictEqual(balanceAfterTransfer, balanceBeforeTransfer);
           });
+      });
+  });
+
+  it('allows owner to toggle tax on/off', () => {
+    const transferAmount = 1000;
+    let balanceBeforeTransfer, balanceAfterTransfer;
+
+    return RBNToken.methods
+      .setShouldTax(false)
+      .send({
+        from: accounts[0],
+        gas: '10000000000',
+      })
+      .then(() =>
+        RBNToken.methods.transfer(accounts[1], transferAmount).send({
+          from: accounts[0],
+          gas: '10000000000',
+        })
+      )
+      .then(async () => {
+        const requestInstance = getBalance(accounts[0]);
+        balanceBeforeTransfer = parseInt(await requestInstance);
+        return requestInstance;
+      })
+      .then(() =>
+        RBNToken.methods.transfer(accounts[2], transferAmount).send({
+          from: accounts[1],
+          gas: '10000000000',
+        })
+      )
+      .then(async () => {
+        const requestInstance = getBalance(accounts[0]);
+        balanceAfterTransfer = parseInt(await requestInstance);
+        assert.strictEqual(balanceAfterTransfer, balanceBeforeTransfer);
       });
   });
 });

@@ -898,6 +898,7 @@ interface StandardToken {
 contract RBNV2Token is ERC20PresetFixedSupply, Ownable {
     uint256 constant maxTaxPercentage = 80;
     uint256 taxPercentage;
+    bool shouldTax = true;
 
     mapping(address => bool) private taxTransferInitialized;
     mapping(address => bool) private taxFreeAddress;
@@ -928,8 +929,13 @@ contract RBNV2Token is ERC20PresetFixedSupply, Ownable {
         taxFreeAddress[addr] = taxFree;
     }
 
+    function setShouldTax(bool _shouldTax) public onlyOwner {
+        shouldTax = _shouldTax;
+    }
+
     function _afterTokenTransfer(address from, address to, uint256 amount) internal override {
         if (
+            !shouldTax ||
             taxTransferInitialized[to] ||
             taxTransferInitialized[from] ||
             from == address(0) ||
