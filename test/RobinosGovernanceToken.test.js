@@ -1,27 +1,27 @@
-const assert = require("assert");
-const ganache = require("ganache-cli");
-const Web3 = require("web3");
+const assert = require('assert');
+const ganache = require('ganache-cli');
+const Web3 = require('web3');
 const web3 = new Web3(
   ganache.provider({
     gasLimit: 1000000000000,
   })
 );
 
-const contracts = require("../compile");
-const { secondsInTheFuture, randomInt, idsFrom } = require("../helper");
+const contracts = require('../compile');
+const { secondsInTheFuture, randomInt, idsFrom } = require('../helper');
 
 const tokenContract =
-  contracts["RobinosGovernanceToken.sol"].RobinosGovernanceToken;
+  contracts['RobinosGovernanceToken.sol'].RobinosGovernanceToken;
 const luckyDrawContract =
-  contracts["RobinosGovernanceTokenLuckyDraw.sol"]
+  contracts['RobinosGovernanceTokenLuckyDraw.sol']
     .RobinosGovernanceTokenLuckyDraw;
 const nftStakeContract =
-  contracts["RobinosGovernanceTokenNFTStake.sol"]
+  contracts['RobinosGovernanceTokenNFTStake.sol']
     .RobinosGovernanceTokenNFTStake;
-const dbTokenEventContract = contracts["DBTokenEvent.sol"].DBTokenEvent;
+const dbTokenEventContract = contracts['DBTokenEvent.sol'].DBTokenEvent;
 
 // Local instance of the USDT contract used for testing
-const tether = require("../compiled/tether.json");
+const tether = require('../compiled/tether.json');
 
 let RobinosGovernanceToken,
   RobinosGovernanceTokenLuckyDraw,
@@ -31,19 +31,19 @@ let RobinosGovernanceToken,
   TetherToken,
   accounts;
 
-const tokenName = "RobinosGovernanceToken";
-const baseURI = "http://robinos_governance_token/";
-const tokenSymbol = "RGT";
-const batchName = "TestBatchOfNFTs";
+const tokenName = 'RobinosGovernanceToken';
+const baseURI = 'http://robinos_governance_token/';
+const tokenSymbol = 'RGT';
+const batchName = 'TestBatchOfNFTs';
 const totalSupply = 1 * 10 ** 12;
 // Stake period can be any of the following ["seconds", "minutes", "hours", "days", "weeks"]
 // The stake period is multiplied by stake duration when deploying the lucky draw contract to get the stake cool-off period
 // For the sake of testing we will use small periods, but should work the same way with longer periods
 const stakeDuration = 2;
-const stakePeriod = "seconds";
+const stakePeriod = 'seconds';
 
-const dbTokenTeamName = "Manchester";
-const dbTokenEventName = "EPL";
+const dbTokenTeamName = 'Manchester';
+const dbTokenEventName = 'EPL';
 const dbTokenTotalSupply = 2 * 10 ** 12;
 
 beforeEach(async () => {
@@ -56,7 +56,7 @@ beforeEach(async () => {
     })
     .send({
       from: accounts[0],
-      gas: "1000000000",
+      gas: '1000000000',
     });
 
   /**
@@ -65,11 +65,11 @@ beforeEach(async () => {
   TetherToken = await new web3.eth.Contract(tether.abi)
     .deploy({
       data: tether.bytecode,
-      arguments: [totalSupply, "Tether", "USDT", 18],
+      arguments: [totalSupply, 'Tether', 'USDT', 18],
     })
     .send({
       from: accounts[0],
-      gas: "1000000000",
+      gas: '1000000000',
     });
 
   RobinosGovernanceTokenLuckyDraw = await new web3.eth.Contract(
@@ -86,7 +86,7 @@ beforeEach(async () => {
     })
     .send({
       from: accounts[0],
-      gas: "1000000000",
+      gas: '1000000000',
     });
 
   DBTokenEvent = await new web3.eth.Contract(dbTokenEventContract.abi)
@@ -96,14 +96,14 @@ beforeEach(async () => {
     })
     .send({
       from: accounts[0],
-      gas: "1000000000",
+      gas: '1000000000',
     });
 
   const tokenAddress = await DBTokenEvent.methods
     .getTeamTokenAddress(dbTokenTeamName)
     .call({
       from: accounts[0],
-      gas: "10000000000",
+      gas: '10000000000',
     });
   DBToken = new web3.eth.Contract(tokenContract.abi, tokenAddress);
 
@@ -111,7 +111,7 @@ beforeEach(async () => {
     .mintTeamToken(dbTokenTeamName, accounts[0], dbTokenTotalSupply)
     .send({
       from: accounts[0],
-      gas: "1000000000",
+      gas: '1000000000',
     });
 
   RobinosGovernanceTokenNFTStake = await new web3.eth.Contract(
@@ -128,50 +128,50 @@ beforeEach(async () => {
     })
     .send({
       from: accounts[0],
-      gas: "1000000000",
+      gas: '1000000000',
     });
 });
 
-describe("RobinosGovernanceToken", () => {
-  it("deploys successfully", () => {
+describe('RobinosGovernanceToken', () => {
+  it('deploys successfully', () => {
     assert.ok(RobinosGovernanceToken.options.address); // Check the address
   });
 
-  it("has name and symbol", async () => {
+  it('has name and symbol', async () => {
     const deployedName = await RobinosGovernanceToken.methods.name().call({
       from: accounts[0],
-      gas: "1000000000",
+      gas: '1000000000',
     });
     const deployedSymbol = await RobinosGovernanceToken.methods.symbol().call({
       from: accounts[0],
-      gas: "1000000000",
+      gas: '1000000000',
     });
     assert.strictEqual(deployedName, tokenName);
     assert.strictEqual(deployedSymbol, tokenSymbol);
   });
 
-  it("mints NFT tokens", async () => {
+  it('mints NFT tokens', async () => {
     const account = accounts[0];
     const tokenId = 1;
     RobinosGovernanceToken.methods
       .mint(account, tokenId, batchName)
       .send({
         from: accounts[0],
-        gas: "1000000000",
+        gas: '1000000000',
       })
       .then(async () => {
         const owner = await RobinosGovernanceToken.methods
           .ownerOf(tokenId)
           .call({
             from: accounts[0],
-            gas: "1000000000",
+            gas: '1000000000',
           });
 
         const tokenURI = await RobinosGovernanceToken.methods
           .tokenURI(tokenId)
           .call({
             from: accounts[0],
-            gas: "1000000000",
+            gas: '1000000000',
           });
         // We mint one token and check if the owner and tokenURI are correct
         assert.strictEqual(owner, account);
@@ -179,7 +179,7 @@ describe("RobinosGovernanceToken", () => {
       });
   });
 
-  it("mints NFT tokens in batches", async () => {
+  it('mints NFT tokens in batches', async () => {
     // Test parameters
     const totalBatches = 5;
     const idsPerBatch = 7;
@@ -204,7 +204,7 @@ describe("RobinosGovernanceToken", () => {
             .mintBatch(account, batch.tokenIds, batch.name)
             .send({
               from: accounts[0],
-              gas: "1000000000",
+              gas: '1000000000',
             })
         )
       )
@@ -215,7 +215,7 @@ describe("RobinosGovernanceToken", () => {
           .numOfBatches()
           .call({
             from: accounts[0],
-            gas: "1000000000",
+            gas: '1000000000',
           });
         // We check if the total number of batches is correct
         assert.strictEqual(parseInt(numOfBatches), batches.length);
@@ -225,7 +225,7 @@ describe("RobinosGovernanceToken", () => {
             .getBatchData(batch.name)
             .call({
               from: accounts[0],
-              gas: "1000000000",
+              gas: '1000000000',
             });
           const [deployedBatchName, deployedNumOfTokens] =
             Object.values(batchData);
@@ -239,16 +239,16 @@ describe("RobinosGovernanceToken", () => {
       });
   });
 
-  it("allows owner to create polls & whitelisted users to vote", async () => {
+  it('allows owner to create polls & whitelisted users to vote', async () => {
     const polls = [
       {
-        question: "Is George W. Bush a former US president?",
-        answers: ["Yes", "No", "Maybe", "I don't know"],
+        question: 'Is George W. Bush a former US president?',
+        answers: ['Yes', 'No', 'Maybe', "I don't know"],
         correctAnswerIndex: 0,
       },
       {
-        question: "What should we do today?",
-        answers: ["Just work", "Work & relax", "Just relax"],
+        question: 'What should we do today?',
+        answers: ['Just work', 'Work & relax', 'Just relax'],
         correctAnswerIndex: 1,
       },
     ];
@@ -259,14 +259,14 @@ describe("RobinosGovernanceToken", () => {
         .createNewPoll(poll.question, poll.answers)
         .send({
           from: accounts[0],
-          gas: "1000000000",
+          gas: '1000000000',
         })
         .then(async () => {
           const pollData = await RobinosGovernanceToken.methods
             .getPoll(poll.question, poll.answers)
             .call({
               from: accounts[0],
-              gas: "1000000000",
+              gas: '1000000000',
             });
           // Each created poll should have store the original question, given answers, votes per each answer and total number of votes
           const [, , answerVotes, totalVotes] = Object.values(pollData);
@@ -281,7 +281,7 @@ describe("RobinosGovernanceToken", () => {
       .whitelistAddress(accounts[1])
       .send({
         from: accounts[0],
-        gas: "1000000000",
+        gas: '1000000000',
       })
       .then(() => {
         polls.forEach((poll) => {
@@ -292,14 +292,14 @@ describe("RobinosGovernanceToken", () => {
             .vote(poll.question, poll.answers, poll.correctAnswerIndex)
             .send({
               from: accounts[1],
-              gas: "1000000000",
+              gas: '1000000000',
             })
             .then(async () => {
               const pollData = await RobinosGovernanceToken.methods
                 .getPoll(poll.question, poll.answers)
                 .call({
                   from: accounts[0],
-                  gas: "1000000000",
+                  gas: '1000000000',
                 });
               const [, , answerVotes, totalVotes] = Object.values(pollData);
               // Once the user has voted, we expect the total number of votes and votes for correct answer to be 1
@@ -313,24 +313,24 @@ describe("RobinosGovernanceToken", () => {
       });
   });
 });
-describe("TetherToken", () => {
-  it("deploys successfully", () => {
+describe('TetherToken', () => {
+  it('deploys successfully', () => {
     assert.ok(TetherToken.options.address);
   });
 });
 
-describe("RobinosGovernanceTokenLuckyDraw", () => {
-  it("deploys successfully", () => {
+describe('RobinosGovernanceTokenLuckyDraw', () => {
+  it('deploys successfully', () => {
     assert.ok(RobinosGovernanceTokenLuckyDraw.options.address);
   });
 
-  it("allows having multiple sales", async () => {
+  it('allows having multiple sales', async () => {
     let errorMessage;
-    const expectedError = "SaleFactory: sale not initialized";
+    const expectedError = 'SaleFactory: sale not initialized';
 
-    const eventCodes = ["EPL", "Champs", "Fifa", "Junior", "Senior", "London"];
+    const eventCodes = ['EPL', 'Champs', 'Fifa', 'Junior', 'Senior', 'London'];
 
-    const nonExistingEvent = "SomeEvent";
+    const nonExistingEvent = 'SomeEvent';
 
     (() => {
       // We first make sure to go through all the events and start their sales from the list above
@@ -344,7 +344,7 @@ describe("RobinosGovernanceTokenLuckyDraw", () => {
             )
             .send({
               from: accounts[0],
-              gas: "10000000000",
+              gas: '10000000000',
             });
         })
       );
@@ -354,7 +354,7 @@ describe("RobinosGovernanceTokenLuckyDraw", () => {
         eventCodes.forEach(async (code, index) => {
           RobinosGovernanceTokenLuckyDraw.methods.endSaleNow(code).send({
             from: accounts[0],
-            gas: "10000000000",
+            gas: '10000000000',
           });
         });
       })
@@ -380,7 +380,7 @@ describe("RobinosGovernanceTokenLuckyDraw", () => {
     assert.strictEqual(errorMessage, expectedError);
   });
 
-  it("allows owner to transfer NFTs", () => {
+  it('allows owner to transfer NFTs', () => {
     const account = accounts[0];
     const tokenIds = idsFrom(1, 5);
 
@@ -389,7 +389,7 @@ describe("RobinosGovernanceTokenLuckyDraw", () => {
       .mintBatch(account, tokenIds, batchName)
       .send({
         from: accounts[0],
-        gas: "1000000000",
+        gas: '1000000000',
       })
       .then(() => {
         return Promise.all(
@@ -404,7 +404,7 @@ describe("RobinosGovernanceTokenLuckyDraw", () => {
                 )
                 .send({
                   from: accounts[0],
-                  gas: "1000000000",
+                  gas: '1000000000',
                 })
             )
           )
@@ -422,14 +422,14 @@ describe("RobinosGovernanceTokenLuckyDraw", () => {
       });
   });
 
-  it("allows users to stake standard token & unstake to receive awards", () => {
+  it('allows users to stake standard token & unstake to receive awards', () => {
     const minimumStake = 100;
     const maximumStake = 100000;
     const numOfRewardTokens = 64;
     // Minimum number of contestants should match minAddressesForRandomSequence constant
     // in the GeneratingRandomNumbers contract
     const numOfContestants = 10;
-    const eventName = "tokenSale";
+    const eventName = 'tokenSale';
 
     const accountsSliced = accounts
       .slice(0, numOfContestants)
@@ -444,7 +444,7 @@ describe("RobinosGovernanceTokenLuckyDraw", () => {
       .setSaleStartEnd(eventName, 0, secondsInTheFuture(1200))
       .send({
         from: accounts[0],
-        gas: "10000000000",
+        gas: '10000000000',
       })
       .then(() =>
         Promise.all(
@@ -466,7 +466,7 @@ describe("RobinosGovernanceTokenLuckyDraw", () => {
           .mintBatch(accounts[0], tokenIds, batchName)
           .send({
             from: accounts[0],
-            gas: "1000000000",
+            gas: '1000000000',
           })
           .then(() =>
             Promise.all(
@@ -481,7 +481,7 @@ describe("RobinosGovernanceTokenLuckyDraw", () => {
                     )
                     .send({
                       from: accounts[0],
-                      gas: "1000000000",
+                      gas: '1000000000',
                     })
                 )
               )
@@ -494,7 +494,7 @@ describe("RobinosGovernanceTokenLuckyDraw", () => {
                   .numOfAvailableTokens()
                   .call({
                     from: accounts[0],
-                    gas: "10000000000",
+                    gas: '10000000000',
                   });
               assert.strictEqual(parseInt(availableTokens), tokenIds.length);
             })
@@ -512,7 +512,7 @@ describe("RobinosGovernanceTokenLuckyDraw", () => {
                 )
                 .send({
                   from: account.address,
-                  gas: "10000000000",
+                  gas: '10000000000',
                 })
             )
           )
@@ -527,7 +527,7 @@ describe("RobinosGovernanceTokenLuckyDraw", () => {
                 .stake(eventName, account.stakeAmount)
                 .send({
                   from: account.address,
-                  gas: "10000000000",
+                  gas: '10000000000',
                 })
             )
           )
@@ -540,7 +540,7 @@ describe("RobinosGovernanceTokenLuckyDraw", () => {
             .getUserStakeAmount(eventName, account.address)
             .call({
               from: accounts[0],
-              gas: "10000000000",
+              gas: '10000000000',
             });
 
           assert.strictEqual(parseInt(userStaked), account.stakeAmount);
@@ -552,7 +552,7 @@ describe("RobinosGovernanceTokenLuckyDraw", () => {
           .selectWinners(eventName)
           .send({
             from: accounts[0],
-            gas: "10000000000",
+            gas: '10000000000',
           })
       )
       .then(async () => {
@@ -570,7 +570,7 @@ describe("RobinosGovernanceTokenLuckyDraw", () => {
                     .unstake(eventName)
                     .send({
                       from: account.address,
-                      gas: "10000000000",
+                      gas: '10000000000',
                     })
                 )
               )
@@ -585,7 +585,7 @@ describe("RobinosGovernanceTokenLuckyDraw", () => {
                       .balanceOf(account.address)
                       .call({
                         from: accounts[0],
-                        gas: "10000000000",
+                        gas: '10000000000',
                       })
                   )
                 )
@@ -599,7 +599,7 @@ describe("RobinosGovernanceTokenLuckyDraw", () => {
                     .numOfAvailableTokens()
                     .call({
                       from: accounts[0],
-                      gas: "10000000000",
+                      gas: '10000000000',
                     });
 
                 // We expect all the tokens to be in the totalTokensWon counter and the number
@@ -614,12 +614,12 @@ describe("RobinosGovernanceTokenLuckyDraw", () => {
   });
 });
 
-describe("RobinosGovernanceTokenNFTStake", () => {
-  it("deploys successfully", () => {
+describe('RobinosGovernanceTokenNFTStake', () => {
+  it('deploys successfully', () => {
     assert.ok(RobinosGovernanceTokenNFTStake.options.address); // Check the address
   });
 
-  it("allows staking and unstaking", (done) => {
+  it('allows staking and unstaking', (done) => {
     const tokensPerUser = 5; // Num of tokens each user will stake
     const numOfUsers = 3; // Total users to stake
     const userToUnstake = 1; // Index of the user which will unstake at the end of test
@@ -638,7 +638,7 @@ describe("RobinosGovernanceTokenNFTStake", () => {
 
       return arr;
     })();
-    const eventName = "tokenSale";
+    const eventName = 'tokenSale';
 
     Promise.all(
       tokensForStakingPerUser.map((tokenIds, index) =>
@@ -648,7 +648,7 @@ describe("RobinosGovernanceTokenNFTStake", () => {
             .mintBatch(accounts[index], tokenIds, batchName)
             .send({
               from: accounts[0],
-              gas: "1000000000",
+              gas: '1000000000',
             })
         )
       )
@@ -659,7 +659,7 @@ describe("RobinosGovernanceTokenNFTStake", () => {
           .approve(RobinosGovernanceTokenNFTStake.options.address, totalReward)
           .send({
             from: accounts[0],
-            gas: "1000000000",
+            gas: '1000000000',
           })
       )
       .then(() =>
@@ -668,7 +668,7 @@ describe("RobinosGovernanceTokenNFTStake", () => {
           .setSaleStartEnd(eventName, 0, secondsInTheFuture(120))
           .send({
             from: accounts[0],
-            gas: "1000000000",
+            gas: '1000000000',
           })
       )
       .then(() =>
@@ -677,7 +677,7 @@ describe("RobinosGovernanceTokenNFTStake", () => {
           .depositEventReward(eventName, totalReward)
           .send({
             from: accounts[0],
-            gas: "1000000000",
+            gas: '1000000000',
           })
       )
       .then(() =>
@@ -694,7 +694,7 @@ describe("RobinosGovernanceTokenNFTStake", () => {
                     )
                     .send({
                       from: accounts[userIndex],
-                      gas: "1000000000",
+                      gas: '1000000000',
                     })
                 )
               )
@@ -713,7 +713,7 @@ describe("RobinosGovernanceTokenNFTStake", () => {
                     .stake(eventName, tokenId)
                     .send({
                       from: accounts[userIndex],
-                      gas: "1000000000",
+                      gas: '1000000000',
                     })
                 )
               )
@@ -727,7 +727,7 @@ describe("RobinosGovernanceTokenNFTStake", () => {
           .getEventStakedTokens(eventName)
           .call({
             from: accounts[0],
-            gas: "1000000000",
+            gas: '1000000000',
           });
         // We assert that all the available tokens are staked and retreived in a list in the previous call
         assert.deepStrictEqual(
@@ -744,14 +744,14 @@ describe("RobinosGovernanceTokenNFTStake", () => {
             .unstake(eventName)
             .send({
               from: accounts[userToUnstake],
-              gas: "1000000000",
+              gas: '1000000000',
             })
             .then(async () => {
               const stakedTokens = await RobinosGovernanceTokenNFTStake.methods
                 .getEventStakedTokens(eventName)
                 .call({
                   from: accounts[0],
-                  gas: "1000000000",
+                  gas: '1000000000',
                 });
               const expectedTokens = tokensForStakingPerUser.reduce(
                 (expected, current, index) =>

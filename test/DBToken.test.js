@@ -1,23 +1,23 @@
-const assert = require("assert");
-const ganache = require("ganache-cli");
-const Web3 = require("web3");
+const assert = require('assert');
+const ganache = require('ganache-cli');
+const Web3 = require('web3');
 const web3 = new Web3(
   ganache.provider({
     gasLimit: 1000000000000,
   })
 );
 
-const contracts = require("../compile");
-const { secondsInTheFuture, randomInt } = require("../helper");
+const contracts = require('../compile');
+const { secondsInTheFuture, randomInt } = require('../helper');
 
-const tokenContract = contracts["DBToken.sol"].DBToken;
-const eventContract = contracts["DBTokenEvent.sol"].DBTokenEvent;
-const salesContract = contracts["DBTokenSale.sol"].DBTokenSale;
-const rewardContract = contracts["DBTokenReward.sol"].DBTokenReward;
-const sideBetContract = contracts["DBTokenSideBet.sol"].DBTokenSideBet;
+const tokenContract = contracts['DBToken.sol'].DBToken;
+const eventContract = contracts['DBTokenEvent.sol'].DBTokenEvent;
+const salesContract = contracts['DBTokenSale.sol'].DBTokenSale;
+const rewardContract = contracts['DBTokenReward.sol'].DBTokenReward;
+const sideBetContract = contracts['DBTokenSideBet.sol'].DBTokenSideBet;
 
 // Local instance of the USDT contract used for testing
-const tether = require("../compiled/tether.json");
+const tether = require('../compiled/tether.json');
 
 let accounts,
   rate,
@@ -31,22 +31,22 @@ let accounts,
 // Teams and event code default info for testing
 const teamTokenParams = [
   {
-    name: "DBToken",
-    symbol: "DBT",
-    teamName: "Manchester",
+    name: 'DBToken',
+    symbol: 'DBT',
+    teamName: 'Manchester',
   },
   {
-    name: "DBToken",
-    symbol: "DBT",
-    teamName: "Liverpool",
+    name: 'DBToken',
+    symbol: 'DBT',
+    teamName: 'Liverpool',
   },
   {
-    name: "DBToken",
-    symbol: "DBT",
-    teamName: "Arsenal",
+    name: 'DBToken',
+    symbol: 'DBT',
+    teamName: 'Arsenal',
   },
 ];
-const eventCode = "EPL";
+const eventCode = 'EPL';
 const totalSupply = 1 * 10 ** 12;
 
 beforeEach(async () => {
@@ -60,7 +60,7 @@ beforeEach(async () => {
     })
     .send({
       from: accounts[0],
-      gas: "1000000000",
+      gas: '1000000000',
     });
 
   teamTokenParams.forEach(async (teamParams) => {
@@ -68,7 +68,7 @@ beforeEach(async () => {
       .getTeamTokenAddress(teamParams.teamName)
       .call({
         from: accounts[0],
-        gas: "10000000000",
+        gas: '10000000000',
       });
     DBTokens.push(new web3.eth.Contract(tokenContract.abi, tokenAddress));
   });
@@ -79,11 +79,11 @@ beforeEach(async () => {
   TetherToken = await new web3.eth.Contract(tether.abi)
     .deploy({
       data: tether.bytecode,
-      arguments: [totalSupply, "Tether", "USDT", 18],
+      arguments: [totalSupply, 'Tether', 'USDT', 18],
     })
     .send({
       from: accounts[0],
-      gas: "1000000000",
+      gas: '1000000000',
     });
 
   DBTokenSale = await new web3.eth.Contract(salesContract.abi)
@@ -93,7 +93,7 @@ beforeEach(async () => {
     })
     .send({
       from: accounts[0],
-      gas: "1000000000",
+      gas: '1000000000',
     });
 
   rate = await DBTokenSale.methods.rate().call({
@@ -107,7 +107,7 @@ beforeEach(async () => {
     })
     .send({
       from: accounts[0],
-      gas: "1000000000",
+      gas: '1000000000',
     });
 
   DBTokenSideBet = await new web3.eth.Contract(sideBetContract.abi)
@@ -121,12 +121,12 @@ beforeEach(async () => {
     })
     .send({
       from: accounts[0],
-      gas: "1000000000",
+      gas: '1000000000',
     });
 });
 
-describe("DBTokens", () => {
-  it("all deployed successfully", () => {
+describe('DBTokens', () => {
+  it('all deployed successfully', () => {
     DBTokens.forEach(async (DBToken, index) => {
       const tokenTeamName = await DBToken.methods.teamName().call({
         from: accounts[0],
@@ -137,12 +137,12 @@ describe("DBTokens", () => {
   });
 });
 
-describe("TetherToken", () => {
-  it("deploys successfully", () => {
+describe('TetherToken', () => {
+  it('deploys successfully', () => {
     assert.ok(TetherToken.options.address);
   });
 
-  it("allows user to approve funds for transfer", async () => {
+  it('allows user to approve funds for transfer', async () => {
     /**
      * @dev This test is required to work for the DBTokenSale purchase to work below
      */
@@ -156,11 +156,11 @@ describe("TetherToken", () => {
         from: accounts[0],
       });
 
-    assert.strictEqual(allowance, "200");
+    assert.strictEqual(allowance, '200');
   });
 });
 
-describe("DBTokenSale", () => {
+describe('DBTokenSale', () => {
   beforeEach(() =>
     DBTokenEvent.methods
       .transferOwnershipOfEventAndTokens(DBTokenSale.options.address)
@@ -169,11 +169,11 @@ describe("DBTokenSale", () => {
       })
   );
 
-  it("deploys successfully", () => {
+  it('deploys successfully', () => {
     assert.ok(DBTokenSale.options.address);
   });
 
-  it("accepts DBToken references", async () => {
+  it('accepts DBToken references', async () => {
     let tokenAddress;
 
     await DBTokens.forEach(async (DBToken, index) => {
@@ -188,20 +188,20 @@ describe("DBTokenSale", () => {
         )
         .send({
           from: accounts[0],
-          gas: "10000000000",
+          gas: '10000000000',
         });
 
       tokenAddress = await DBTokenSale.methods
         .getToken(eventCode, teamTokenParams[index].teamName)
         .call({
           from: accounts[0],
-          gas: "10000000000",
+          gas: '10000000000',
         });
       assert.ok(tokenAddress);
     });
   });
 
-  it("allows to start, end and read sale time", async () => {
+  it('allows to start, end and read sale time', async () => {
     /**
      *  @dev We have 3 tests for checking the sale status. This functions are available for any account to use.
      */
@@ -225,7 +225,7 @@ describe("DBTokenSale", () => {
       .setSaleStartEnd(eventCode, 0, secondsInTheFuture(60))
       .send({
         from: accounts[0],
-        gas: "10000000000",
+        gas: '10000000000',
       });
 
     sale = await isSaleOn(eventCode);
@@ -241,8 +241,8 @@ describe("DBTokenSale", () => {
     assert(parseInt(sale.saleEnd) <= secondsInTheFuture(0));
   });
 
-  it("allows having multiple sales", async () => {
-    const eventCodes = ["EPL", "Champs", "Fifa", "Junior", "Senior", "London"];
+  it('allows having multiple sales', async () => {
+    const eventCodes = ['EPL', 'Champs', 'Fifa', 'Junior', 'Senior', 'London'];
 
     (() => {
       // We first make sure to go through all the events and start their sales from the list above
@@ -256,7 +256,7 @@ describe("DBTokenSale", () => {
             )
             .send({
               from: accounts[0],
-              gas: "10000000000",
+              gas: '10000000000',
             });
         })
       );
@@ -266,7 +266,7 @@ describe("DBTokenSale", () => {
         eventCodes.forEach(async (code, index) => {
           DBTokenSale.methods.endSaleNow(code).send({
             from: accounts[0],
-            gas: "10000000000",
+            gas: '10000000000',
           });
         });
       })
@@ -279,7 +279,7 @@ describe("DBTokenSale", () => {
       });
   });
 
-  it("allows exchange of DBTokens <> USDT and withdrawal of contract funds", async () => {
+  it('allows exchange of DBTokens <> USDT and withdrawal of contract funds', async () => {
     /**
      * @dev This is the main and the most complicated test of all. The test is made up of multiple steps:
      *  1) We add at least one DBToken reference to the DBTokenSale contract
@@ -312,7 +312,7 @@ describe("DBTokenSale", () => {
       .addDBTokenReference(DBToken.options.address, eventCode, teamName)
       .send({
         from: accounts[0],
-        gas: "10000000000",
+        gas: '10000000000',
       });
 
     await TetherToken.methods.approve(DBTokenSale.options.address, 250).send({
@@ -324,14 +324,14 @@ describe("DBTokenSale", () => {
       .setSaleStartEnd(eventCode, 0, secondsInTheFuture(60))
       .send({
         from: accounts[0],
-        gas: "10000000000",
+        gas: '10000000000',
       });
 
     await DBTokenSale.methods
       .buyTokens(eventCode, teamName, purchaseUSDTFunds)
       .send({
         from: accounts[0],
-        gas: "10000000000",
+        gas: '10000000000',
       });
 
     const contractUSDTBalance = parseInt(
@@ -349,7 +349,7 @@ describe("DBTokenSale", () => {
 
     await DBTokenSale.methods.withdraw(purchaseUSDTFunds).send({
       from: accounts[0],
-      gas: "10000000000",
+      gas: '10000000000',
     });
 
     // We expect the withdrawn funds to be on accounts[1] as that was set as the withdrawable address in the DBTokenSale constructor
@@ -357,7 +357,7 @@ describe("DBTokenSale", () => {
     assert.strictEqual(safeUSDTBalance, purchaseUSDTFunds);
   });
 
-  it("allows owner to record sold supply and mint 1% at the end of sale", async () => {
+  it('allows owner to record sold supply and mint 1% at the end of sale', async () => {
     const tokenPurchaseAmount = 100000;
 
     const tokenBalancesEqual = async (checkAmount = null) => {
@@ -390,7 +390,7 @@ describe("DBTokenSale", () => {
       .setSaleStartEnd(eventCode, 0, secondsInTheFuture(60))
       .send({
         from: accounts[0],
-        gas: "10000000000",
+        gas: '10000000000',
       });
 
     for (let i = 0; i < DBTokens.length; i++) {
@@ -402,14 +402,14 @@ describe("DBTokenSale", () => {
         )
         .send({
           from: accounts[0],
-          gas: "10000000000",
+          gas: '10000000000',
         });
 
       await DBTokenSale.methods
         .buyTokens(eventCode, teamTokenParams[i].teamName, tokenPurchaseAmount)
         .send({
           from: accounts[0],
-          gas: "10000000000",
+          gas: '10000000000',
         });
     }
 
@@ -426,7 +426,7 @@ describe("DBTokenSale", () => {
           .mintOnePercentToOwner()
           .send({
             from: accounts[0],
-            gas: "10000000000",
+            gas: '10000000000',
           })
           .then(async () => {
             const tokensSold = await DBTokenSale.methods.tokensSold().call({
@@ -442,8 +442,8 @@ describe("DBTokenSale", () => {
   });
 });
 
-describe("DBTokenReward", () => {
-  it("allows dynamic rates", async () => {
+describe('DBTokenReward', () => {
+  it('allows dynamic rates', async () => {
     const DBToken = DBTokens[0];
     const teamName = teamTokenParams[0].teamName;
     const DBtokenAmount = 10000;
@@ -453,21 +453,21 @@ describe("DBTokenReward", () => {
       .addDBTokenReference(DBToken.options.address, eventCode, teamName)
       .send({
         from: accounts[0],
-        gas: "10000000000",
+        gas: '10000000000',
       });
 
     DBTokenReward.methods
       .setRate(eventCode, teamName, ratio[0], ratio[1])
       .send({
         from: accounts[0],
-        gas: "10000000000",
+        gas: '10000000000',
       })
       .then(async () => {
         const standardTokenAmount = await DBTokenReward.methods
           .standardTokensFor(DBtokenAmount, eventCode, teamName)
           .call({
             from: accounts[0],
-            gas: "10000000000",
+            gas: '10000000000',
           });
         assert.strictEqual(
           parseInt(standardTokenAmount),
@@ -476,7 +476,7 @@ describe("DBTokenReward", () => {
       });
   });
 
-  it("allows rewards", async () => {
+  it('allows rewards', async () => {
     const DBToken = DBTokens[0];
     const teamName = teamTokenParams[0].teamName;
     const purchaseAmount = 500;
@@ -485,7 +485,7 @@ describe("DBTokenReward", () => {
       .addDBTokenReference(DBToken.options.address, eventCode, teamName)
       .send({
         from: accounts[0],
-        gas: "10000000000",
+        gas: '10000000000',
       });
 
     await TetherToken.methods
@@ -499,14 +499,14 @@ describe("DBTokenReward", () => {
       .setSaleStartEnd(eventCode, 0, secondsInTheFuture(60))
       .send({
         from: accounts[0],
-        gas: "10000000000",
+        gas: '10000000000',
       });
 
     await DBTokenSale.methods
       .buyTokens(eventCode, teamName, purchaseAmount)
       .send({
         from: accounts[0],
-        gas: "10000000000",
+        gas: '10000000000',
       });
 
     await DBTokenSale.methods.endSaleNow(eventCode).send({
@@ -517,7 +517,7 @@ describe("DBTokenReward", () => {
       .addDBTokenReference(DBToken.options.address, eventCode, teamName)
       .send({
         from: accounts[0],
-        gas: "10000000000",
+        gas: '10000000000',
       });
 
     await TetherToken.methods
@@ -536,14 +536,14 @@ describe("DBTokenReward", () => {
       .setSaleStartEnd(eventCode, 0, secondsInTheFuture(60))
       .send({
         from: accounts[0],
-        gas: "10000000000",
+        gas: '10000000000',
       })
       .then(() => {
         const success = DBTokenReward.methods
           .sellTokens(eventCode, teamName, purchaseAmount)
           .send({
             from: accounts[0],
-            gas: "10000000000",
+            gas: '10000000000',
           });
 
         assert.ok(success);
@@ -551,29 +551,29 @@ describe("DBTokenReward", () => {
   });
 });
 
-describe("DBTokenEvent", () => {
-  it("deploys successfully", async () => {
+describe('DBTokenEvent', () => {
+  it('deploys successfully', async () => {
     assert.ok(DBTokenEvent.options.address);
   });
 
-  it("creates multiple tokens", async () => {
+  it('creates multiple tokens', async () => {
     DBTokens.forEach(async (DBToken, index) => {
       const teamName = teamTokenParams[index].teamName;
       const tokenTeamName = await DBToken.methods.teamName().call({
         from: accounts[0],
-        gas: "10000000000",
+        gas: '10000000000',
       });
       assert.strictEqual(tokenTeamName, teamName);
     });
   });
 });
 
-describe("DBTokenSideBet", () => {
-  it("deploys successfully", async () => {
+describe('DBTokenSideBet', () => {
+  it('deploys successfully', async () => {
     assert.ok(DBTokenSideBet.options.address);
   });
 
-  it("allows owner to deposit reward & select winners and users to stake & unstake", (done) => {
+  it('allows owner to deposit reward & select winners and users to stake & unstake', (done) => {
     const mintTeamToken = ({ teamIndex, account, amount }) => {
       const teamNames = [
         teamTokenParams[0].teamName,
@@ -583,7 +583,7 @@ describe("DBTokenSideBet", () => {
         .mintTeamToken(teamNames[teamIndex], account, amount)
         .send({
           from: accounts[0],
-          gas: "10000000000",
+          gas: '10000000000',
         });
     };
     const randTeamIndex = () => randomInt(0, 2) - 1;
@@ -592,7 +592,7 @@ describe("DBTokenSideBet", () => {
     const maxStake = 150000;
     const winningTeamIndex = randTeamIndex();
     const numOfUsers = 10;
-    const eventName = "Man vs. Liv";
+    const eventName = 'Man vs. Liv';
     const totalReward = randomInt(10000, 100000);
     const stakingParams = (() => {
       const params = [];
@@ -612,7 +612,7 @@ describe("DBTokenSideBet", () => {
           .setSaleStartEnd(eventName, 0, secondsInTheFuture(saleDuration))
           .send({
             from: accounts[0],
-            gas: "10000000000",
+            gas: '10000000000',
           })
       )
       .then(() =>
@@ -621,7 +621,7 @@ describe("DBTokenSideBet", () => {
           .approve(DBTokenSideBet.options.address, totalReward)
           .send({
             from: accounts[0],
-            gas: "10000000000",
+            gas: '10000000000',
           })
       )
       .then(() =>
@@ -630,7 +630,7 @@ describe("DBTokenSideBet", () => {
           .depositReward(eventName, totalReward)
           .send({
             from: accounts[0],
-            gas: "10000000000",
+            gas: '10000000000',
           })
       )
       .then(() =>
@@ -641,7 +641,7 @@ describe("DBTokenSideBet", () => {
               .approve(DBTokenSideBet.options.address, params.amount)
               .send({
                 from: params.account,
-                gas: "10000000000",
+                gas: '10000000000',
               })
           )
         )
@@ -658,7 +658,7 @@ describe("DBTokenSideBet", () => {
               )
               .send({
                 from: params.account,
-                gas: "10000000000",
+                gas: '10000000000',
               })
           )
         )
@@ -674,7 +674,7 @@ describe("DBTokenSideBet", () => {
             )
             .call({
               from: accounts[0],
-              gas: "10000000000",
+              gas: '10000000000',
             });
           // And compare the value returned with local
           assert.strictEqual(parseInt(userStaked), params.amount);
@@ -694,7 +694,7 @@ describe("DBTokenSideBet", () => {
             )
             .send({
               from: accounts[0],
-              gas: "10000000000",
+              gas: '10000000000',
             })
             .then(() => {
               let totalCalculatedReward = 0;
@@ -704,7 +704,7 @@ describe("DBTokenSideBet", () => {
                     .getUserReward(eventName, params.account)
                     .call({
                       from: accounts[0],
-                      gas: "10000000000",
+                      gas: '10000000000',
                     });
                   // We check how many standard tokens each user will be rewarded
                   const userReward = parseInt(await requestInstance);
@@ -734,7 +734,7 @@ describe("DBTokenSideBet", () => {
                 )
                 .send({
                   from: accounts[winningAccountIndex],
-                  gas: "10000000000",
+                  gas: '10000000000',
                 })
                 .then(async () => {
                   const winnerReward = await TetherToken.methods

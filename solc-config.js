@@ -1,14 +1,14 @@
 module.exports = {
   // Required: Source code language. Currently supported are "Solidity" and "Yul".
-  language: "Solidity",
+  language: 'Solidity',
   // Required
   sources: {
     // The keys here are the "global" names of the source files,
     // imports can use other files via remappings (see below).
-    "myFile.sol": {
+    'myFile.sol': {
       // Optional: keccak256 hash of the source file
       // It is used to verify the retrieved content if imported via URLs.
-      keccak256: "0x123...",
+      keccak256: '0x123...',
       // Required (unless "content" is used, see below): URL(s) to the source file.
       // URL(s) should be imported in this order and the result checked against the
       // keccak256 hash (if available). If the hash doesn't match or none of the
@@ -17,27 +17,27 @@ module.exports = {
       // With the JavaScript interface the URL will be passed to the user-supplied
       // read callback, so any URL supported by the callback can be used.
       urls: [
-        "bzzr://56ab...",
-        "ipfs://Qma...",
-        "/tmp/path/to/file.sol",
+        'bzzr://56ab...',
+        'ipfs://Qma...',
+        '/tmp/path/to/file.sol',
         // If files are used, their directories should be added to the command line via
         // `--allow-paths <path>`.
       ],
     },
     destructible: {
       // Optional: keccak256 hash of the source file
-      keccak256: "0x234...",
+      keccak256: '0x234...',
       // Required (unless "urls" is used): literal contents of the source file
       content:
-        "contract destructible is owned { function shutdown() { if (msg.sender == owner) selfdestruct(owner); } }",
+        'contract destructible is owned { function shutdown() { if (msg.sender == owner) selfdestruct(owner); } }',
     },
   },
   // Optional
   settings: {
     // Optional: Stop compilation after the given stage. Currently only "parsing" is valid here
-    stopAfter: "parsing",
+    stopAfter: 'parsing',
     // Optional: Sorted list of remappings
-    remappings: [":g=/dir"],
+    remappings: [':g=/dir'],
     // Optional: Optimizer settings
     optimizer: {
       // Disabled by default.
@@ -84,14 +84,14 @@ module.exports = {
           stackAllocation: true,
           // Select optimization steps to be applied.
           // Optional, the optimizer will use the default sequence if omitted.
-          optimizerSteps: "dhfoDgvulfnTUtnIf...",
+          optimizerSteps: 'dhfoDgvulfnTUtnIf...',
         },
       },
     },
     // Version of the EVM to compile for.
     // Affects type checking and code generation. Can be homestead,
     // tangerineWhistle, spuriousDragon, byzantium, constantinople, petersburg, istanbul or berlin
-    evmVersion: "byzantium",
+    evmVersion: 'byzantium',
     // Optional: Change compilation pipeline to go through the Yul intermediate representation.
     // This is a highly EXPERIMENTAL feature, not to be used for production. This is false by default.
     viaIR: true,
@@ -103,7 +103,7 @@ module.exports = {
       // "strip" removes all revert strings (if possible, i.e. if literals are used) keeping side-effects
       // "debug" injects strings for compiler-generated internal reverts, implemented for ABI encoders V1 and V2 for now.
       // "verboseDebug" even appends further information to user-supplied revert strings (not yet implemented)
-      revertStrings: "default",
+      revertStrings: 'default',
     },
     // Metadata settings (optional)
     metadata: {
@@ -113,7 +113,7 @@ module.exports = {
       // The metadata hash can be removed from the bytecode via option "none".
       // The other options are "ipfs" and "bzzr1".
       // If the option is omitted, "ipfs" is used by default.
-      bytecodeHash: "ipfs",
+      bytecodeHash: 'ipfs',
     },
     // Addresses of the libraries. If not all libraries are given here,
     // it can result in unlinked objects whose output data is different.
@@ -122,8 +122,8 @@ module.exports = {
       // If remappings are used, this source file should match the global path
       // after remappings were applied.
       // If this key is an empty string, that refers to a global level.
-      "myFile.sol": {
-        MyLib: "0x123123...",
+      'myFile.sol': {
+        MyLib: '0x123123...',
       },
     },
     // The following can be used to select desired outputs based
@@ -171,35 +171,35 @@ module.exports = {
     // target part of that output. Additionally, `*` can be used as a wildcard to request everything.
     //
     outputSelection: {
-      "*": {
-        "*": [
-          "metadata",
-          "evm.bytecode", // Enable the metadata and bytecode outputs of every single contract.
-          "evm.bytecode.sourceMap", // Enable the source map output of every single contract.
+      '*': {
+        '*': [
+          'metadata',
+          'evm.bytecode', // Enable the metadata and bytecode outputs of every single contract.
+          'evm.bytecode.sourceMap', // Enable the source map output of every single contract.
         ],
-        "": [
-          "ast", // Enable the AST output of every single file.
+        '': [
+          'ast', // Enable the AST output of every single file.
         ],
       },
       // Enable the abi and opcodes output of MyContract defined in file def.
       def: {
-        MyContract: ["abi", "evm.bytecode.opcodes"],
+        MyContract: ['abi', 'evm.bytecode.opcodes'],
       },
     },
     // The modelChecker object is experimental and subject to changes.
     modelChecker: {
       // Chose which contracts should be analyzed as the deployed one.
       contracts: {
-        "source1.sol": ["contract1"],
-        "source2.sol": ["contract2", "contract3"],
+        'source1.sol': ['contract1'],
+        'source2.sol': ['contract2', 'contract3'],
       },
       // Choose which model checker engine to use: all (default), bmc, chc, none.
-      engine: "chc",
+      engine: 'chc',
       // Choose which targets should be checked: constantCondition,
       // underflow, overflow, divByZero, balance, assert, popEmptyArray, outOfBounds.
       // If the option is not given all targets are checked by default.
       // See the Formal Verification section for the targets description.
-      targets: ["underflow", "overflow", "assert"],
+      targets: ['underflow', 'overflow', 'assert'],
       // Timeout for each SMT query in milliseconds.
       // If this option is not given, the SMTChecker will use a deterministic
       // resource limit by default.
