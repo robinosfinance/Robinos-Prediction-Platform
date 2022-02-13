@@ -443,6 +443,13 @@ describe('DBTokenSale', () => {
 });
 
 describe('DBTokenReward', () => {
+  beforeEach(() =>
+    DBTokenEvent.methods
+      .transferOwnershipOfEventAndTokens(DBTokenSale.options.address)
+      .send({
+        from: accounts[0],
+      })
+  );
   it('allows dynamic rates', async () => {
     const DBToken = DBTokens[0];
     const teamName = teamTokenParams[0].teamName;
