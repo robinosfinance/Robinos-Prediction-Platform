@@ -42,13 +42,7 @@ abstract contract ERC165 is IERC165 {
     /**
      * @dev See {IERC165-supportsInterface}.
      */
-    function supportsInterface(bytes4 interfaceId)
-        public
-        view
-        virtual
-        override
-        returns (bool)
-    {
+    function supportsInterface(bytes4 interfaceId) public view virtual override returns (bool) {
         return interfaceId == type(IERC165).interfaceId;
     }
 }
@@ -60,29 +54,17 @@ interface IERC721 is IERC165 {
     /**
      * @dev Emitted when `tokenId` token is transferred from `from` to `to`.
      */
-    event Transfer(
-        address indexed from,
-        address indexed to,
-        uint256 indexed tokenId
-    );
+    event Transfer(address indexed from, address indexed to, uint256 indexed tokenId);
 
     /**
      * @dev Emitted when `owner` enables `approved` to manage the `tokenId` token.
      */
-    event Approval(
-        address indexed owner,
-        address indexed approved,
-        uint256 indexed tokenId
-    );
+    event Approval(address indexed owner, address indexed approved, uint256 indexed tokenId);
 
     /**
      * @dev Emitted when `owner` enables or disables (`approved`) `operator` to manage all of its assets.
      */
-    event ApprovalForAll(
-        address indexed owner,
-        address indexed operator,
-        bool approved
-    );
+    event ApprovalForAll(address indexed owner, address indexed operator, bool approved);
 
     /**
      * @dev Returns the number of tokens in ``owner``'s account.
@@ -160,10 +142,7 @@ interface IERC721 is IERC165 {
      *
      * - `tokenId` must exist.
      */
-    function getApproved(uint256 tokenId)
-        external
-        view
-        returns (address operator);
+    function getApproved(uint256 tokenId) external view returns (address operator);
 
     /**
      * @dev Approve or remove `operator` as an operator for the caller.
@@ -182,10 +161,7 @@ interface IERC721 is IERC165 {
      *
      * See {setApprovalForAll}
      */
-    function isApprovedForAll(address owner, address operator)
-        external
-        view
-        returns (bool);
+    function isApprovedForAll(address owner, address operator) external view returns (bool);
 
     /**
      * @dev Safely transfers `tokenId` token from `from` to `to`.
@@ -302,16 +278,10 @@ library Address {
      * https://solidity.readthedocs.io/en/v0.5.11/security-considerations.html#use-the-checks-effects-interactions-pattern[checks-effects-interactions pattern].
      */
     function sendValue(address payable recipient, uint256 amount) internal {
-        require(
-            address(this).balance >= amount,
-            "Address: insufficient balance"
-        );
+        require(address(this).balance >= amount, "Address: insufficient balance");
 
         (bool success, ) = recipient.call{value: amount}("");
-        require(
-            success,
-            "Address: unable to send value, recipient may have reverted"
-        );
+        require(success, "Address: unable to send value, recipient may have reverted");
     }
 
     /**
@@ -332,10 +302,7 @@ library Address {
      *
      * _Available since v3.1._
      */
-    function functionCall(address target, bytes memory data)
-        internal
-        returns (bytes memory)
-    {
+    function functionCall(address target, bytes memory data) internal returns (bytes memory) {
         return functionCall(target, data, "Address: low-level call failed");
     }
 
@@ -369,13 +336,7 @@ library Address {
         bytes memory data,
         uint256 value
     ) internal returns (bytes memory) {
-        return
-            functionCallWithValue(
-                target,
-                data,
-                value,
-                "Address: low-level call with value failed"
-            );
+        return functionCallWithValue(target, data, value, "Address: low-level call with value failed");
     }
 
     /**
@@ -390,15 +351,10 @@ library Address {
         uint256 value,
         string memory errorMessage
     ) internal returns (bytes memory) {
-        require(
-            address(this).balance >= value,
-            "Address: insufficient balance for call"
-        );
+        require(address(this).balance >= value, "Address: insufficient balance for call");
         require(isContract(target), "Address: call to non-contract");
 
-        (bool success, bytes memory returndata) = target.call{value: value}(
-            data
-        );
+        (bool success, bytes memory returndata) = target.call{value: value}(data);
         return verifyCallResult(success, returndata, errorMessage);
     }
 
@@ -408,17 +364,8 @@ library Address {
      *
      * _Available since v3.3._
      */
-    function functionStaticCall(address target, bytes memory data)
-        internal
-        view
-        returns (bytes memory)
-    {
-        return
-            functionStaticCall(
-                target,
-                data,
-                "Address: low-level static call failed"
-            );
+    function functionStaticCall(address target, bytes memory data) internal view returns (bytes memory) {
+        return functionStaticCall(target, data, "Address: low-level static call failed");
     }
 
     /**
@@ -444,16 +391,8 @@ library Address {
      *
      * _Available since v3.4._
      */
-    function functionDelegateCall(address target, bytes memory data)
-        internal
-        returns (bytes memory)
-    {
-        return
-            functionDelegateCall(
-                target,
-                data,
-                "Address: low-level delegate call failed"
-            );
+    function functionDelegateCall(address target, bytes memory data) internal returns (bytes memory) {
+        return functionDelegateCall(target, data, "Address: low-level delegate call failed");
     }
 
     /**
@@ -537,10 +476,7 @@ abstract contract Context {
 abstract contract Ownable is Context {
     address private _owner;
 
-    event OwnershipTransferred(
-        address indexed previousOwner,
-        address indexed newOwner
-    );
+    event OwnershipTransferred(address indexed previousOwner, address indexed newOwner);
 
     /**
      * @dev Initializes the contract setting the deployer as the initial owner.
@@ -580,10 +516,7 @@ abstract contract Ownable is Context {
      * Can only be called by the current owner.
      */
     function transferOwnership(address newOwner) public virtual onlyOwner {
-        require(
-            newOwner != address(0),
-            "Ownable: new owner is the zero address"
-        );
+        require(newOwner != address(0), "Ownable: new owner is the zero address");
         _transferOwnership(newOwner);
     }
 
@@ -648,11 +581,7 @@ library Strings {
     /**
      * @dev Converts a `uint256` to its ASCII `string` hexadecimal representation with fixed length.
      */
-    function toHexString(uint256 value, uint256 length)
-        internal
-        pure
-        returns (string memory)
-    {
+    function toHexString(uint256 value, uint256 length) internal pure returns (string memory) {
         bytes memory buffer = new bytes(2 * length + 2);
         buffer[0] = "0";
         buffer[1] = "x";
@@ -703,13 +632,7 @@ contract ERC721 is Context, ERC165, IERC721, IERC721Metadata {
     /**
      * @dev See {IERC165-supportsInterface}.
      */
-    function supportsInterface(bytes4 interfaceId)
-        public
-        view
-        virtual
-        override(ERC165, IERC165)
-        returns (bool)
-    {
+    function supportsInterface(bytes4 interfaceId) public view virtual override(ERC165, IERC165) returns (bool) {
         return
             interfaceId == type(IERC721).interfaceId ||
             interfaceId == type(IERC721Metadata).interfaceId ||
@@ -719,35 +642,17 @@ contract ERC721 is Context, ERC165, IERC721, IERC721Metadata {
     /**
      * @dev See {IERC721-balanceOf}.
      */
-    function balanceOf(address owner)
-        public
-        view
-        virtual
-        override
-        returns (uint256)
-    {
-        require(
-            owner != address(0),
-            "ERC721: balance query for the zero address"
-        );
+    function balanceOf(address owner) public view virtual override returns (uint256) {
+        require(owner != address(0), "ERC721: balance query for the zero address");
         return _balances[owner];
     }
 
     /**
      * @dev See {IERC721-ownerOf}.
      */
-    function ownerOf(uint256 tokenId)
-        public
-        view
-        virtual
-        override
-        returns (address)
-    {
+    function ownerOf(uint256 tokenId) public view virtual override returns (address) {
         address owner = _owners[tokenId];
-        require(
-            owner != address(0),
-            "ERC721: owner query for nonexistent token"
-        );
+        require(owner != address(0), "ERC721: owner query for nonexistent token");
         return owner;
     }
 
@@ -768,23 +673,11 @@ contract ERC721 is Context, ERC165, IERC721, IERC721Metadata {
     /**
      * @dev See {IERC721Metadata-tokenURI}.
      */
-    function tokenURI(uint256 tokenId)
-        public
-        view
-        virtual
-        override
-        returns (string memory)
-    {
-        require(
-            _exists(tokenId),
-            "ERC721Metadata: URI query for nonexistent token"
-        );
+    function tokenURI(uint256 tokenId) public view virtual override returns (string memory) {
+        require(_exists(tokenId), "ERC721Metadata: URI query for nonexistent token");
 
         string memory baseURI = _baseURI();
-        return
-            bytes(baseURI).length > 0
-                ? string(abi.encodePacked(baseURI, tokenId.toString()))
-                : "";
+        return bytes(baseURI).length > 0 ? string(abi.encodePacked(baseURI, tokenId.toString())) : "";
     }
 
     /**
@@ -814,17 +707,8 @@ contract ERC721 is Context, ERC165, IERC721, IERC721Metadata {
     /**
      * @dev See {IERC721-getApproved}.
      */
-    function getApproved(uint256 tokenId)
-        public
-        view
-        virtual
-        override
-        returns (address)
-    {
-        require(
-            _exists(tokenId),
-            "ERC721: approved query for nonexistent token"
-        );
+    function getApproved(uint256 tokenId) public view virtual override returns (address) {
+        require(_exists(tokenId), "ERC721: approved query for nonexistent token");
 
         return _tokenApprovals[tokenId];
     }
@@ -832,24 +716,14 @@ contract ERC721 is Context, ERC165, IERC721, IERC721Metadata {
     /**
      * @dev See {IERC721-setApprovalForAll}.
      */
-    function setApprovalForAll(address operator, bool approved)
-        public
-        virtual
-        override
-    {
+    function setApprovalForAll(address operator, bool approved) public virtual override {
         _setApprovalForAll(_msgSender(), operator, approved);
     }
 
     /**
      * @dev See {IERC721-isApprovedForAll}.
      */
-    function isApprovedForAll(address owner, address operator)
-        public
-        view
-        virtual
-        override
-        returns (bool)
-    {
+    function isApprovedForAll(address owner, address operator) public view virtual override returns (bool) {
         return _operatorApprovals[owner][operator];
     }
 
@@ -862,10 +736,7 @@ contract ERC721 is Context, ERC165, IERC721, IERC721Metadata {
         uint256 tokenId
     ) public virtual override {
         //solhint-disable-next-line max-line-length
-        require(
-            _isApprovedOrOwner(_msgSender(), tokenId),
-            "ERC721: transfer caller is not owner nor approved"
-        );
+        require(_isApprovedOrOwner(_msgSender(), tokenId), "ERC721: transfer caller is not owner nor approved");
 
         _transfer(from, to, tokenId);
     }
@@ -890,10 +761,7 @@ contract ERC721 is Context, ERC165, IERC721, IERC721Metadata {
         uint256 tokenId,
         bytes memory _data
     ) public virtual override {
-        require(
-            _isApprovedOrOwner(_msgSender(), tokenId),
-            "ERC721: transfer caller is not owner nor approved"
-        );
+        require(_isApprovedOrOwner(_msgSender(), tokenId), "ERC721: transfer caller is not owner nor approved");
         _safeTransfer(from, to, tokenId, _data);
     }
 
@@ -922,10 +790,7 @@ contract ERC721 is Context, ERC165, IERC721, IERC721Metadata {
         bytes memory _data
     ) internal virtual {
         _transfer(from, to, tokenId);
-        require(
-            _checkOnERC721Received(from, to, tokenId, _data),
-            "ERC721: transfer to non ERC721Receiver implementer"
-        );
+        require(_checkOnERC721Received(from, to, tokenId, _data), "ERC721: transfer to non ERC721Receiver implementer");
     }
 
     /**
@@ -947,20 +812,10 @@ contract ERC721 is Context, ERC165, IERC721, IERC721Metadata {
      *
      * - `tokenId` must exist.
      */
-    function _isApprovedOrOwner(address spender, uint256 tokenId)
-        internal
-        view
-        virtual
-        returns (bool)
-    {
-        require(
-            _exists(tokenId),
-            "ERC721: operator query for nonexistent token"
-        );
+    function _isApprovedOrOwner(address spender, uint256 tokenId) internal view virtual returns (bool) {
+        require(_exists(tokenId), "ERC721: operator query for nonexistent token");
         address owner = ERC721.ownerOf(tokenId);
-        return (spender == owner ||
-            getApproved(tokenId) == spender ||
-            isApprovedForAll(owner, spender));
+        return (spender == owner || getApproved(tokenId) == spender || isApprovedForAll(owner, spender));
     }
 
     /**
@@ -1057,10 +912,7 @@ contract ERC721 is Context, ERC165, IERC721, IERC721Metadata {
         address to,
         uint256 tokenId
     ) internal virtual {
-        require(
-            ERC721.ownerOf(tokenId) == from,
-            "ERC721: transfer of token that is not own"
-        );
+        require(ERC721.ownerOf(tokenId) == from, "ERC721: transfer of token that is not own");
         require(to != address(0), "ERC721: transfer to the zero address");
 
         _beforeTokenTransfer(from, to, tokenId);
@@ -1117,20 +969,11 @@ contract ERC721 is Context, ERC165, IERC721, IERC721Metadata {
         bytes memory _data
     ) private returns (bool) {
         if (to.isContract()) {
-            try
-                IERC721Receiver(to).onERC721Received(
-                    _msgSender(),
-                    from,
-                    tokenId,
-                    _data
-                )
-            returns (bytes4 retval) {
+            try IERC721Receiver(to).onERC721Received(_msgSender(), from, tokenId, _data) returns (bytes4 retval) {
                 return retval == IERC721Receiver.onERC721Received.selector;
             } catch (bytes memory reason) {
                 if (reason.length == 0) {
-                    revert(
-                        "ERC721: transfer to non ERC721Receiver implementer"
-                    );
+                    revert("ERC721: transfer to non ERC721Receiver implementer");
                 } else {
                     assembly {
                         revert(add(32, reason), mload(reason))
@@ -1176,30 +1019,17 @@ abstract contract DeployingInBatches is ERC721, Ownable {
 
     function batchExists(string memory batchName) private view returns (bool) {
         if (batchDataArray.length == 0) return false;
-        BatchData storage batchData = batchDataArray[
-            _batchNameToBatchIndexMapping[batchName]
-        ];
+        BatchData storage batchData = batchDataArray[_batchNameToBatchIndexMapping[batchName]];
         string memory batchDataName = batchData.name;
         return matchStrings(batchDataName, batchName) && batchData.initialized;
     }
 
-    function getBatchIndex(string memory batchName)
-        private
-        view
-        returns (uint256)
-    {
-        require(
-            batchExists(batchName),
-            "DeployingInBatches: Batch not initialized"
-        );
+    function getBatchIndex(string memory batchName) private view returns (uint256) {
+        require(batchExists(batchName), "DeployingInBatches: Batch not initialized");
         return _batchNameToBatchIndexMapping[batchName];
     }
 
-    function getBatch(string memory batchName)
-        private
-        view
-        returns (BatchData storage)
-    {
+    function getBatch(string memory batchName) private view returns (BatchData storage) {
         uint256 batchIndex = getBatchIndex(batchName);
         return batchDataArray[batchIndex];
     }
@@ -1208,71 +1038,45 @@ abstract contract DeployingInBatches is ERC721, Ownable {
         return batchDataArray.length;
     }
 
-    function getBatchData(string memory batchName)
-        public
-        view
-        returns (string memory, uint256)
-    {
+    function getBatchData(string memory batchName) public view returns (string memory, uint256) {
         BatchData storage batchData = getBatch(batchName);
         return (batchData.name, batchData.numOfTokens);
     }
 
-    function matchStrings(string memory a, string memory b)
-        private
-        pure
-        returns (bool)
-    {
+    function matchStrings(string memory a, string memory b) private pure returns (bool) {
         return keccak256(bytes(a)) == keccak256(bytes(b));
     }
 
-    function createBatch(string memory batchName)
-        private
-        returns (BatchData storage)
-    {
-        require(
-            !batchExists(batchName),
-            "DeployingInBatches: Batch is already initialized"
-        );
+    function createBatch(string memory batchName) private returns (BatchData storage) {
+        require(!batchExists(batchName), "DeployingInBatches: Batch is already initialized");
         uint256 batchIndex = batchDataArray.length;
         _batchNameToBatchIndexMapping[batchName] = batchIndex;
         batchDataArray.push(BatchData(batchName, 0, true));
         return batchDataArray[batchIndex];
     }
 
-    function allTokensInitialized(uint256[] memory tokenIds)
-        private
-        view
-        returns (bool)
-    {
+    function allTokensInitialized(uint256[] memory tokenIds) private view returns (bool) {
         return allTokensInitialized(tokenIds, true);
     }
 
-    function allTokensInitialized(
-        uint256[] memory tokenIds,
-        bool expectedToBeInitialized
-    ) internal view returns (bool) {
+    function allTokensInitialized(uint256[] memory tokenIds, bool expectedToBeInitialized)
+        internal
+        view
+        returns (bool)
+    {
         for (uint256 i = 0; i < tokenIds.length; i++) {
             if (
-                (expectedToBeInitialized && !_exists(tokenIds[i])) ||
-                (!expectedToBeInitialized && _exists(tokenIds[i]))
+                (expectedToBeInitialized && !_exists(tokenIds[i])) || (!expectedToBeInitialized && _exists(tokenIds[i]))
             ) return false;
         }
         return true;
     }
 
-    function linkTokensToBatch(
-        uint256[] memory tokenIds,
-        string memory batchName
-    ) internal {
-        require(
-            allTokensInitialized(tokenIds),
-            "DeployingInBatches: some of the tokens are not minted"
-        );
+    function linkTokensToBatch(uint256[] memory tokenIds, string memory batchName) internal {
+        require(allTokensInitialized(tokenIds), "DeployingInBatches: some of the tokens are not minted");
 
         BatchData storage batchData;
-        batchData = batchExists(batchName)
-            ? getBatch(batchName)
-            : createBatch(batchName);
+        batchData = batchExists(batchName) ? getBatch(batchName) : createBatch(batchName);
         uint256 batchIndex = getBatchIndex(batchName);
 
         for (uint256 i = 0; i < tokenIds.length; i++) {
@@ -1294,32 +1098,22 @@ abstract contract PollFactory is Ownable {
     mapping(bytes32 => PollData) private pollDataHashTable;
     bytes32[] private pollDataHashArray;
     mapping(address => bool) private whiteListedAddresses;
-    mapping(address => mapping(bytes32 => bool))
-        private userAlreadyVotedHashTable;
+    mapping(address => mapping(bytes32 => bool)) private userAlreadyVotedHashTable;
 
     function whitelistAddress(address toWhitelist) public onlyOwner {
         require(toWhitelist != address(0), "PollFactory: zero address");
-        require(
-            !whiteListedAddresses[toWhitelist],
-            "PollFactory: address already whitelisted"
-        );
+        require(!whiteListedAddresses[toWhitelist], "PollFactory: address already whitelisted");
         whiteListedAddresses[toWhitelist] = true;
     }
 
     function removeAddressFromWhitelist(address toRemove) public onlyOwner {
         require(toRemove != address(0), "PollFactory: zero address");
-        require(
-            whiteListedAddresses[toRemove],
-            "PollFactory: address already whitelisted"
-        );
+        require(whiteListedAddresses[toRemove], "PollFactory: address already whitelisted");
         whiteListedAddresses[toRemove] = false;
     }
 
     modifier whitelistedSender() {
-        require(
-            whiteListedAddresses[_msgSender()],
-            "PollFactory: sender is not whitelisted"
-        );
+        require(whiteListedAddresses[_msgSender()], "PollFactory: sender is not whitelisted");
         _;
     }
 
@@ -1328,22 +1122,12 @@ abstract contract PollFactory is Ownable {
      * @param question of the poll
      * @param answers of the poll. ORDER MATTERS!
      */
-    function createNewPoll(string memory question, string[] memory answers)
-        public
-        onlyOwner
-        returns (bytes32)
-    {
+    function createNewPoll(string memory question, string[] memory answers) public onlyOwner returns (bytes32) {
         bytes32 pollHash = getPollHash(question, answers);
         require(!pollExists(pollHash), "PollFactory: Poll already initialized");
 
         uint256[] memory answerVotes = new uint256[](answers.length);
-        pollDataHashTable[pollHash] = PollData(
-            question,
-            answers,
-            answerVotes,
-            0,
-            true
-        );
+        pollDataHashTable[pollHash] = PollData(question, answers, answerVotes, 0, true);
         pollDataHashArray.push(pollHash);
         return pollHash;
     }
@@ -1353,58 +1137,31 @@ abstract contract PollFactory is Ownable {
      * @param question of the poll
      * @param answers of the poll. ORDER MATTERS!
      */
-    function getPollHash(string memory question, string[] memory answers)
-        private
-        pure
-        returns (bytes32)
-    {
-        require(
-            bytes(question).length > 0,
-            "PollFactory: empty question given"
-        );
+    function getPollHash(string memory question, string[] memory answers) private pure returns (bytes32) {
+        require(bytes(question).length > 0, "PollFactory: empty question given");
         for (uint256 i = 0; i < answers.length; i++) {
-            require(
-                bytes(answers[i]).length > 0,
-                "PollFactory: empty answer given"
-            );
+            require(bytes(answers[i]).length > 0, "PollFactory: empty answer given");
         }
 
-        return
-            keccak256(
-                bytes(concatArrayOfStrings(packPollParams(question, answers)))
-            );
+        return keccak256(bytes(concatArrayOfStrings(packPollParams(question, answers))));
     }
 
-    function packPollParams(string memory question, string[] memory answers)
-        private
-        pure
-        returns (string[] memory)
-    {
+    function packPollParams(string memory question, string[] memory answers) private pure returns (string[] memory) {
         string[] memory pollPacked = new string[](1);
         pollPacked[0] = concatStrings(question, "|");
         string[] memory answersPacked = packAnswers(answers);
         return concatArrays(pollPacked, answersPacked);
     }
 
-    function packAnswers(string[] memory answers)
-        private
-        pure
-        returns (string[] memory)
-    {
+    function packAnswers(string[] memory answers) private pure returns (string[] memory) {
         string[] memory answersPacked = new string[](answers.length);
         for (uint256 i = 0; i < answers.length; i++) {
-            answersPacked[i] = i < answers.length - 1
-                ? concatStrings(answers[i], ",")
-                : answers[i];
+            answersPacked[i] = i < answers.length - 1 ? concatStrings(answers[i], ",") : answers[i];
         }
         return answersPacked;
     }
 
-    function concatArrays(string[] memory a, string[] memory b)
-        public
-        pure
-        returns (string[] memory)
-    {
+    function concatArrays(string[] memory a, string[] memory b) public pure returns (string[] memory) {
         uint256 finalLength = a.length + b.length;
         string[] memory finalArray = new string[](finalLength);
         string memory tempString;
@@ -1415,11 +1172,7 @@ abstract contract PollFactory is Ownable {
         return finalArray;
     }
 
-    function getPollData(bytes32 pollHash)
-        private
-        view
-        returns (PollData storage)
-    {
+    function getPollData(bytes32 pollHash) private view returns (PollData storage) {
         require(pollExists(pollHash), "PollFactory: Poll not initialized");
         return pollDataHashTable[pollHash];
     }
@@ -1478,11 +1231,7 @@ abstract contract PollFactory is Ownable {
         return pollDataHashArray.length;
     }
 
-    function concatArrayOfStrings(string[] memory strings)
-        private
-        pure
-        returns (string memory)
-    {
+    function concatArrayOfStrings(string[] memory strings) private pure returns (string memory) {
         string memory finalString = "";
         for (uint256 i = 0; i < strings.length; i++) {
             finalString = concatStrings(finalString, strings[i]);
@@ -1490,11 +1239,7 @@ abstract contract PollFactory is Ownable {
         return finalString;
     }
 
-    function concatStrings(string memory a, string memory b)
-        private
-        pure
-        returns (string memory)
-    {
+    function concatStrings(string memory a, string memory b) private pure returns (string memory) {
         return string(abi.encodePacked(a, b));
     }
 
@@ -1510,15 +1255,9 @@ abstract contract PollFactory is Ownable {
         uint256 answerIndex
     ) public whitelistedSender {
         bytes32 pollHash = getPollHash(question, answers);
-        require(
-            !userAlreadyVotedHashTable[_msgSender()][pollHash],
-            "PollFactory: user already voted on poll"
-        );
+        require(!userAlreadyVotedHashTable[_msgSender()][pollHash], "PollFactory: user already voted on poll");
         PollData storage pollData = getPollData(pollHash);
-        require(
-            answerIndex < pollData.answerVotes.length,
-            "PollFactory: answer index out of bounds"
-        );
+        require(answerIndex < pollData.answerVotes.length, "PollFactory: answer index out of bounds");
         pollData.answerVotes[answerIndex]++;
         pollData.totalVotes++;
         userAlreadyVotedHashTable[_msgSender()][pollHash] = true;
@@ -1531,12 +1270,7 @@ abstract contract PollFactory is Ownable {
  ***********************************************************************
  **********************************************************************/
 
-contract RobinosGovernanceToken is
-    ERC721,
-    Ownable,
-    DeployingInBatches,
-    PollFactory
-{
+contract RobinosGovernanceToken is ERC721, Ownable, DeployingInBatches, PollFactory {
     string private baseURI;
 
     constructor(
@@ -1563,10 +1297,7 @@ contract RobinosGovernanceToken is
         uint256[] memory tokenIds,
         string memory batchName
     ) public onlyOwner {
-        require(
-            allTokensInitialized(tokenIds, false),
-            "RobinosGovernanceToken: some of the tokens are already minted"
-        );
+        require(allTokensInitialized(tokenIds, false), "RobinosGovernanceToken: some of the tokens are already minted");
 
         for (uint256 i = 0; i < tokenIds.length; i++) {
             _safeMint(to, tokenIds[i]);

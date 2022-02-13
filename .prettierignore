@@ -1,4 +1,3 @@
-*.sol
 .eslintrc.json
 /node_modules
 task_requirements.txt

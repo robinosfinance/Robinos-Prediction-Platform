@@ -22,9 +22,7 @@ interface IERC20 {
      *
      * Emits a {Transfer} event.
      */
-    function transfer(address recipient, uint256 amount)
-        external
-        returns (bool);
+    function transfer(address recipient, uint256 amount) external returns (bool);
 
     /**
      * @dev Returns the remaining number of tokens that `spender` will be
@@ -33,10 +31,7 @@ interface IERC20 {
      *
      * This value changes when {approve} or {transferFrom} are called.
      */
-    function allowance(address owner, address spender)
-        external
-        view
-        returns (uint256);
+    function allowance(address owner, address spender) external view returns (uint256);
 
     /**
      * @dev Sets `amount` as the allowance of `spender` over the caller's tokens.
@@ -81,11 +76,7 @@ interface IERC20 {
      * @dev Emitted when the allowance of a `spender` for an `owner` is set by
      * a call to {approve}. `value` is the new allowance.
      */
-    event Approval(
-        address indexed owner,
-        address indexed spender,
-        uint256 value
-    );
+    event Approval(address indexed owner, address indexed spender, uint256 value);
 }
 
 /**
@@ -121,10 +112,7 @@ interface StandardToken {
 
     function approve(address _spender, uint256 _value) external;
 
-    function allowance(address _owner, address _spender)
-        external
-        view
-        returns (uint256);
+    function allowance(address _owner, address _spender) external view returns (uint256);
 
     function balanceOf(address _owner) external returns (uint256);
 }
@@ -164,10 +152,7 @@ abstract contract Context {
 abstract contract Ownable is Context {
     address private _owner;
 
-    event OwnershipTransferred(
-        address indexed previousOwner,
-        address indexed newOwner
-    );
+    event OwnershipTransferred(address indexed previousOwner, address indexed newOwner);
 
     /**
      * @dev Initializes the contract setting the deployer as the initial owner.
@@ -207,10 +192,7 @@ abstract contract Ownable is Context {
      * Can only be called by the current owner.
      */
     function transferOwnership(address newOwner) public virtual onlyOwner {
-        require(
-            newOwner != address(0),
-            "Ownable: new owner is the zero address"
-        );
+        require(newOwner != address(0), "Ownable: new owner is the zero address");
         _setOwner(newOwner);
     }
 
@@ -304,38 +286,20 @@ contract DBToken is IERC20, IERC20Metadata, Ownable {
         return _totalSupply;
     }
 
-    function balanceOf(address account)
-        external
-        view
-        override
-        returns (uint256)
-    {
+    function balanceOf(address account) external view override returns (uint256) {
         return _balances[account];
     }
 
-    function transfer(address recipient, uint256 amount)
-        public
-        override
-        returns (bool)
-    {
+    function transfer(address recipient, uint256 amount) public override returns (bool) {
         _transfer(_msgSender(), recipient, amount);
         return true;
     }
 
-    function allowance(address owner, address spender)
-        external
-        view
-        override
-        returns (uint256)
-    {
+    function allowance(address owner, address spender) external view override returns (uint256) {
         return _allowances[owner][spender];
     }
 
-    function approve(address spender, uint256 amount)
-        public
-        override
-        returns (bool)
-    {
+    function approve(address spender, uint256 amount) public override returns (bool) {
         _approve(_msgSender(), spender, amount);
         return true;
     }
@@ -345,28 +309,17 @@ contract DBToken is IERC20, IERC20Metadata, Ownable {
         address recipient,
         uint256 amount
     ) external override returns (bool) {
-        require(
-            _allowances[sender][_msgSender()] >= amount,
-            "DBToken: transfer amount exceeds allowance"
-        );
+        require(_allowances[sender][_msgSender()] >= amount, "DBToken: transfer amount exceeds allowance");
         _transfer(sender, recipient, amount);
 
         unchecked {
-            _approve(
-                sender,
-                _msgSender(),
-                _allowances[sender][_msgSender()] - amount
-            );
+            _approve(sender, _msgSender(), _allowances[sender][_msgSender()] - amount);
         }
 
         return true;
     }
 
-    function _mint(address account, uint256 amount)
-        external
-        onlyOwner
-        returns (bool)
-    {
+    function _mint(address account, uint256 amount) external onlyOwner returns (bool) {
         require(account != address(0), "DBToken: mint to the zero address");
 
         _totalSupply += amount;
@@ -380,20 +333,11 @@ contract DBToken is IERC20, IERC20Metadata, Ownable {
         address recipient,
         uint256 amount
     ) private {
-        require(
-            sender != address(0),
-            "DBToken: transfer from the zero address"
-        );
-        require(
-            recipient != address(0),
-            "DBToken: transfer to the zero address"
-        );
+        require(sender != address(0), "DBToken: transfer from the zero address");
+        require(recipient != address(0), "DBToken: transfer to the zero address");
 
         uint256 senderBalance = _balances[sender];
-        require(
-            senderBalance >= amount,
-            "DBToken: transfer amount exceeds balance"
-        );
+        require(senderBalance >= amount, "DBToken: transfer amount exceeds balance");
 
         unchecked {
             _balances[sender] = senderBalance - amount;
@@ -434,10 +378,7 @@ abstract contract SaleFactory is Ownable {
     // Modifier allowing a call if and only if there are no active sales at the moment
     modifier noActiveSale() {
         for (uint256 i; i < _allSales.length; i++) {
-            require(
-                saleIsActive(false, _eventSale[_allSales[i]]),
-                "SaleFactory: unavailable while a sale is active"
-            );
+            require(saleIsActive(false, _eventSale[_allSales[i]]), "SaleFactory: unavailable while a sale is active");
         }
         _;
     }
@@ -445,10 +386,7 @@ abstract contract SaleFactory is Ownable {
     // Modifier allowing a call only if event by eventCode is currently active
     modifier duringSale(string memory eventCode) {
         Sale storage eventSale = getEventSale(eventCode);
-        require(
-            saleIsActive(true, eventSale),
-            "SaleFactory: function can only be called during sale"
-        );
+        require(saleIsActive(true, eventSale), "SaleFactory: function can only be called during sale");
         _;
         clearExpiredSales();
     }
@@ -457,10 +395,7 @@ abstract contract SaleFactory is Ownable {
     modifier outsideOfSale(string memory eventCode) {
         // We are fetching the event directly through a hash, since getEventSale reverts if sale is not initialized
         Sale storage eventSale = _eventSale[hashStr(eventCode)];
-        require(
-            saleIsActive(false, eventSale),
-            "SaleFactory: function can only be called outside of sale"
-        );
+        require(saleIsActive(false, eventSale), "SaleFactory: function can only be called outside of sale");
 
         _;
     }
@@ -470,11 +405,7 @@ abstract contract SaleFactory is Ownable {
      * @param expectActive If we expect the sale to be active set to true
      * @param sale Sale that is being inspected
      */
-    function saleIsActive(bool expectActive, Sale memory sale)
-        private
-        view
-        returns (bool)
-    {
+    function saleIsActive(bool expectActive, Sale memory sale) private view returns (bool) {
         if (expectActive) {
             return (time() >= sale.saleStart) && (time() < sale.saleEnd);
         } else {
@@ -546,10 +477,7 @@ abstract contract SaleFactory is Ownable {
             if (i == length) {
                 _allSales.push(unorderedSale);
             } else {
-                if (
-                    _eventSale[_allSales[i]].saleEnd >
-                    _eventSale[unorderedSale].saleEnd
-                ) {
+                if (_eventSale[_allSales[i]].saleEnd > _eventSale[unorderedSale].saleEnd) {
                     tmpSale = _allSales[i];
                     _allSales[i] = unorderedSale;
                     unorderedSale = tmpSale;
@@ -563,16 +491,9 @@ abstract contract SaleFactory is Ownable {
      * @dev Function returns Sale struct with saleEnd and saleStart. Function reverts if event is not initialized
      * @param eventCode string code of event
      */
-    function getEventSale(string memory eventCode)
-        private
-        view
-        returns (Sale storage)
-    {
+    function getEventSale(string memory eventCode) private view returns (Sale storage) {
         Sale storage eventSale = _eventSale[hashStr(eventCode)];
-        require(
-            eventSale.saleStart > 0 || eventSale.saleEnd > 0,
-            "SaleFactory: sale not initialized"
-        );
+        require(eventSale.saleStart > 0 || eventSale.saleEnd > 0, "SaleFactory: sale not initialized");
         return eventSale;
     }
 
@@ -599,10 +520,7 @@ abstract contract SaleFactory is Ownable {
         } else {
             start = time();
         }
-        require(
-            end > start,
-            "SaleFactory: sale end time needs to be greater than start time"
-        );
+        require(end > start, "SaleFactory: sale end time needs to be greater than start time");
 
         eventSale.saleStart = start;
         eventSale.saleEnd = end;
@@ -615,12 +533,7 @@ abstract contract SaleFactory is Ownable {
     }
 
     // Function can be called by the owner during a sale to end it prematurely
-    function endSaleNow(string memory eventCode)
-        public
-        onlyOwner
-        duringSale(eventCode)
-        returns (bool)
-    {
+    function endSaleNow(string memory eventCode) public onlyOwner duringSale(eventCode) returns (bool) {
         Sale storage eventSale = getEventSale(eventCode);
 
         eventSale.saleEnd = time();
@@ -656,11 +569,7 @@ abstract contract SaleFactory is Ownable {
 }
 
 abstract contract TokenHash is Ownable {
-    function getTokenHash(string memory _eventCode, string memory _teamName)
-        internal
-        pure
-        returns (bytes32)
-    {
+    function getTokenHash(string memory _eventCode, string memory _teamName) internal pure returns (bytes32) {
         return keccak256(bytes(abi.encodePacked(_eventCode, _teamName)));
     }
 }
@@ -676,12 +585,10 @@ contract DBTokenSideBet is SaleFactory {
     DBToken private secondTeamToken;
     StandardToken private standardToken;
 
-    mapping(bytes32 => mapping(address => uint256))
-        private userStakedFirstTokenPerEvent;
+    mapping(bytes32 => mapping(address => uint256)) private userStakedFirstTokenPerEvent;
     mapping(bytes32 => uint256) private totalStakedFirstTokenPerEvent;
 
-    mapping(bytes32 => mapping(address => uint256))
-        private userStakedSecondTokenPerEvent;
+    mapping(bytes32 => mapping(address => uint256)) private userStakedSecondTokenPerEvent;
     mapping(bytes32 => uint256) private totalStakedSecondTokenPerEvent;
 
     struct UsersStaked {
@@ -713,18 +620,12 @@ contract DBTokenSideBet is SaleFactory {
     }
 
     modifier rewardIsDistributed(string memory eventCode) {
-        require(
-            isRewardDistributed(eventCode),
-            "DBTokenSideBet: reward is not distributed"
-        );
+        require(isRewardDistributed(eventCode), "DBTokenSideBet: reward is not distributed");
         _;
     }
 
     modifier rewardNotDistributed(string memory eventCode) {
-        require(
-            !isRewardDistributed(eventCode),
-            "DBTokenSideBet: reward is already distributed"
-        );
+        require(!isRewardDistributed(eventCode), "DBTokenSideBet: reward is already distributed");
         _;
     }
 
@@ -742,8 +643,7 @@ contract DBTokenSideBet is SaleFactory {
         oneOfTeamTokens(teamToken)
         returns (uint256)
     {
-        if (isFirstTeamToken(teamToken))
-            return totalStakedFirstTokenPerEvent[hashStr(eventCode)];
+        if (isFirstTeamToken(teamToken)) return totalStakedFirstTokenPerEvent[hashStr(eventCode)];
         return totalStakedSecondTokenPerEvent[hashStr(eventCode)];
     }
 
@@ -764,16 +664,11 @@ contract DBTokenSideBet is SaleFactory {
         address user,
         DBToken teamToken
     ) public view oneOfTeamTokens(teamToken) returns (uint256) {
-        if (isFirstTeamToken(teamToken))
-            return userStakedFirstTokenPerEvent[hashStr(eventCode)][user];
+        if (isFirstTeamToken(teamToken)) return userStakedFirstTokenPerEvent[hashStr(eventCode)][user];
         return userStakedSecondTokenPerEvent[hashStr(eventCode)][user];
     }
 
-    function getTotalReward(string memory eventCode)
-        public
-        view
-        returns (uint256)
-    {
+    function getTotalReward(string memory eventCode) public view returns (uint256) {
         return totalEventReward[hashStr(eventCode)];
     }
 
@@ -797,10 +692,7 @@ contract DBTokenSideBet is SaleFactory {
         DBToken teamToken,
         address user
     ) public view returns (bool) {
-        address[] memory _eventStakingUsers = getEventStakingUsers(
-            eventCode,
-            teamToken
-        );
+        address[] memory _eventStakingUsers = getEventStakingUsers(eventCode, teamToken);
         for (uint256 i = 0; i < _eventStakingUsers.length; i++) {
             if (_eventStakingUsers[i] == user) return true;
         }
@@ -819,25 +711,15 @@ contract DBTokenSideBet is SaleFactory {
         eventStakingUsers[hashStr(eventCode)].stakedForSecondTeam.push(user);
     }
 
-    function isRewardDistributed(string memory eventCode)
-        public
-        view
-        returns (bool)
-    {
+    function isRewardDistributed(string memory eventCode) public view returns (bool) {
         return rewardDistributed[hashStr(eventCode)];
     }
 
-    function setRewardDistributed(string memory eventCode, bool distributed)
-        private
-    {
+    function setRewardDistributed(string memory eventCode, bool distributed) private {
         rewardDistributed[hashStr(eventCode)] = distributed;
     }
 
-    function getUserReward(string memory eventCode, address user)
-        public
-        view
-        returns (uint256)
-    {
+    function getUserReward(string memory eventCode, address user) public view returns (uint256) {
         return userEventReward[hashStr(eventCode)][user];
     }
 
@@ -917,20 +799,10 @@ contract DBTokenSideBet is SaleFactory {
      * @param eventCode of the sale you want to deposit for
      * @param amount of standard token you want to deposit
      */
-    function depositReward(string memory eventCode, uint256 amount)
-        public
-        onlyOwner
-        rewardNotDistributed(eventCode)
-    {
+    function depositReward(string memory eventCode, uint256 amount) public onlyOwner rewardNotDistributed(eventCode) {
         isSaleOn(eventCode);
-        uint256 allowance = standardToken.allowance(
-            _msgSender(),
-            address(this)
-        );
-        require(
-            allowance >= amount,
-            "DBTokenSideBet: insufficient allowance for transfer"
-        );
+        uint256 allowance = standardToken.allowance(_msgSender(), address(this));
+        require(allowance >= amount, "DBTokenSideBet: insufficient allowance for transfer");
         standardToken.transferFrom(_msgSender(), address(this), amount);
         uint256 totalReward = getTotalReward(eventCode);
         setTotalReward(eventCode, totalReward + amount);
@@ -963,29 +835,18 @@ contract DBTokenSideBet is SaleFactory {
         rewardNotDistributed(eventCode)
         oneOfTeamTokens(winningTeam)
     {
-        address[] memory _eventStakingUsers = getEventStakingUsers(
-            eventCode,
-            winningTeam
-        );
+        address[] memory _eventStakingUsers = getEventStakingUsers(eventCode, winningTeam);
         uint256 totalReward = getTotalReward(eventCode);
         uint256 totalStaked = getTotalStaked(eventCode, winningTeam);
         uint256 totalRewardDistributed = 0;
 
         for (uint256 i = 0; i < _eventStakingUsers.length; i++) {
-            uint256 userStaked = getUserStaked(
-                eventCode,
-                _eventStakingUsers[i],
-                winningTeam
-            );
+            uint256 userStaked = getUserStaked(eventCode, _eventStakingUsers[i], winningTeam);
             uint256 userReward = (userStaked * totalReward) / totalStaked;
             totalRewardDistributed += userReward;
             setUserReward(eventCode, _eventStakingUsers[i], userReward);
         }
-        distributeLeftOverReward(
-            eventCode,
-            totalReward - totalRewardDistributed,
-            _eventStakingUsers
-        );
+        distributeLeftOverReward(eventCode, totalReward - totalRewardDistributed, _eventStakingUsers);
 
         setRewardDistributed(eventCode, true);
     }
@@ -1002,13 +863,9 @@ contract DBTokenSideBet is SaleFactory {
         uint256 amount
     ) public duringSale(eventCode) oneOfTeamTokens(teamToken) {
         uint256 allowance = teamToken.allowance(_msgSender(), address(this));
-        require(
-            allowance >= amount,
-            "DBTokenSideBet: insufficient allowance for transfer"
-        );
+        require(allowance >= amount, "DBTokenSideBet: insufficient allowance for transfer");
 
-        if (!userHasStaked(eventCode, teamToken, _msgSender()))
-            addEventStakingUser(eventCode, teamToken, _msgSender());
+        if (!userHasStaked(eventCode, teamToken, _msgSender())) addEventStakingUser(eventCode, teamToken, _msgSender());
         addStakedTokens(eventCode, teamToken, _msgSender(), amount);
         teamToken.transferFrom(_msgSender(), address(this), amount);
     }
@@ -1024,24 +881,12 @@ contract DBTokenSideBet is SaleFactory {
         rewardIsDistributed(eventCode)
         oneOfTeamTokens(teamToken)
     {
-        uint256 userStakedTokens = getUserStaked(
-            eventCode,
-            _msgSender(),
-            teamToken
-        );
-        require(
-            userStakedTokens != 0,
-            "DBTokenSideBet: user has not staked this token in this event"
-        );
+        uint256 userStakedTokens = getUserStaked(eventCode, _msgSender(), teamToken);
+        require(userStakedTokens != 0, "DBTokenSideBet: user has not staked this token in this event");
 
         uint256 reward = getUserReward(eventCode, _msgSender());
         if (reward != 0) standardToken.transfer(_msgSender(), reward);
-        removeStakedTokens(
-            eventCode,
-            teamToken,
-            _msgSender(),
-            userStakedTokens
-        );
+        removeStakedTokens(eventCode, teamToken, _msgSender(), userStakedTokens);
         teamToken.transfer(_msgSender(), userStakedTokens);
     }
 }

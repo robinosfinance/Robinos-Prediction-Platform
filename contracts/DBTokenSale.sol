@@ -22,9 +22,7 @@ interface IERC20 {
      *
      * Emits a {Transfer} event.
      */
-    function transfer(address recipient, uint256 amount)
-        external
-        returns (bool);
+    function transfer(address recipient, uint256 amount) external returns (bool);
 
     /**
      * @dev Returns the remaining number of tokens that `spender` will be
@@ -33,10 +31,7 @@ interface IERC20 {
      *
      * This value changes when {approve} or {transferFrom} are called.
      */
-    function allowance(address owner, address spender)
-        external
-        view
-        returns (uint256);
+    function allowance(address owner, address spender) external view returns (uint256);
 
     /**
      * @dev Sets `amount` as the allowance of `spender` over the caller's tokens.
@@ -81,11 +76,7 @@ interface IERC20 {
      * @dev Emitted when the allowance of a `spender` for an `owner` is set by
      * a call to {approve}. `value` is the new allowance.
      */
-    event Approval(
-        address indexed owner,
-        address indexed spender,
-        uint256 value
-    );
+    event Approval(address indexed owner, address indexed spender, uint256 value);
 }
 
 /**
@@ -121,10 +112,7 @@ interface StandardToken {
 
     function approve(address _spender, uint256 _value) external;
 
-    function allowance(address _owner, address _spender)
-        external
-        view
-        returns (uint256);
+    function allowance(address _owner, address _spender) external view returns (uint256);
 
     function balanceOf(address _owner) external returns (uint256);
 }
@@ -164,10 +152,7 @@ abstract contract Context {
 abstract contract Ownable is Context {
     address private _owner;
 
-    event OwnershipTransferred(
-        address indexed previousOwner,
-        address indexed newOwner
-    );
+    event OwnershipTransferred(address indexed previousOwner, address indexed newOwner);
 
     /**
      * @dev Initializes the contract setting the deployer as the initial owner.
@@ -207,10 +192,7 @@ abstract contract Ownable is Context {
      * Can only be called by the current owner.
      */
     function transferOwnership(address newOwner) public virtual onlyOwner {
-        require(
-            newOwner != address(0),
-            "Ownable: new owner is the zero address"
-        );
+        require(newOwner != address(0), "Ownable: new owner is the zero address");
         _setOwner(newOwner);
     }
 
@@ -304,38 +286,20 @@ contract DBToken is IERC20, IERC20Metadata, Ownable {
         return _totalSupply;
     }
 
-    function balanceOf(address account)
-        external
-        view
-        override
-        returns (uint256)
-    {
+    function balanceOf(address account) external view override returns (uint256) {
         return _balances[account];
     }
 
-    function transfer(address recipient, uint256 amount)
-        public
-        override
-        returns (bool)
-    {
+    function transfer(address recipient, uint256 amount) public override returns (bool) {
         _transfer(_msgSender(), recipient, amount);
         return true;
     }
 
-    function allowance(address owner, address spender)
-        external
-        view
-        override
-        returns (uint256)
-    {
+    function allowance(address owner, address spender) external view override returns (uint256) {
         return _allowances[owner][spender];
     }
 
-    function approve(address spender, uint256 amount)
-        public
-        override
-        returns (bool)
-    {
+    function approve(address spender, uint256 amount) public override returns (bool) {
         _approve(_msgSender(), spender, amount);
         return true;
     }
@@ -345,28 +309,17 @@ contract DBToken is IERC20, IERC20Metadata, Ownable {
         address recipient,
         uint256 amount
     ) external override returns (bool) {
-        require(
-            _allowances[sender][_msgSender()] >= amount,
-            "DBToken: transfer amount exceeds allowance"
-        );
+        require(_allowances[sender][_msgSender()] >= amount, "DBToken: transfer amount exceeds allowance");
         _transfer(sender, recipient, amount);
 
         unchecked {
-            _approve(
-                sender,
-                _msgSender(),
-                _allowances[sender][_msgSender()] - amount
-            );
+            _approve(sender, _msgSender(), _allowances[sender][_msgSender()] - amount);
         }
 
         return true;
     }
 
-    function _mint(address account, uint256 amount)
-        external
-        onlyOwner
-        returns (bool)
-    {
+    function _mint(address account, uint256 amount) external onlyOwner returns (bool) {
         require(account != address(0), "DBToken: mint to the zero address");
 
         _totalSupply += amount;
@@ -380,20 +333,11 @@ contract DBToken is IERC20, IERC20Metadata, Ownable {
         address recipient,
         uint256 amount
     ) private {
-        require(
-            sender != address(0),
-            "DBToken: transfer from the zero address"
-        );
-        require(
-            recipient != address(0),
-            "DBToken: transfer to the zero address"
-        );
+        require(sender != address(0), "DBToken: transfer from the zero address");
+        require(recipient != address(0), "DBToken: transfer to the zero address");
 
         uint256 senderBalance = _balances[sender];
-        require(
-            senderBalance >= amount,
-            "DBToken: transfer amount exceeds balance"
-        );
+        require(senderBalance >= amount, "DBToken: transfer amount exceeds balance");
 
         unchecked {
             _balances[sender] = senderBalance - amount;
@@ -434,10 +378,7 @@ abstract contract SaleFactory is Ownable {
     // Modifier allowing a call if and only if there are no active sales at the moment
     modifier noActiveSale() {
         for (uint256 i; i < _allSales.length; i++) {
-            require(
-                saleIsActive(false, _eventSale[_allSales[i]]),
-                "SaleFactory: unavailable while a sale is active"
-            );
+            require(saleIsActive(false, _eventSale[_allSales[i]]), "SaleFactory: unavailable while a sale is active");
         }
         _;
     }
@@ -445,10 +386,7 @@ abstract contract SaleFactory is Ownable {
     // Modifier allowing a call only if event by eventCode is currently active
     modifier duringSale(string memory eventCode) {
         Sale storage eventSale = getEventSale(eventCode);
-        require(
-            saleIsActive(true, eventSale),
-            "SaleFactory: function can only be called during sale"
-        );
+        require(saleIsActive(true, eventSale), "SaleFactory: function can only be called during sale");
         _;
         clearExpiredSales();
     }
@@ -457,10 +395,7 @@ abstract contract SaleFactory is Ownable {
     modifier outsideOfSale(string memory eventCode) {
         // We are fetching the event directly through a hash, since getEventSale reverts if sale is not initialized
         Sale storage eventSale = _eventSale[hashStr(eventCode)];
-        require(
-            saleIsActive(false, eventSale),
-            "SaleFactory: function can only be called outside of sale"
-        );
+        require(saleIsActive(false, eventSale), "SaleFactory: function can only be called outside of sale");
 
         _;
     }
@@ -470,11 +405,7 @@ abstract contract SaleFactory is Ownable {
      * @param expectActive If we expect the sale to be active set to true
      * @param sale Sale that is being inspected
      */
-    function saleIsActive(bool expectActive, Sale memory sale)
-        private
-        view
-        returns (bool)
-    {
+    function saleIsActive(bool expectActive, Sale memory sale) private view returns (bool) {
         if (expectActive) {
             return (time() >= sale.saleStart) && (time() < sale.saleEnd);
         } else {
@@ -546,10 +477,7 @@ abstract contract SaleFactory is Ownable {
             if (i == length) {
                 _allSales.push(unorderedSale);
             } else {
-                if (
-                    _eventSale[_allSales[i]].saleEnd >
-                    _eventSale[unorderedSale].saleEnd
-                ) {
+                if (_eventSale[_allSales[i]].saleEnd > _eventSale[unorderedSale].saleEnd) {
                     tmpSale = _allSales[i];
                     _allSales[i] = unorderedSale;
                     unorderedSale = tmpSale;
@@ -563,16 +491,9 @@ abstract contract SaleFactory is Ownable {
      * @dev Function returns Sale struct with saleEnd and saleStart. Function reverts if event is not initialized
      * @param eventCode string code of event
      */
-    function getEventSale(string memory eventCode)
-        private
-        view
-        returns (Sale storage)
-    {
+    function getEventSale(string memory eventCode) private view returns (Sale storage) {
         Sale storage eventSale = _eventSale[hashStr(eventCode)];
-        require(
-            eventSale.saleStart > 0 || eventSale.saleEnd > 0,
-            "SaleFactory: sale not initialized"
-        );
+        require(eventSale.saleStart > 0 || eventSale.saleEnd > 0, "SaleFactory: sale not initialized");
         return eventSale;
     }
 
@@ -599,10 +520,7 @@ abstract contract SaleFactory is Ownable {
         } else {
             start = time();
         }
-        require(
-            end > start,
-            "SaleFactory: sale end time needs to be greater than start time"
-        );
+        require(end > start, "SaleFactory: sale end time needs to be greater than start time");
 
         eventSale.saleStart = start;
         eventSale.saleEnd = end;
@@ -615,12 +533,7 @@ abstract contract SaleFactory is Ownable {
     }
 
     // Function can be called by the owner during a sale to end it prematurely
-    function endSaleNow(string memory eventCode)
-        public
-        onlyOwner
-        duringSale(eventCode)
-        returns (bool)
-    {
+    function endSaleNow(string memory eventCode) public onlyOwner duringSale(eventCode) returns (bool) {
         Sale storage eventSale = getEventSale(eventCode);
 
         eventSale.saleEnd = time();
@@ -656,11 +569,7 @@ abstract contract SaleFactory is Ownable {
 }
 
 abstract contract TokenHash is Ownable {
-    function getTokenHash(string memory _eventCode, string memory _teamName)
-        internal
-        pure
-        returns (bytes32)
-    {
+    function getTokenHash(string memory _eventCode, string memory _teamName) internal pure returns (bytes32) {
         return keccak256(bytes(abi.encodePacked(_eventCode, _teamName)));
     }
 }
@@ -673,10 +582,7 @@ abstract contract RecordingTradePairs is Ownable {
      * @dev Adds the trading pair address to array and creates a O(1) get reference. Function will revert if pair is already registered.
      */
     function addTPAddress(address tradingPair) public onlyOwner returns (bool) {
-        require(
-            !_tradingPairMapping[tradingPair].status,
-            "DBTokenSale: pair already created"
-        );
+        require(!_tradingPairMapping[tradingPair].status, "DBTokenSale: pair already created");
         uint256 index = _allTradingPairs.length;
         _allTradingPairs.push(tradingPair);
         _tradingPairMapping[tradingPair] = ArrayElRef(true, index);
@@ -685,15 +591,8 @@ abstract contract RecordingTradePairs is Ownable {
     }
 
     // Get pair index from array. Function will revert if pair is not registered
-    function getTPAddressIndex(address tradingPair)
-        public
-        view
-        returns (uint256)
-    {
-        require(
-            _tradingPairMapping[tradingPair].status,
-            "DBTokenSale: pair not initialized"
-        );
+    function getTPAddressIndex(address tradingPair) public view returns (uint256) {
+        require(_tradingPairMapping[tradingPair].status, "DBTokenSale: pair not initialized");
         return _tradingPairMapping[tradingPair].arrayIndex;
     }
 
@@ -705,11 +604,7 @@ abstract contract RecordingTradePairs is Ownable {
      * @dev Delete the trading pair address from array and reference. Function will revert if address is not active.
      * Note that function will only set address to address(0). Array length will stay the same
      */
-    function deleteTPAddress(address tradingPair)
-        public
-        onlyOwner
-        returns (bool)
-    {
+    function deleteTPAddress(address tradingPair) public onlyOwner returns (bool) {
         uint256 index = getTPAddressIndex(tradingPair);
         _allTradingPairs[index] = address(0);
         _tradingPairMapping[tradingPair] = ArrayElRef(false, 0);
@@ -719,11 +614,7 @@ abstract contract RecordingTradePairs is Ownable {
     /**
      * @dev Low level function. Will calculate circulating supply for given token
      */
-    function _calculateCirculatingSupply(DBToken token)
-        internal
-        view
-        returns (uint256)
-    {
+    function _calculateCirculatingSupply(DBToken token) internal view returns (uint256) {
         uint256 supply = token.totalSupply();
         uint256 length = _allTradingPairs.length;
 
@@ -759,12 +650,7 @@ abstract contract RecordingTokensSold is TokenHash {
         return _currentSale;
     }
 
-    function eventTokensSold()
-        public
-        view
-        onlyOwner
-        returns (EventTokensSold[] memory)
-    {
+    function eventTokensSold() public view onlyOwner returns (EventTokensSold[] memory) {
         return _currentEventSale;
     }
 
@@ -773,10 +659,7 @@ abstract contract RecordingTokensSold is TokenHash {
         bytes32 eventHash,
         uint256 initialAmount
     ) private returns (bool) {
-        require(
-            !_saleArrayMapping[tokenHash].status,
-            "DBTokenSale: TokenSold reference already initialized"
-        );
+        require(!_saleArrayMapping[tokenHash].status, "DBTokenSale: TokenSold reference already initialized");
 
         uint256 tokenSoldIndex = _currentSale.length;
 
@@ -786,17 +669,10 @@ abstract contract RecordingTokensSold is TokenHash {
         return true;
     }
 
-    function increaseTokensSold(bytes32 tokenHash, uint256 amount)
-        private
-        returns (bool)
-    {
-        require(
-            _saleArrayMapping[tokenHash].status,
-            "DBTokenSale: TokenSold reference is not initialized"
-        );
+    function increaseTokensSold(bytes32 tokenHash, uint256 amount) private returns (bool) {
+        require(_saleArrayMapping[tokenHash].status, "DBTokenSale: TokenSold reference is not initialized");
 
-        _currentSale[_saleArrayMapping[tokenHash].arrayIndex]
-            .amountSold += amount;
+        _currentSale[_saleArrayMapping[tokenHash].arrayIndex].amountSold += amount;
 
         return true;
     }
@@ -820,14 +696,8 @@ abstract contract RecordingTokensSold is TokenHash {
         return true;
     }
 
-    function initEventTokensSold(bytes32 eventHash, uint256 amount)
-        private
-        returns (bool)
-    {
-        require(
-            !_saleEventArrayMapping[eventHash].status,
-            "DBTokenSale: EventTokenSold reference already initialized"
-        );
+    function initEventTokensSold(bytes32 eventHash, uint256 amount) private returns (bool) {
+        require(!_saleEventArrayMapping[eventHash].status, "DBTokenSale: EventTokenSold reference already initialized");
 
         uint256 index = _currentEventSale.length;
 
@@ -837,24 +707,14 @@ abstract contract RecordingTokensSold is TokenHash {
         return true;
     }
 
-    function increaseEventTokensSold(bytes32 eventHash, uint256 amount)
-        private
-        returns (bool)
-    {
-        require(
-            _saleEventArrayMapping[eventHash].status,
-            "DBTokenSale: EventTokenSold reference is not initialized"
-        );
-        _currentEventSale[_saleEventArrayMapping[eventHash].arrayIndex]
-            .amountSold += amount;
+    function increaseEventTokensSold(bytes32 eventHash, uint256 amount) private returns (bool) {
+        require(_saleEventArrayMapping[eventHash].status, "DBTokenSale: EventTokenSold reference is not initialized");
+        _currentEventSale[_saleEventArrayMapping[eventHash].arrayIndex].amountSold += amount;
 
         return true;
     }
 
-    function recordEventTokensSold(bytes32 eventHash, uint256 amount)
-        private
-        returns (bool)
-    {
+    function recordEventTokensSold(bytes32 eventHash, uint256 amount) private returns (bool) {
         if (!_saleEventArrayMapping[eventHash].status) {
             initEventTokensSold(eventHash, amount);
         } else {
@@ -893,14 +753,8 @@ contract StoringDBTokens is TokenHash, Pausable {
         bytes32 givenEventCode = keccak256(bytes(_eventCode));
         bytes32 givenTeamName = keccak256(bytes(_teamName));
 
-        require(
-            tokenEventCode == givenEventCode,
-            "DBTokenSale: given event code doesn't match reference event code"
-        );
-        require(
-            tokenTeamName == givenTeamName,
-            "DBTokenSale: given team name doesn't match reference team name"
-        );
+        require(tokenEventCode == givenEventCode, "DBTokenSale: given event code doesn't match reference event code");
+        require(tokenTeamName == givenTeamName, "DBTokenSale: given team name doesn't match reference team name");
 
         bytes32 tokenHash = getTokenHash(_eventCode, _teamName);
 
@@ -911,16 +765,9 @@ contract StoringDBTokens is TokenHash, Pausable {
     }
 
     // Get token by event code and team name. Revert on not found
-    function getToken(string memory _eventCode, string memory _teamName)
-        public
-        view
-        returns (DBToken)
-    {
+    function getToken(string memory _eventCode, string memory _teamName) public view returns (DBToken) {
         bytes32 tokenHash = getTokenHash(_eventCode, _teamName);
-        require(
-            address(_dbtokens[tokenHash]) != address(0),
-            "DBTokenSale: token doesn't exist"
-        );
+        require(address(_dbtokens[tokenHash]) != address(0), "DBTokenSale: token doesn't exist");
         return _dbtokens[tokenHash];
     }
 }
@@ -931,12 +778,7 @@ contract StoringDBTokens is TokenHash, Pausable {
  ***********************************************************************
  **********************************************************************/
 
-contract DBTokenSale is
-    StoringDBTokens,
-    RecordingTradePairs,
-    RecordingTokensSold,
-    SaleFactory
-{
+contract DBTokenSale is StoringDBTokens, RecordingTradePairs, RecordingTokensSold, SaleFactory {
     address private _owner;
     address private _withrawable;
 
@@ -952,10 +794,11 @@ contract DBTokenSale is
     }
 
     // High level call. Function will revert if token not found.
-    function calculateCirculatingSupply(
-        string memory _eventCode,
-        string memory _teamName
-    ) public view returns (uint256) {
+    function calculateCirculatingSupply(string memory _eventCode, string memory _teamName)
+        public
+        view
+        returns (uint256)
+    {
         DBToken token = getToken(_eventCode, _teamName);
         return _calculateCirculatingSupply(token);
     }
@@ -975,14 +818,8 @@ contract DBTokenSale is
     ) public duringSale(_eventCode) returns (bool) {
         DBToken dbtoken = getToken(_eventCode, _teamName);
 
-        uint256 senderAllowance = _standardToken.allowance(
-            _msgSender(),
-            address(this)
-        );
-        require(
-            senderAllowance >= amount,
-            "DBTokenSale: insufficient allowance for standard token transaction"
-        );
+        uint256 senderAllowance = _standardToken.allowance(_msgSender(), address(this));
+        require(senderAllowance >= amount, "DBTokenSale: insufficient allowance for standard token transaction");
 
         uint256 dbtokenAmount = amount * rate();
         _standardToken.transferFrom(_msgSender(), address(this), amount);
@@ -993,12 +830,7 @@ contract DBTokenSale is
         return true;
     }
 
-    function mintOnePercentToOwner()
-        public
-        onlyOwner
-        noActiveSale
-        returns (bool)
-    {
+    function mintOnePercentToOwner() public onlyOwner noActiveSale returns (bool) {
         bytes32 tokenHash;
         uint256 amountToMint;
 
@@ -1039,10 +871,7 @@ contract DBTokenSale is
      * @param amount Amount of tokens standardTokens the owner wants to withdraw. If the amount is more than the current balance, all tokens are withdrawn.
      */
     function withdraw(uint256 amount) public onlyOwner returns (bool) {
-        require(
-            _withrawable != address(0),
-            "DBTokenSale: withdrawable address is zero address"
-        );
+        require(_withrawable != address(0), "DBTokenSale: withdrawable address is zero address");
         uint256 tokenBalance = _standardToken.balanceOf(address(this));
         if (amount > tokenBalance) {
             amount = tokenBalance;

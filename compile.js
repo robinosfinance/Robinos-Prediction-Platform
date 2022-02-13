@@ -1,18 +1,7 @@
 const path = require('path');
 const fs = require('fs');
 const solc = require('solc');
-
-const files = [
-  'DBToken.sol',
-  'DBTokenEvent.sol',
-  'DBTokenSale.sol',
-  'DBTokenReward.sol',
-  'DBTokenSideBet.sol',
-  'RobinosGovernanceToken.sol',
-  'RobinosGovernanceTokenLuckyDraw.sol',
-  'RobinosGovernanceTokenNFTStake.sol',
-  'RBNV2Token.sol',
-];
+const files = require('./contracts');
 
 const input = {
   language: 'Solidity',
