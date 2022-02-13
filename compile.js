@@ -3,38 +3,36 @@ const fs = require("fs");
 const solc = require("solc");
 
 const files = [
-	"DBToken.sol",
-	"DBTokenEvent.sol",
-	"DBTokenSale.sol",
-	"DBTokenReward.sol",
-	"DBTokenSideBet.sol",
-	"RobinosGovernanceToken.sol",
-	"RobinosGovernanceTokenLuckyDraw.sol",
-	"RobinosGovernanceTokenNFTStake.sol",
-	"RBNV2Token.sol",
+  "DBToken.sol",
+  "DBTokenEvent.sol",
+  "DBTokenSale.sol",
+  "DBTokenReward.sol",
+  "DBTokenSideBet.sol",
+  "RobinosGovernanceToken.sol",
+  "RobinosGovernanceTokenLuckyDraw.sol",
+  "RobinosGovernanceTokenNFTStake.sol",
+  "RBNV2Token.sol",
 ];
 
-let pathToFile, source;
-
-let input = {
-	language: 'Solidity',
-	sources: {},
-	settings: {
-		outputSelection: {
-			'*': {
-				'*': ['*']
-			}
-		}
-	}
+const input = {
+  language: "Solidity",
+  sources: {},
+  settings: {
+    outputSelection: {
+      "*": {
+        "*": ["*"],
+      },
+    },
+  },
 };
 
-files.forEach(file => {
-	pathToFile = path.resolve(__dirname, "contracts", file);
-	source = fs.readFileSync(pathToFile, "utf8");
+files.forEach((file) => {
+  const pathToFile = path.resolve(__dirname, "contracts", file);
+  const source = fs.readFileSync(pathToFile, "utf8");
 
-	input.sources[file] = {
-		content: source
-	};
+  input.sources[file] = {
+    content: source,
+  };
 });
 
 // console.log(input);

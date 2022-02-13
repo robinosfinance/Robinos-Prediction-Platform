@@ -902,8 +902,6 @@ contract RBNV2Token is ERC20PresetFixedSupply, Ownable {
     mapping(address => bool) private taxTransferInitialized;
     mapping(address => bool) private taxFreeAddress;
 
-    IUniswapV2Router02 private uniswapRouter;
-
     constructor(
         string memory name,
         string memory symbol,
@@ -918,31 +916,6 @@ contract RBNV2Token is ERC20PresetFixedSupply, Ownable {
         return (amount * taxPercentage) / 100;
     }
 
-    function _beforeTokenTransfer(
-        address from,
-        address to,
-        uint256 amount
-    ) internal override {
-        if (
-            from == address(0) ||
-            to == address(0) ||
-            taxFreeAddress[from] ||
-            taxFreeAddress[to] ||
-            taxTransferInitialized[from]
-        ) return;
-
-        uint256 tax = calculateTax(amount);
-        uint256 balance = balanceOf(from);
-        require(
-            balance >= amount + tax,
-            "RBNV2Token: insufficient balance for transfer"
-        );
-
-        taxTransferInitialized[from] = true;
-        _transfer(from, owner(), tax);
-        taxTransferInitialized[from] = false;
-    }
-
     function setTaxPercentage(uint8 _taxPercentage) public onlyOwner {
         require(
             _taxPercentage <= maxTaxPercentage,
@@ -951,78 +924,7 @@ contract RBNV2Token is ERC20PresetFixedSupply, Ownable {
         taxPercentage = _taxPercentage;
     }
 
-    function setUniswapRouter(IUniswapV2Router02 _uniswapRouter)
-        public
-        onlyOwner
-    {
-        uniswapRouter = _uniswapRouter;
-    }
-
     function setTaxFreeAddress(address addr, bool taxFree) public onlyOwner {
         taxFreeAddress[addr] = taxFree;
-    }
-
-    function getUniswapRouterAddress() public view returns (address) {
-        return address(uniswapRouter);
-    }
-
-    function getBalance(address tokenB) public view returns (uint256) {
-        return ERC20(tokenB).balanceOf(_msgSender());
-    }
-
-    function safeTransferFrom(
-        address token,
-        address from,
-        address to,
-        uint256 value
-    ) internal {
-        // bytes4(keccak256(bytes('transferFrom(address,address,uint256)')));
-        (bool success, bytes memory data) = token.call(
-            abi.encodeWithSelector(0x23b872dd, from, to, value)
-        );
-        require(
-            success && (data.length == 0 || abi.decode(data, (bool))),
-            "RBNV2Token: TRANSFER_FROM_FAILED"
-        );
-    }
-
-    function addLiquidity(
-        address tokenB,
-        uint256 amountDesired,
-        uint256 amountBDesired,
-        uint256 amountMin,
-        uint256 amountBMin,
-        address to,
-        uint256 deadline
-    ) public {
-        uint256 allowance = ERC20(tokenB).allowance(
-            _msgSender(),
-            address(this)
-        );
-        require(
-            address(uniswapRouter) != address(0),
-            "RBNV2Token: uniswap instance not assigned"
-        );
-
-        require(
-            allowance >= amountBDesired,
-            "RBNV2Token: insufficient token B allowance"
-        );
-
-        _transfer(_msgSender(), address(this), amountDesired);
-        safeTransferFrom(tokenB, _msgSender(), address(this), amountBDesired);
-
-        taxTransferInitialized[address(this)] = true;
-        uniswapRouter.addLiquidity(
-            address(this),
-            tokenB,
-            amountDesired,
-            amountBDesired,
-            amountMin,
-            amountBMin,
-            to,
-            deadline
-        );
-        taxTransferInitialized[address(this)] = false;
     }
 }
