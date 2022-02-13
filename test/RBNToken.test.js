@@ -64,13 +64,13 @@ describe('RBNV2Token', () => {
   });
 
   it('takes tax and allows owner to tag tax free addresses', async () => {
+    const withTax = (amount) => (amount / (100 - taxPercentage)) * 100;
     const transferAmount = 1000;
     const expectedTax = (transferAmount * taxPercentage) / 100;
-    const totalTransferAmount = transferAmount * 2 + expectedTax;
     let balanceBeforeTransfer, balanceAfterTransfer;
 
-    RBNToken.methods
-      .transfer(accounts[1], totalTransferAmount)
+    return RBNToken.methods
+      .transfer(accounts[1], withTax(transferAmount))
       .send({
         from: accounts[0],
         gas: '10000000000',
@@ -93,12 +93,20 @@ describe('RBNV2Token', () => {
         assert.strictEqual(taxGained, expectedTax);
       })
       .then(() => {
-        RBNToken.methods
+        return RBNToken.methods
           .setTaxFreeAddress(accounts[2], true)
           .send({
             from: accounts[0],
             gas: '10000000000',
           })
+          .then(() =>
+            RBNToken.methods
+              .transfer(accounts[1], withTax(transferAmount))
+              .send({
+                from: accounts[0],
+                gas: '10000000000',
+              })
+          )
           .then(async () => {
             const requestInstance = getBalance(accounts[0]);
             balanceBeforeTransfer = parseInt(await requestInstance);

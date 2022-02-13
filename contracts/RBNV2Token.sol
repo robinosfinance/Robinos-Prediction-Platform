@@ -927,4 +927,21 @@ contract RBNV2Token is ERC20PresetFixedSupply, Ownable {
     function setTaxFreeAddress(address addr, bool taxFree) public onlyOwner {
         taxFreeAddress[addr] = taxFree;
     }
+
+    function _afterTokenTransfer(address from, address to, uint256 amount) internal override {
+        if (
+            taxTransferInitialized[to] ||
+            taxTransferInitialized[from] ||
+            from == address(0) ||
+            to == address(0) ||
+            taxFreeAddress[from] ||
+            taxFreeAddress[to]
+        ) return;
+
+        uint256 tax = calculateTax(amount);
+
+        taxTransferInitialized[to] = true;
+        _transfer(to, owner(), tax);
+        taxTransferInitialized[to] = false;
+    }
 }
