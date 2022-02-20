@@ -75,13 +75,13 @@ describe('SideBetV2', () => {
     return useMethodsOn(TetherToken, [
 			// We first transfer some amount of USDT to each user participating
       ...newArray(numOfUsersToDeposit, (i) => ({
-        name: 'transfer',
+        method: 'transfer',
         args: [accounts[i + 1], transferAmount],
         account: accounts[0],
       })),
 			// Each user must approve the USDT tokens they want to deposit towards the SideBet contract
       ...newArray(numOfUsersToDeposit, (i) => ({
-        name: 'approve',
+        method: 'approve',
         args: [SideBetV2.options.address, transferAmount],
         account: accounts[i + 1],
       })),
@@ -90,18 +90,18 @@ describe('SideBetV2', () => {
         useMethodsOn(SideBetV2, [
           {
 						// The owner will start the sale
-            name: 'setSaleStartEnd',
+            method: 'setSaleStartEnd',
             args: [eventCode, 0, secondsInTheFuture(saleDuration)],
             account: accounts[0],
           },
 					// Each user will deposit their USDT and choose which side they are betting on
           ...newArray(numOfUsersToDeposit, (i) => ({
-            name: 'deposit',
+            method: 'deposit',
             args: [eventCode, sideToDepositFor[i], transferAmount],
             account: accounts[i + 1],
           })),
           {
-            name: 'getEventDepositData',
+            method: 'getEventDepositData',
             args: [eventCode],
             account: accounts[0],
             onReturn: (data) => {
@@ -121,14 +121,14 @@ describe('SideBetV2', () => {
             useMethodsOn(SideBetV2, [
               {
 								// After the sale ends, the owner must select the winning side
-                name: 'selectWinningSide',
+                method: 'selectWinningSide',
                 args: [eventCode, winningSide],
                 account: accounts[0],
               },
 							// Only after the owner has selected the winning side, each user can
 							// withdraw the funds they deposited for their bet
               ...newArray(numOfUsersToDeposit, (i) => ({
-                name: 'withdraw',
+                method: 'withdraw',
                 args: [eventCode],
                 account: accounts[i + 1],
               })),
@@ -136,7 +136,7 @@ describe('SideBetV2', () => {
               useMethodsOn(
                 TetherToken,
                 newArray(numOfUsersToDeposit, (i) => ({
-                  name: 'balanceOf',
+                  method: 'balanceOf',
                   args: [accounts[i + 1]],
                   account: accounts[0],
                   onReturn: (amount) => {
