@@ -411,6 +411,8 @@ contract SideBetV2 is SaleFactory {
     ) private view returns (uint256) {
         SideDepositData storage sideDepositData = getSideDepositData(eventCode, side);
         uint256 _totalDeposit = totalDeposited[hashStr(eventCode)];
+        // If no user has deposited for the winning side, the reward is always 0
+        if (sideDepositData.totalDeposit == 0) return 0;
         return (sideDepositData.userDeposit[user] * _totalDeposit) / sideDepositData.totalDeposit;
     }
 
@@ -442,6 +444,22 @@ contract SideBetV2 is SaleFactory {
         totalDeposited[hashStr(eventCode)] += amount;
     }
 
+    /**
+     * Allows users to check how much has been deposited towards each side in the event
+     * @param eventCode for which you are getting data for
+     */
+    function getEventDepositData(string memory eventCode) public view returns (uint256, uint256) {
+        uint256 sideATotalDeposit = getSideDepositData(eventCode, Side.A).totalDeposit;
+        uint256 sideBTotalDeposit = getSideDepositData(eventCode, Side.B).totalDeposit;
+        return (sideATotalDeposit, sideBTotalDeposit);
+    }
+
+    /**
+     * Allows the owner to select the winning side after the sale for this event has ended
+     * 
+     * @param eventCode of the event you are choosing the winner for
+     * @param side A or B which will be set as winner
+     */
     function selectWinningSide(string memory eventCode, Side side)
         public
         onlyOwner
@@ -454,6 +472,14 @@ contract SideBetV2 is SaleFactory {
         else _eventResults.winningSide = Side.B;
     }
 
+    /**
+     * Allows users to bet on their preffered side (A or B) during a sale. Users which bet on the side
+     * which is selected as winner will gain appropriate awards
+     * 
+     * @param eventCode of the event you are depositing for
+     * @param side A or B on which you are betting
+     * @param amount of standardToken you want to deposit
+     */
     function deposit(
         string memory eventCode,
         Side side,
@@ -466,13 +492,19 @@ contract SideBetV2 is SaleFactory {
         recordDeposit(eventCode, _msgSender(), side, amount);
     }
 
+    /**
+     * Allows users to withdraw any possible rewards after the sale has finished and the 
+     * owner has selected the winning side. Only the users which have bet on the winning side
+     * will receive rewards proportional to the amount they deposited
+     * @param eventCode of the event which you are withdrawing from
+     */
     function withdraw(string memory eventCode)
         public
         eventFinished(eventCode)
         userNotWithdrawn(eventCode, _msgSender())
     {
         uint256 reward = calculateUserReward(eventCode, _msgSender());
-        standardToken.transferFrom(_msgSender(), address(this), reward);
+        if (reward != 0) standardToken.transfer(_msgSender(), reward);
         setUserWithdrawn(eventCode, _msgSender());
     }
 }
