@@ -8,7 +8,7 @@ const web3 = new Web3(
 );
 
 const contracts = require('../compile');
-const { secondsInTheFuture, randomInt } = require('../helper');
+const { secondsInTheFuture, randomInt, zeroOrOne } = require('../helper');
 
 const tokenContract = contracts['DBToken.sol'].DBToken;
 const eventContract = contracts['DBTokenEvent.sol'].DBTokenEvent;
@@ -593,11 +593,10 @@ describe('DBTokenSideBet', () => {
           gas: '10000000000',
         });
     };
-    const randTeamIndex = () => randomInt(0, 2) - 1;
     const saleDuration = 15;
     const minStake = 500;
     const maxStake = 150000;
-    const winningTeamIndex = randTeamIndex();
+    const winningTeamIndex = zeroOrOne();
     const numOfUsers = 10;
     const eventName = 'Man vs. Liv';
     const totalReward = randomInt(10000, 100000);
@@ -606,7 +605,7 @@ describe('DBTokenSideBet', () => {
       for (let i = 0; i < numOfUsers; i++)
         params.push({
           account: accounts[i],
-          teamIndex: randTeamIndex(),
+          teamIndex: zeroOrOne(),
           amount: randomInt(minStake, maxStake),
         });
       return params;
