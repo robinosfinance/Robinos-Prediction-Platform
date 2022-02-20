@@ -20,13 +20,28 @@ const useMethodsOn = (contractInstance, methods) => {
 
   const recursiveFunction = (methodIndex, promise) =>
     promise.then(async (previousReturnValue) => {
-      const { name, args, account, onReturn } = methods[methodIndex];
-      const requestInstance = contractInstance.methods[name](...args)[
-        onReturn ? 'call' : 'send'
-      ]({
-        from: account,
-        gas: '1000000000',
-      });
+      const {
+        method,
+        args,
+        account,
+        onReturn,
+        catch: catchCallback,
+      } = methods[methodIndex];
+
+      if (!contractInstance.methods[method])
+        throw new Error(`Unknown method called ${method}`);
+
+      const requestInstance = contractInstance.methods[method](...args)
+        [onReturn ? 'call' : 'send']({
+          from: account,
+          gas: '1000000000',
+        })
+        .catch((err) => {
+          if (!catchCallback) {
+            throw new Error(err);
+          }
+          catchCallback(Object.values(err.results)[0].reason);
+        });
 
       const returnValue = await requestInstance;
       onReturn && onReturn(returnValue, previousReturnValue);
