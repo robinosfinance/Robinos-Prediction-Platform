@@ -631,6 +631,7 @@ describe('DBTokenSideBet', () => {
       .then(() =>
         useMethodsOn(TetherToken, [
           {
+            // The owner approves stardard token for the reward deposit
             method: 'approve',
             args: [DBTokenSideBet.options.address, totalReward],
             account: accounts[0],
@@ -640,11 +641,13 @@ describe('DBTokenSideBet', () => {
       .then(() =>
         useMethodsOn(DBTokenSideBet, [
           {
+            // The owner initializes a sale and sets start and end time
             method: 'setSaleStartEnd',
             args: [eventName, 0, secondsInTheFuture(saleDuration)],
             account: accounts[0],
           },
           {
+            // The owner deposits the reward for this event
             method: 'depositReward',
             args: [eventName, totalReward],
             account: accounts[0],
@@ -656,6 +659,7 @@ describe('DBTokenSideBet', () => {
           stakingParams.map(({ teamIndex, account, amount }) =>
             useMethodsOn(DBTokens[teamIndex], [
               {
+                // Each user approves the amount of DBTokens for their prefered team towards the side bet contract
                 method: 'approve',
                 args: [DBTokenSideBet.options.address, amount],
                 account,
@@ -667,15 +671,18 @@ describe('DBTokenSideBet', () => {
       .then(() =>
         useMethodsOn(DBTokenSideBet, [
           ...stakingParams.map(({ teamIndex, account, amount }) => ({
+            // Each user then stakes their DBTokens for their chosen team
             method: 'stake',
             args: [eventName, DBTokens[teamIndex].options.address, amount],
             account,
           })),
           ...stakingParams.map(({ teamIndex, account, amount }) => ({
+            // We check how much each user has staked
             method: 'getUserStaked',
             args: [eventName, account, DBTokens[teamIndex].options.address],
             account,
             onReturn: (userStaked) => {
+              // And compare the value returned with local
               assert.strictEqual(parseInt(userStaked), amount);
             },
           })),
@@ -683,6 +690,7 @@ describe('DBTokenSideBet', () => {
       )
       .then(() => {
         const waitDuration = Math.round(saleDuration * 1000);
+        // To select a winning team we must wait until the sale ends
         return new Promise((resolve) => {
           setTimeout(() => {
             let winningAccountIndex;
@@ -696,6 +704,7 @@ describe('DBTokenSideBet', () => {
                 account: accounts[0],
               },
               ...stakingParams.map(({ account }, index) => ({
+                // We check how many standard tokens each user will be rewarded
                 method: 'getUserReward',
                 args: [eventName, account],
                 account: accounts[0],
@@ -705,16 +714,20 @@ describe('DBTokenSideBet', () => {
                     biggestReward = userReward;
                     winningAccountIndex = index;
                   }
+
+                  // We sum up all the rewards
                   totalCalculatedReward += userReward;
                 },
               })),
             ])
               .then(() => {
+                // And we expect the total reward is equal to the local reward. Every single token must be distributed
                 assert.strictEqual(totalCalculatedReward, totalReward);
               })
               .then(() =>
                 useMethodsOn(DBTokenSideBet, [
                   {
+                    // The user with the biggest reward will unstake
                     method: 'unstake',
                     args: [
                       eventName,
@@ -728,10 +741,12 @@ describe('DBTokenSideBet', () => {
               .then(() =>
                 useMethodsOn(TetherToken, [
                   {
+                    // And check their standard token balance for the reward
                     method: 'balanceOf',
                     args: [accounts[winningAccountIndex]],
                     account: accounts[0],
                     onReturn: (winnerReward) => {
+                      // We check if the exact amount of standard token has been transfered
                       assert.strictEqual(parseInt(winnerReward), biggestReward);
                       resolve();
                     },
