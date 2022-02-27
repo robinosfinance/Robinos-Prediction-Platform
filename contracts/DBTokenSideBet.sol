@@ -437,7 +437,7 @@ abstract contract SaleFactory is Ownable {
             while (i < length) {
                 if (_eventSale[_allSales[i]].saleEnd > time()) {
                     endDelete = i;
-                    i = length; // Break from while loop
+                    break;
                 }
                 i++;
             }
