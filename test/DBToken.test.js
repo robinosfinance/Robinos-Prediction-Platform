@@ -69,19 +69,19 @@ beforeEach(async () => {
       gas: '1000000000',
     });
 
-  teamTokenParams.forEach(async (teamParams) => {
-    const tokenAddress = await DBTokenEvent.methods
-      .getTeamTokenAddress(teamParams.teamName)
-      .call({
-        from: accounts[0],
-        gas: '10000000000',
-      });
-    DBTokens.push(new web3.eth.Contract(tokenContract.abi, tokenAddress));
-  });
+  useMethodsOn(
+    DBTokenEvent,
+    teamTokenParams.map((teamParams) => ({
+      method: 'getTeamTokenAddress',
+      args: [teamParams.teamName],
+      onReturn: (tokenAddress) => {
+        DBTokens.push(new web3.eth.Contract(tokenContract.abi, tokenAddress));
+      },
+    }))
+  );
 
-  /**
-   *  @dev Local USDT instance. Address accounts[0] is the owner of the contract and is immediately minted totalSupply amount of tokens on initialization
-   */
+  // Local USDT instance. Address accounts[0] is the owner of the contract
+  // and is immediately minted totalSupply amount of tokens on initialization
   TetherToken = await new web3.eth.Contract(tether.abi)
     .deploy({
       data: tether.bytecode,
@@ -102,9 +102,16 @@ beforeEach(async () => {
       gas: '1000000000',
     });
 
-  rate = await DBTokenSale.methods.rate().call({
-    from: accounts[0],
-  });
+  useMethodsOn(DBTokenSale, [
+    {
+      method: 'rate',
+      args: [],
+      account: accounts[0],
+      onReturn: (_rate) => {
+        rate = _rate;
+      },
+    },
+  ]);
 
   DBTokenReward = await new web3.eth.Contract(rewardContract.abi)
     .deploy({
@@ -257,13 +264,21 @@ describe('DBTokenSale', () => {
       },
     ]));
 
-  it('allows having multiple sales', async () => {
+  it('allows having multiple sales', () => {
     const eventCodes = ['EPL', 'Champs', 'Fifa', 'Junior', 'Senior', 'London'];
 
     return useMethodsOn(DBTokenSale, [
+      {
+        method: 'isSaleOn',
+        args: ['SomeEvent'],
+        account: accounts[0],
+        catch: (err) => {
+          assert.strictEqual(err, 'SaleFactory: sale not initialized');
+        },
+      },
       ...eventCodes.map((code) => ({
         method: 'setSaleStartEnd',
-        args: [code, 0, secondsInTheFuture(randomInt(20, 100) * 30)],
+        args: [code, 0, secondsInTheFuture(60)],
         account: accounts[0],
       })),
       ...eventCodes.map((code) => ({
@@ -282,7 +297,7 @@ describe('DBTokenSale', () => {
     ]);
   });
 
-  it('allows exchange of DBTokens <> USDT and withdrawal of contract funds', async () => {
+  it('allows exchange of DBTokens <> USDT and withdrawal of contract funds', () => {
     /**
      * @dev This is the main and the most complicated test of all. The test is made up of multiple steps:
      *  1) We add at least one DBToken reference to the DBTokenSale contract
@@ -370,7 +385,7 @@ describe('DBTokenSale', () => {
       });
   });
 
-  it('allows owner to record sold supply and mint 1% at the end of sale', async () => {
+  it('allows owner to record sold supply and mint 1% at the end of sale', () => {
     const tokenPurchaseAmount = 100000;
     let tokenBalances;
 
@@ -467,7 +482,7 @@ describe('DBTokenReward', () => {
         from: accounts[0],
       })
   );
-  it('allows dynamic rates', async () => {
+  it('allows dynamic rates', () => {
     const DBToken = DBTokens[0];
     const teamName = teamTokenParams[0].teamName;
     const DBtokenAmount = 10000;
@@ -498,7 +513,7 @@ describe('DBTokenReward', () => {
     ]);
   });
 
-  it('allows rewards', async () => {
+  it('allows rewards', () => {
     const DBToken = DBTokens[0];
     const teamName = teamTokenParams[0].teamName;
     const purchaseAmount = 500;

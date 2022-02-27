@@ -8,7 +8,12 @@ const web3 = new Web3(
 );
 
 const contracts = require('../compile');
-const { secondsInTheFuture, randomInt, idsFrom } = require('../helper');
+const {
+  secondsInTheFuture,
+  randomInt,
+  idsFrom,
+  useMethodsOn,
+} = require('../helper');
 
 const tokenContract =
   contracts['RobinosGovernanceToken.sol'].RobinosGovernanceToken;
@@ -324,60 +329,37 @@ describe('RobinosGovernanceTokenLuckyDraw', () => {
     assert.ok(RobinosGovernanceTokenLuckyDraw.options.address);
   });
 
-  it('allows having multiple sales', async () => {
-    let errorMessage;
-    const expectedError = 'SaleFactory: sale not initialized';
-
+  it('allows having multiple sales', () => {
     const eventCodes = ['EPL', 'Champs', 'Fifa', 'Junior', 'Senior', 'London'];
 
-    const nonExistingEvent = 'SomeEvent';
-
-    (() => {
-      // We first make sure to go through all the events and start their sales from the list above
-      return Promise.resolve(
-        eventCodes.forEach(async (code, index) => {
-          RobinosGovernanceTokenLuckyDraw.methods
-            .setSaleStartEnd(
-              code,
-              0,
-              secondsInTheFuture(randomInt(20, 100) * 30)
-            )
-            .send({
-              from: accounts[0],
-              gas: '10000000000',
-            });
-        })
-      );
-    })()
-      .then(() => {
-        // Then we end each sale as the owner
-        eventCodes.forEach(async (code, index) => {
-          RobinosGovernanceTokenLuckyDraw.methods.endSaleNow(code).send({
-            from: accounts[0],
-            gas: '10000000000',
-          });
-        });
-      })
-      .then(async () => {
-        // Resulting sales array should have 0 entries
-        const sales = await RobinosGovernanceTokenLuckyDraw.methods
-          .getAllSales()
-          .call({
-            from: accounts[0],
-          });
-        assert.strictEqual(sales.length, 0);
-      });
-
-    try {
-      await RobinosGovernanceTokenLuckyDraw.methods
-        .getTotalStaked(nonExistingEvent)
-        .call({
-          from: accounts[0],
-        });
-    } catch (error) {
-      errorMessage = Object.values(error.results)[0].reason;
-    }
-    assert.strictEqual(errorMessage, expectedError);
+    return useMethodsOn(RobinosGovernanceTokenLuckyDraw, [
+      {
+        method: 'isSaleOn',
+        args: ['SomeEvent'],
+        account: accounts[0],
+        catch: (err) => {
+          assert.strictEqual(err, 'SaleFactory: sale not initialized');
+        },
+      },
+      ...eventCodes.map((code) => ({
+        method: 'setSaleStartEnd',
+        args: [code, 0, secondsInTheFuture(60)],
+        account: accounts[0],
+      })),
+      ...eventCodes.map((code) => ({
+        method: 'endSaleNow',
+        args: [code],
+        account: accounts[0],
+      })),
+      {
+        method: 'getAllSales',
+        args: [],
+        account: accounts[0],
+        onReturn: (sales) => {
+          assert.strictEqual(sales.length, 0);
+        },
+      },
+    ]);
   });
 
   it('allows owner to transfer NFTs', () => {
