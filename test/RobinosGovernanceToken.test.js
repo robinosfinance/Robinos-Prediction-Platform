@@ -19,10 +19,10 @@ const tokenContract =
   contracts['RobinosGovernanceToken.sol'].RobinosGovernanceToken;
 const luckyDrawContract =
   contracts['RobinosGovernanceTokenLuckyDraw.sol']
-    .RobinosGovernanceTokenLuckyDraw;
+  .RobinosGovernanceTokenLuckyDraw;
 const nftStakeContract =
   contracts['RobinosGovernanceTokenNFTStake.sol']
-    .RobinosGovernanceTokenNFTStake;
+  .RobinosGovernanceTokenNFTStake;
 const dbTokenEventContract = contracts['DBTokenEvent.sol'].DBTokenEvent;
 
 // Local instance of the USDT contract used for testing
@@ -78,8 +78,8 @@ beforeEach(async () => {
     });
 
   RobinosGovernanceTokenLuckyDraw = await new web3.eth.Contract(
-    luckyDrawContract.abi
-  )
+      luckyDrawContract.abi
+    )
     .deploy({
       data: luckyDrawContract.evm.bytecode.object,
       arguments: [
@@ -97,7 +97,9 @@ beforeEach(async () => {
   DBTokenEvent = await new web3.eth.Contract(dbTokenEventContract.abi)
     .deploy({
       data: dbTokenEventContract.evm.bytecode.object,
-      arguments: [[dbTokenTeamName], dbTokenEventName],
+      arguments: [
+        [dbTokenTeamName], dbTokenEventName
+      ],
     })
     .send({
       from: accounts[0],
@@ -120,8 +122,8 @@ beforeEach(async () => {
     });
 
   RobinosGovernanceTokenNFTStake = await new web3.eth.Contract(
-    nftStakeContract.abi
-  )
+      nftStakeContract.abi
+    )
     .deploy({
       data: nftStakeContract.evm.bytecode.object,
       arguments: [
@@ -202,18 +204,18 @@ describe('RobinosGovernanceToken', () => {
     })();
 
     Promise.all(
-      // First we wait until all batches are fully minted
-      batches.map((batch) =>
-        Promise.resolve(
-          RobinosGovernanceToken.methods
+        // First we wait until all batches are fully minted
+        batches.map((batch) =>
+          Promise.resolve(
+            RobinosGovernanceToken.methods
             .mintBatch(account, batch.tokenIds, batch.name)
             .send({
               from: accounts[0],
               gas: '1000000000',
             })
+          )
         )
       )
-    )
       // After all promises are finished, we will inspect contract storage
       .then(async () => {
         const numOfBatches = await RobinosGovernanceToken.methods
@@ -233,7 +235,7 @@ describe('RobinosGovernanceToken', () => {
               gas: '1000000000',
             });
           const [deployedBatchName, deployedNumOfTokens] =
-            Object.values(batchData);
+          Object.values(batchData);
           // Then for each local batch we check if the storage batch name and num of tokens is correct
           assert.strictEqual(deployedBatchName, batch.name);
           assert.strictEqual(
@@ -245,8 +247,7 @@ describe('RobinosGovernanceToken', () => {
   });
 
   it('allows owner to create polls & whitelisted users to vote', async () => {
-    const polls = [
-      {
+    const polls = [{
         question: 'Is George W. Bush a former US president?',
         answers: ['Yes', 'No', 'Maybe', "I don't know"],
         correctAnswerIndex: 0,
@@ -332,8 +333,7 @@ describe('RobinosGovernanceTokenLuckyDraw', () => {
   it('allows having multiple sales', () => {
     const eventCodes = ['EPL', 'Champs', 'Fifa', 'Junior', 'Senior', 'London'];
 
-    return useMethodsOn(RobinosGovernanceTokenLuckyDraw, [
-      {
+    return useMethodsOn(RobinosGovernanceTokenLuckyDraw, [{
         method: 'isSaleOn',
         args: ['SomeEvent'],
         account: accounts[0],
@@ -379,15 +379,15 @@ describe('RobinosGovernanceTokenLuckyDraw', () => {
             Promise.resolve(
               // Transfer each token to the lucky draw contract address
               RobinosGovernanceToken.methods
-                .safeTransferFrom(
-                  account,
-                  RobinosGovernanceTokenLuckyDraw.options.address,
-                  id
-                )
-                .send({
-                  from: accounts[0],
-                  gas: '1000000000',
-                })
+              .safeTransferFrom(
+                account,
+                RobinosGovernanceTokenLuckyDraw.options.address,
+                id
+              )
+              .send({
+                from: accounts[0],
+                gas: '1000000000',
+              })
             )
           )
         );
@@ -395,10 +395,10 @@ describe('RobinosGovernanceTokenLuckyDraw', () => {
       .then(async () => {
         const numOfAvailableTokens =
           await RobinosGovernanceTokenLuckyDraw.methods
-            .numOfAvailableTokens()
-            .call({
-              from: accounts[0],
-            });
+          .numOfAvailableTokens()
+          .call({
+            from: accounts[0],
+          });
         // We read the total number of tokens in the contract and compare the amount
         assert.strictEqual(parseInt(numOfAvailableTokens), tokenIds.length);
       });
@@ -433,69 +433,69 @@ describe('RobinosGovernanceTokenLuckyDraw', () => {
           accountsSliced.map((account) =>
             Promise.resolve(
               TetherToken.methods
-                // We send a random number of tokens to a number of accounts
-                .transfer(account.address, account.stakeAmount)
-                .send({
-                  from: accounts[0],
-                })
+              // We send a random number of tokens to a number of accounts
+              .transfer(account.address, account.stakeAmount)
+              .send({
+                from: accounts[0],
+              })
             )
           )
         )
       )
       .then(() =>
         RobinosGovernanceToken.methods
-          // We mint the tokens in one batch
-          .mintBatch(accounts[0], tokenIds, batchName)
-          .send({
-            from: accounts[0],
-            gas: '1000000000',
-          })
-          .then(() =>
-            Promise.all(
-              tokenIds.map((id) =>
-                Promise.resolve(
-                  // Transfer each token to the lucky draw contract address
-                  RobinosGovernanceToken.methods
-                    .safeTransferFrom(
-                      accounts[0],
-                      RobinosGovernanceTokenLuckyDraw.options.address,
-                      id
-                    )
-                    .send({
-                      from: accounts[0],
-                      gas: '1000000000',
-                    })
+        // We mint the tokens in one batch
+        .mintBatch(accounts[0], tokenIds, batchName)
+        .send({
+          from: accounts[0],
+          gas: '1000000000',
+        })
+        .then(() =>
+          Promise.all(
+            tokenIds.map((id) =>
+              Promise.resolve(
+                // Transfer each token to the lucky draw contract address
+                RobinosGovernanceToken.methods
+                .safeTransferFrom(
+                  accounts[0],
+                  RobinosGovernanceTokenLuckyDraw.options.address,
+                  id
                 )
+                .send({
+                  from: accounts[0],
+                  gas: '1000000000',
+                })
               )
-            ).then(async () => {
-              const availableTokens =
-                await RobinosGovernanceTokenLuckyDraw.methods
-                  // Since we transfered the whole batch to the lucky draw contract
-                  // we want to check if the number of available tokens for reward
-                  // matches the amount of minted tokens
-                  .numOfAvailableTokens()
-                  .call({
-                    from: accounts[0],
-                    gas: '10000000000',
-                  });
-              assert.strictEqual(parseInt(availableTokens), tokenIds.length);
-            })
-          )
+            )
+          ).then(async () => {
+            const availableTokens =
+              await RobinosGovernanceTokenLuckyDraw.methods
+              // Since we transfered the whole batch to the lucky draw contract
+              // we want to check if the number of available tokens for reward
+              // matches the amount of minted tokens
+              .numOfAvailableTokens()
+              .call({
+                from: accounts[0],
+                gas: '10000000000',
+              });
+            assert.strictEqual(parseInt(availableTokens), tokenIds.length);
+          })
+        )
       )
       .then(() =>
         Promise.all(
           accountsSliced.map((account) =>
             Promise.resolve(
               TetherToken.methods
-                // Each account must approve their standard tokens to be transfered by the lucky draw contract
-                .approve(
-                  RobinosGovernanceTokenLuckyDraw.options.address,
-                  account.stakeAmount
-                )
-                .send({
-                  from: account.address,
-                  gas: '10000000000',
-                })
+              // Each account must approve their standard tokens to be transfered by the lucky draw contract
+              .approve(
+                RobinosGovernanceTokenLuckyDraw.options.address,
+                account.stakeAmount
+              )
+              .send({
+                from: account.address,
+                gas: '10000000000',
+              })
             )
           )
         )
@@ -505,12 +505,12 @@ describe('RobinosGovernanceTokenLuckyDraw', () => {
           accountsSliced.map((account) =>
             Promise.resolve(
               RobinosGovernanceTokenLuckyDraw.methods
-                // Each user will call the stake function on the lucky draw contract
-                .stake(eventName, account.stakeAmount)
-                .send({
-                  from: account.address,
-                  gas: '10000000000',
-                })
+              // Each user will call the stake function on the lucky draw contract
+              .stake(eventName, account.stakeAmount)
+              .send({
+                from: account.address,
+                gas: '10000000000',
+              })
             )
           )
         )
@@ -530,12 +530,12 @@ describe('RobinosGovernanceTokenLuckyDraw', () => {
       })
       .then(() =>
         RobinosGovernanceTokenLuckyDraw.methods
-          // Each user will call the stake function on the lucky draw contract
-          .selectWinners(eventName)
-          .send({
-            from: accounts[0],
-            gas: '10000000000',
-          })
+        // Each user will call the stake function on the lucky draw contract
+        .selectWinners(eventName)
+        .send({
+          from: accounts[0],
+          gas: '10000000000',
+        })
       )
       .then(async () => {
         // For now we just get the amount of ms from stakeDuration and multiply by 1.5 just to be safe
@@ -544,53 +544,53 @@ describe('RobinosGovernanceTokenLuckyDraw', () => {
 
         setTimeout(
           () =>
+          Promise.all(
+            accountsSliced.map((account) =>
+              Promise.resolve(
+                RobinosGovernanceTokenLuckyDraw.methods
+                // After the stake duration has passed, the users can all safely unstake their standard tokens
+                .unstake(eventName)
+                .send({
+                  from: account.address,
+                  gas: '10000000000',
+                })
+              )
+            )
+          ).then(() =>
             Promise.all(
               accountsSliced.map((account) =>
                 Promise.resolve(
-                  RobinosGovernanceTokenLuckyDraw.methods
-                    // After the stake duration has passed, the users can all safely unstake their standard tokens
-                    .unstake(eventName)
-                    .send({
-                      from: account.address,
-                      gas: '10000000000',
-                    })
+                  RobinosGovernanceToken.methods
+                  // We will check the balance of NFTs of each user after unstaking.
+                  // We expect all NFTs have been already distributed as rewards and
+                  // check if the total balance is equal to the amount of minted NFTs
+                  .balanceOf(account.address)
+                  .call({
+                    from: accounts[0],
+                    gas: '10000000000',
+                  })
                 )
               )
-            ).then(() =>
-              Promise.all(
-                accountsSliced.map((account) =>
-                  Promise.resolve(
-                    RobinosGovernanceToken.methods
-                      // We will check the balance of NFTs of each user after unstaking.
-                      // We expect all NFTs have been already distributed as rewards and
-                      // check if the total balance is equal to the amount of minted NFTs
-                      .balanceOf(account.address)
-                      .call({
-                        from: accounts[0],
-                        gas: '10000000000',
-                      })
-                  )
-                )
-              ).then(async (values) => {
-                const totalTokensWon = values.reduce(
-                  (total, value) => total + parseInt(value),
-                  0
-                );
-                const availableTokens =
-                  await RobinosGovernanceTokenLuckyDraw.methods
-                    .numOfAvailableTokens()
-                    .call({
-                      from: accounts[0],
-                      gas: '10000000000',
-                    });
+            ).then(async (values) => {
+              const totalTokensWon = values.reduce(
+                (total, value) => total + parseInt(value),
+                0
+              );
+              const availableTokens =
+                await RobinosGovernanceTokenLuckyDraw.methods
+                .numOfAvailableTokens()
+                .call({
+                  from: accounts[0],
+                  gas: '10000000000',
+                });
 
-                // We expect all the tokens to be in the totalTokensWon counter and the number
-                // of available tokens to be 0, since they were all marked as sold
-                assert.strictEqual(totalTokensWon, tokenIds.length);
-                assert.strictEqual(parseInt(availableTokens), 0);
-                done();
-              })
-            ),
+              // We expect all the tokens to be in the totalTokensWon counter and the number
+              // of available tokens to be 0, since they were all marked as sold
+              assert.strictEqual(totalTokensWon, tokenIds.length);
+              assert.strictEqual(parseInt(availableTokens), 0);
+              done();
+            })
+          ),
           waitDuration
         );
       });
@@ -624,84 +624,84 @@ describe('RobinosGovernanceTokenNFTStake', () => {
     const eventName = 'tokenSale';
 
     Promise.all(
-      tokensForStakingPerUser.map((tokenIds, index) =>
-        Promise.resolve(
-          RobinosGovernanceToken.methods
+        tokensForStakingPerUser.map((tokenIds, index) =>
+          Promise.resolve(
+            RobinosGovernanceToken.methods
             // First the owner will mint a batch for each of the prepared users and directly deposit them to their address
             .mintBatch(accounts[index], tokenIds, batchName)
             .send({
               from: accounts[0],
               gas: '1000000000',
             })
+          )
         )
       )
-    )
       .then(() =>
         DBToken.methods
-          // The owner then approves their ERC20 tokens for the NFT stake contract to be able to deposit them later
-          .approve(RobinosGovernanceTokenNFTStake.options.address, totalReward)
-          .send({
-            from: accounts[0],
-            gas: '1000000000',
-          })
+        // The owner then approves their ERC20 tokens for the NFT stake contract to be able to deposit them later
+        .approve(RobinosGovernanceTokenNFTStake.options.address, totalReward)
+        .send({
+          from: accounts[0],
+          gas: '1000000000',
+        })
       )
       .then(() =>
         RobinosGovernanceTokenNFTStake.methods
-          // The owner initiates a sale on the NFT stake contract
-          .setSaleStartEnd(eventName, 0, secondsInTheFuture(120))
-          .send({
-            from: accounts[0],
-            gas: '1000000000',
-          })
+        // The owner initiates a sale on the NFT stake contract
+        .setSaleStartEnd(eventName, 0, secondsInTheFuture(120))
+        .send({
+          from: accounts[0],
+          gas: '1000000000',
+        })
       )
       .then(() =>
         RobinosGovernanceTokenNFTStake.methods
-          // The owner deposits the pre-approved ERC20 tokens which will serve as a reward for staking users
-          .depositEventReward(eventName, totalReward)
-          .send({
-            from: accounts[0],
-            gas: '1000000000',
-          })
+        // The owner deposits the pre-approved ERC20 tokens which will serve as a reward for staking users
+        .depositEventReward(eventName, totalReward)
+        .send({
+          from: accounts[0],
+          gas: '1000000000',
+        })
       )
       .then(() =>
         Promise.all(
           tokensForStakingPerUser
-            .map((tokenIds, userIndex) =>
-              tokenIds.map((tokenId) =>
-                Promise.resolve(
-                  RobinosGovernanceToken.methods
-                    // Each of the users must individually approve their ERC721 tokens for transfer to the staking contract
-                    .approve(
-                      RobinosGovernanceTokenNFTStake.options.address,
-                      tokenId
-                    )
-                    .send({
-                      from: accounts[userIndex],
-                      gas: '1000000000',
-                    })
+          .map((tokenIds, userIndex) =>
+            tokenIds.map((tokenId) =>
+              Promise.resolve(
+                RobinosGovernanceToken.methods
+                // Each of the users must individually approve their ERC721 tokens for transfer to the staking contract
+                .approve(
+                  RobinosGovernanceTokenNFTStake.options.address,
+                  tokenId
                 )
+                .send({
+                  from: accounts[userIndex],
+                  gas: '1000000000',
+                })
               )
             )
-            .flat()
+          )
+          .flat()
         )
       )
       .then(() =>
         Promise.all(
           tokensForStakingPerUser
-            .map((tokenIds, userIndex) =>
-              tokenIds.map((tokenId) =>
-                Promise.resolve(
-                  RobinosGovernanceTokenNFTStake.methods
-                    // Each of the users stakes their tokens individually
-                    .stake(eventName, tokenId)
-                    .send({
-                      from: accounts[userIndex],
-                      gas: '1000000000',
-                    })
-                )
+          .map((tokenIds, userIndex) =>
+            tokenIds.map((tokenId) =>
+              Promise.resolve(
+                RobinosGovernanceTokenNFTStake.methods
+                // Each of the users stakes their tokens individually
+                .stake(eventName, tokenId)
+                .send({
+                  from: accounts[userIndex],
+                  gas: '1000000000',
+                })
               )
             )
-            .flat()
+          )
+          .flat()
         )
       )
       .then(async () => {
@@ -738,7 +738,7 @@ describe('RobinosGovernanceTokenNFTStake', () => {
                 });
               const expectedTokens = tokensForStakingPerUser.reduce(
                 (expected, current, index) =>
-                  index !== userToUnstake ? expected.concat(current) : expected,
+                index !== userToUnstake ? expected.concat(current) : expected,
                 []
               );
               // We then assert that all the tokens are still staked on the stake contract except the
