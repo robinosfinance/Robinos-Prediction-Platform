@@ -1451,7 +1451,7 @@ contract RobinosGovernanceTokenNFTStake is Ownable, ERC721Receiver, SaleFactory,
     function getUserStakedSecs(string memory eventCode, address user) public view returns (uint256) {
         UserStaked storage userStake = getUserStakeData(eventCode, user);
         (, , uint256 saleEnd) = isSaleOn(eventCode);
-        uint256 unstakedAt = userStake.unstakedAt;
+        uint256 unstakedAt = time();
         uint256 stakeEnded = saleEnd < unstakedAt ? saleEnd : unstakedAt;
         return stakeEnded - userStake.stakedAt;
     }
@@ -1528,7 +1528,6 @@ contract RobinosGovernanceTokenNFTStake is Ownable, ERC721Receiver, SaleFactory,
 
     function calculateRewards(string memory eventCode, address user) private view returns (uint256) {
         UserStaked storage userStake = getUserStakeData(eventCode, user);
-        require(userStake.unstakedAt != 0, "RobinosGovernanceTokenNFTStake: User has not unstaked");
         uint256 multiplier = calculateMultiplier(userStake.stakedAt);
         uint256 userStakedForSecs = getUserStakedSecs(eventCode, user);
         uint256 tokensStaked = userStake.tokenIds.length;
@@ -1564,9 +1563,9 @@ contract RobinosGovernanceTokenNFTStake is Ownable, ERC721Receiver, SaleFactory,
         userStakedLongEnough(eventCode, _msgSender())
         userNotUnstaked(eventCode, _msgSender())
     {
+        uint256 reward = calculateRewards(eventCode, _msgSender());
         transferUserStakedTokens(eventCode, _msgSender());
         removeUserStakedTokenRecords(eventCode, _msgSender());
-        uint256 reward = calculateRewards(eventCode, _msgSender());
         rewardToken.transfer(_msgSender(), reward);
     }
 }
