@@ -25,7 +25,7 @@ let accounts, SideBetV2, TetherToken;
 const totalSupply = 100000000;
 const sides = ['Machester', 'Liverpool'];
 const eventCode = 'Man v. Liv';
-const saleDuration = 4;
+const saleDuration = 8;
 
 beforeEach(async () => {
   accounts = await web3.eth.getAccounts();
@@ -46,7 +46,14 @@ beforeEach(async () => {
   SideBetV2 = await new web3.eth.Contract(sideBetContract.abi)
     .deploy({
       data: sideBetContract.evm.bytecode.object,
-      arguments: [TetherToken.options.address, sides[0], sides[1]],
+      arguments: [
+        TetherToken.options.address,
+        sides[0],
+        sides[1],
+        eventCode,
+        0,
+        secondsInTheFuture(saleDuration),
+      ],
     })
     .send({
       from: accounts[0],
@@ -59,7 +66,7 @@ describe('SideBetV2', () => {
     assert.ok(SideBetV2.options.address);
   });
 
-  it('allows users to deposit', async () => {
+  it('allows users to deposit, owner to select winning side and distribute rewards', () => {
     const transferAmount = 10000;
     const numOfUsersToDeposit = 7;
     const sideToDepositFor = newArray(numOfUsersToDeposit, () => zeroOrOne());
@@ -73,13 +80,13 @@ describe('SideBetV2', () => {
     const rewardPerUser = Math.floor(totalReward / usersVotedForWinner);
 
     return useMethodsOn(TetherToken, [
-			// We first transfer some amount of USDT to each user participating
+      // We first transfer some amount of USDT to each user participating
       ...newArray(numOfUsersToDeposit, (i) => ({
         method: 'transfer',
         args: [accounts[i + 1], transferAmount],
         account: accounts[0],
       })),
-			// Each user must approve the USDT tokens they want to deposit towards the SideBet contract
+      // Each user must approve the USDT tokens they want to deposit towards the SideBet contract
       ...newArray(numOfUsersToDeposit, (i) => ({
         method: 'approve',
         args: [SideBetV2.options.address, transferAmount],
@@ -88,25 +95,19 @@ describe('SideBetV2', () => {
     ])
       .then(() =>
         useMethodsOn(SideBetV2, [
-          {
-						// The owner will start the sale
-            method: 'setSaleStartEnd',
-            args: [eventCode, 0, secondsInTheFuture(saleDuration)],
-            account: accounts[0],
-          },
-					// Each user will deposit their USDT and choose which side they are betting on
+          // Each user will deposit their USDT and choose which side they are betting on
           ...newArray(numOfUsersToDeposit, (i) => ({
             method: 'deposit',
-            args: [eventCode, sideToDepositFor[i], transferAmount],
+            args: [sideToDepositFor[i], transferAmount],
             account: accounts[i + 1],
           })),
           {
             method: 'getEventDepositData',
-            args: [eventCode],
+            args: [],
             account: accounts[0],
             onReturn: (data) => {
-							// We check that the total amount deposited for this event 
-							// is equal to the expected amount
+              // We check that the total amount deposited for this event
+              // is equal to the expected amount
               const totalDeposited = parseInt(data[0]) + parseInt(data[1]);
               const expectedDeposit = transferAmount * numOfUsersToDeposit;
               assert.strictEqual(totalDeposited, expectedDeposit);
@@ -120,16 +121,16 @@ describe('SideBetV2', () => {
           setTimeout(() => {
             useMethodsOn(SideBetV2, [
               {
-								// After the sale ends, the owner must select the winning side
+                // After the sale ends, the owner must select the winning side
                 method: 'selectWinningSide',
-                args: [eventCode, winningSide],
+                args: [winningSide],
                 account: accounts[0],
               },
-							// Only after the owner has selected the winning side, each user can
-							// withdraw the funds they deposited for their bet
+              // Only after the owner has selected the winning side, each user can
+              // withdraw the funds they deposited for their bet
               ...newArray(numOfUsersToDeposit, (i) => ({
                 method: 'withdraw',
-                args: [eventCode],
+                args: [],
                 account: accounts[i + 1],
               })),
             ]).then(() =>
@@ -140,7 +141,7 @@ describe('SideBetV2', () => {
                   args: [accounts[i + 1]],
                   account: accounts[0],
                   onReturn: (amount) => {
-										// We check if each user has received their expected reward
+                    // We check if each user has received their expected reward
                     const expectedReward =
                       sideToDepositFor[i] === winningSide ? rewardPerUser : 0;
                     assert.strictEqual(parseInt(amount), expectedReward);
