@@ -31,8 +31,7 @@ const useMethodsOn = (contractInstance, methods) => {
       if (!contractInstance.methods[method])
         throw new Error(`Unknown method called ${method}`);
 
-      const requestInstance = contractInstance.methods[method](...args)
-        [onReturn ? 'call' : 'send']({
+      const requestInstance = contractInstance.methods[method](...args)[onReturn ? 'call' : 'send']({
           from: account,
           gas: '1000000000',
         })
@@ -45,8 +44,7 @@ const useMethodsOn = (contractInstance, methods) => {
           catchCallback(Object.values(err.results)[0].reason);
         });
 
-      const returnValue = await requestInstance;
-      onReturn && onReturn(returnValue, previousReturnValue);
+      onReturn && onReturn(await requestInstance, await previousReturnValue);
       if (methods[methodIndex + 1])
         return recursiveFunction(methodIndex + 1, requestInstance);
       else return requestInstance;
@@ -54,6 +52,19 @@ const useMethodsOn = (contractInstance, methods) => {
 
   return recursiveFunction(0, Promise.resolve());
 };
+
+const deploy = ({
+    abi,
+    evm
+  }, args, web3, account) => new web3.eth.Contract(abi)
+  .deploy({
+    data: evm.bytecode.object,
+    arguments: args,
+  })
+  .send({
+    from: account,
+    gas: '1000000000',
+  });
 
 const zeroOrOne = () => randomInt(0, 2) - 1;
 
@@ -77,4 +88,5 @@ module.exports = {
   useMethodsOn,
   zeroOrOne,
   newArray,
+  deploy,
 };

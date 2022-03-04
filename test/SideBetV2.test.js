@@ -31,9 +31,9 @@ const ownerPercent = 5;
 beforeEach(async () => {
   accounts = await web3.eth.getAccounts();
 
-  /**
-   *  @dev Local USDT instance. Address accounts[0] is the owner of the contract and is immediately minted totalSupply amount of tokens on initialization
-   */
+  // Local USDT instance. Address accounts[0] is the 
+  // owner of the contract and is immediately minted totalSupply
+  // amount of tokens on initialization
   TetherToken = await new web3.eth.Contract(tether.abi)
     .deploy({
       data: tether.bytecode,
@@ -84,13 +84,15 @@ describe('SideBetV2', () => {
     let ownerBalance;
 
     return useMethodsOn(TetherToken, [
-        // We first transfer some amount of USDT to each user participating
+        // We first transfer some amount of USDT to 
+        // each user participating
         ...newArray(numOfUsersToDeposit, (i) => ({
           method: 'transfer',
           args: [accounts[i + 1], transferAmount],
           account: accounts[0],
         })),
-        // Each user must approve the USDT tokens they want to deposit towards the SideBet contract
+        // Each user must approve the USDT tokens they want 
+        // to deposit towards the SideBet contract
         ...newArray(numOfUsersToDeposit, (i) => ({
           method: 'approve',
           args: [SideBetV2.options.address, transferAmount],
@@ -107,7 +109,8 @@ describe('SideBetV2', () => {
       ])
       .then(() =>
         useMethodsOn(SideBetV2, [
-          // Each user will deposit their USDT and choose which side they are betting on
+          // Each user will deposit their USDT and choose 
+          // which side they are betting on
           ...newArray(numOfUsersToDeposit, (i) => ({
             method: 'deposit',
             args: [sideToDepositFor[i], transferAmount],
@@ -132,7 +135,8 @@ describe('SideBetV2', () => {
         return new Promise((resolve) => {
           setTimeout(() => {
             useMethodsOn(SideBetV2, [{
-                // After the sale ends, the owner must select the winning side
+                // After the sale ends, the owner 
+                // must select the winning side
                 method: 'selectWinningSide',
                 args: [winningSide],
                 account: accounts[0],
