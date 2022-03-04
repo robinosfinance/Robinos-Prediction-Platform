@@ -38,7 +38,9 @@ const useMethodsOn = (contractInstance, methods) => {
         })
         .catch((err) => {
           if (!catchCallback) {
-            throw new Error(err);
+            throw new Error(
+              `Calling method ${method}${formatArgs(args)} ${err}`
+            );
           }
           catchCallback(Object.values(err.results)[0].reason);
         });
@@ -60,6 +62,12 @@ const newArray = (length, callback) => {
   for (let i = 0; i < length; i++) array.push(callback(i));
   return array;
 };
+
+const formatArgs = (args) =>
+  `(${args.reduce(
+    (string, arg, i) => `${string}${i === 0 ? '' : ', '}${arg}`,
+    ''
+  )})`;
 
 module.exports = {
   secondsInTheFuture,
