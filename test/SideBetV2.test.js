@@ -26,6 +26,7 @@ const totalSupply = 100000000;
 const sides = ['Machester', 'Liverpool'];
 const eventCode = 'Man v. Liv';
 const saleDuration = 8;
+const ownerPercent = 5;
 
 beforeEach(async () => {
   accounts = await web3.eth.getAccounts();
@@ -53,6 +54,7 @@ beforeEach(async () => {
         eventCode,
         0,
         secondsInTheFuture(saleDuration),
+        ownerPercent,
       ],
     })
     .send({
@@ -74,25 +76,35 @@ describe('SideBetV2', () => {
     const totalReward = transferAmount * numOfUsersToDeposit;
     const usersVotedForWinner = sideToDepositFor.reduce(
       (totalReward, side) =>
-        side === winningSide ? totalReward + 1 : totalReward,
+      side === winningSide ? totalReward + 1 : totalReward,
       0
     );
-    const rewardPerUser = Math.floor(totalReward / usersVotedForWinner);
+    const rewardPerUser = Math.floor((totalReward * (1 - (ownerPercent / 100))) / usersVotedForWinner);
+    const expectedOwnerCut = transferAmount * numOfUsersToDeposit * ownerPercent / 100;
+    let ownerBalance;
 
     return useMethodsOn(TetherToken, [
-      // We first transfer some amount of USDT to each user participating
-      ...newArray(numOfUsersToDeposit, (i) => ({
-        method: 'transfer',
-        args: [accounts[i + 1], transferAmount],
-        account: accounts[0],
-      })),
-      // Each user must approve the USDT tokens they want to deposit towards the SideBet contract
-      ...newArray(numOfUsersToDeposit, (i) => ({
-        method: 'approve',
-        args: [SideBetV2.options.address, transferAmount],
-        account: accounts[i + 1],
-      })),
-    ])
+        // We first transfer some amount of USDT to each user participating
+        ...newArray(numOfUsersToDeposit, (i) => ({
+          method: 'transfer',
+          args: [accounts[i + 1], transferAmount],
+          account: accounts[0],
+        })),
+        // Each user must approve the USDT tokens they want to deposit towards the SideBet contract
+        ...newArray(numOfUsersToDeposit, (i) => ({
+          method: 'approve',
+          args: [SideBetV2.options.address, transferAmount],
+          account: accounts[i + 1],
+        })),
+        {
+          method: 'balanceOf',
+          args: [accounts[0]],
+          account: accounts[0],
+          onReturn: (amount) => {
+            ownerBalance = parseInt(amount);
+          },
+        },
+      ])
       .then(() =>
         useMethodsOn(SideBetV2, [
           // Each user will deposit their USDT and choose which side they are betting on
@@ -119,8 +131,7 @@ describe('SideBetV2', () => {
         const waitDuration = saleDuration * 1000;
         return new Promise((resolve) => {
           setTimeout(() => {
-            useMethodsOn(SideBetV2, [
-              {
+            useMethodsOn(SideBetV2, [{
                 // After the sale ends, the owner must select the winning side
                 method: 'selectWinningSide',
                 args: [winningSide],
@@ -136,18 +147,26 @@ describe('SideBetV2', () => {
             ]).then(() =>
               useMethodsOn(
                 TetherToken,
-                newArray(numOfUsersToDeposit, (i) => ({
-                  method: 'balanceOf',
-                  args: [accounts[i + 1]],
-                  account: accounts[0],
-                  onReturn: (amount) => {
-                    // We check if each user has received their expected reward
-                    const expectedReward =
-                      sideToDepositFor[i] === winningSide ? rewardPerUser : 0;
-                    assert.strictEqual(parseInt(amount), expectedReward);
+                [{
+                    method: 'balanceOf',
+                    args: [accounts[0]],
+                    account: accounts[0],
+                    onReturn: (amount) => {
+                      assert.strictEqual(parseInt(amount), ownerBalance + expectedOwnerCut);
+                    },
                   },
-                }))
-              ).then(() => {
+                  ...newArray(numOfUsersToDeposit, (i) => ({
+                    method: 'balanceOf',
+                    args: [accounts[i + 1]],
+                    account: accounts[0],
+                    onReturn: (amount) => {
+                      // We check if each user has received their expected reward
+                      const expectedReward =
+                        sideToDepositFor[i] === winningSide ? rewardPerUser : 0;
+                      assert.strictEqual(parseInt(amount), expectedReward);
+                    },
+                  }))
+                ]).then(() => {
                 resolve();
               })
             );

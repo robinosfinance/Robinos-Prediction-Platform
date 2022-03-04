@@ -309,6 +309,8 @@ abstract contract SaleFactory is Ownable {
 contract SideBetV2 is SaleFactory {
     StandardToken standardToken;
     string private eventCode;
+    uint256 private ownerCutPercent;
+    uint256 constant maxOwnerCutPercent = 80;
 
     struct SideDepositData {
         uint256 totalDeposit;
@@ -348,13 +350,16 @@ contract SideBetV2 is SaleFactory {
         string memory _sideB,
         string memory _eventCode,
         uint256 startTime,
-        uint256 endTime
+        uint256 endTime,
+        uint256 _ownerCutPercent
     ) {
+        require(_ownerCutPercent <= maxOwnerCutPercent, "SideBetV2: owner cut percentage too high");
         standardToken = _standardToken;
         sideA = _sideA;
         sideB = _sideB;
         eventCode = _eventCode;
         setSaleStartEnd(eventCode, startTime, endTime);
+        ownerCutPercent = _ownerCutPercent;
     }
 
     modifier eventNotFinished() {
@@ -436,6 +441,11 @@ contract SideBetV2 is SaleFactory {
         totalDeposited[hashStr(eventCode)] += amount;
     }
 
+    function calculateOwnerCut() public view returns (uint256) {
+        uint256 _totalDeposit = totalDeposited[hashStr(eventCode)];
+        return (_totalDeposit * ownerCutPercent) / 100;
+    }
+
     /**
      * Allows users to check how much has been deposited towards each side in the event
      */
@@ -453,8 +463,12 @@ contract SideBetV2 is SaleFactory {
     function selectWinningSide(Side side) public onlyOwner outsideOfSale(eventCode) eventNotFinished {
         EventResult storage _eventResults = eventResults[hashStr(eventCode)];
         _eventResults.eventFinished = true;
-        if (side == Side.A) _eventResults.winningSide = Side.A;
-        else _eventResults.winningSide = Side.B;
+        _eventResults.winningSide = side;
+        uint256 ownerCut = calculateOwnerCut();
+        unchecked {
+            totalDeposited[hashStr(eventCode)] -= ownerCut;
+        }
+        standardToken.transfer(owner(), ownerCut);
     }
 
     /**
