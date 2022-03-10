@@ -1,3 +1,7 @@
+const {
+  formatArgs
+} = require("./debug");
+
 const secondsInTheFuture = (seconds) => Math.floor(Date.now() / 1000) + seconds;
 
 const randomInt = (min, max) => {
@@ -74,34 +78,6 @@ const newArray = (length, callback) => {
   return array;
 };
 
-const formatArgs = (args) =>
-  `(${args.reduce(
-    (string, arg, i) => `${string}${i === 0 ? '' : ', '}${arg}`,
-    ''
-  )})`;
-
-const printLogs = async (contractInstance) => {
-  const getLogs = async (contractInstance) => {
-    return (await contractInstance.getPastEvents('allEvents')).map(({
-      event,
-      returnValues
-    }) => {
-      const log = {
-        event
-      };
-      Object.entries(returnValues).forEach(([key, value]) => {
-        if (/^\d*$/.test(key)) return;
-        log[key] = value;
-      });
-      return log;
-    }).filter(log => ({
-      message
-    }) => !!message && /^Debugger: /.test(message));
-  };
-  // eslint-disable-next-line no-console
-  console.log(await getLogs(contractInstance));
-};
-
 
 module.exports = {
   secondsInTheFuture,
@@ -112,5 +88,4 @@ module.exports = {
   zeroOrOne,
   newArray,
   deploy,
-  printLogs
 };

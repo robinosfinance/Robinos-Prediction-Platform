@@ -15,8 +15,7 @@ const {
   useMethodsOn,
   deploy,
   newArray,
-  getLogs,
-} = require('../helper');
+} = require('../utils/helper');
 
 const tokenContract =
   contracts['RobinosGovernanceToken.sol'].RobinosGovernanceToken;
@@ -783,10 +782,7 @@ describe('RobinosGovernanceToken tests', () => {
           method: 'getUsersSubscribed',
           args: [eventCode],
           account: accounts[0],
-          onReturn: async (usersSubscribed) => {
-            // console.log(usersSubscribed);
-            console.log(await getLogs(RobinosGovernanceTokenNFTSubscription));
-          },
+          onReturn: (usersSubscribed) => {},
         },
       ]);
     });

@@ -18,7 +18,7 @@ const {
   secondsInTheFuture,
   zeroOrOne,
   newArray,
-} = require('../helper');
+} = require('../utils/helper');
 
 describe('SideBetV2 tests', () => {
   let accounts, SideBetV2, TetherToken;

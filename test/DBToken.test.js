@@ -14,7 +14,7 @@ const {
   zeroOrOne,
   useMethodsOn,
   newArray,
-} = require('../helper');
+} = require('../utils/helper');
 
 const tokenContract = contracts['DBToken.sol'].DBToken;
 const eventContract = contracts['DBTokenEvent.sol'].DBTokenEvent;

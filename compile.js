@@ -2,6 +2,9 @@ const path = require('path');
 const fs = require('fs');
 const solc = require('solc');
 const files = require('./contracts');
+const {
+  formatCompileErrors
+} = require('./utils/debug');
 
 const input = {
   language: 'Solidity',
@@ -24,7 +27,7 @@ files.forEach((file) => {
   };
 });
 
-// console.log(input);
 const compiledInfo = JSON.parse(solc.compile(JSON.stringify(input)));
-// console.log(compiledInfo);
+if (compiledInfo.errors) console.error(formatCompileErrors(compiledInfo));
+
 module.exports = compiledInfo.contracts;

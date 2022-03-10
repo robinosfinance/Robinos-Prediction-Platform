@@ -15,7 +15,7 @@ const tether = require('../compiled/tether.json');
 const {
   useMethodsOn,
   deploy
-} = require('../helper');
+} = require('../utils/helper');
 
 describe('RBNToken tests', () => {
   let accounts, RBNToken, TetherToken;
