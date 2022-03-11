@@ -1315,7 +1315,7 @@ abstract contract SaleFactory is Ownable, ReadingTime {
     // Modifier allowing a call if and only if there are no active sales at the moment
     modifier noActiveSale() {
         for (uint256 i; i < _allSales.length; i++) {
-            require(saleIsActive(false, _eventSale[_allSales[i]]), "SaleFactory: unavailable while a sale is active");
+            require(!saleIsActive(_eventSale[_allSales[i]]), "SaleFactory: unavailable while a sale is active");
         }
         _;
     }
@@ -1323,7 +1323,7 @@ abstract contract SaleFactory is Ownable, ReadingTime {
     // Modifier allowing a call only if event by eventCode is currently active
     modifier duringSale(string memory eventCode) {
         Sale storage eventSale = getEventSale(eventCode);
-        require(saleIsActive(true, eventSale), "SaleFactory: function can only be called during sale");
+        require(saleIsActive(eventSale), "SaleFactory: function can only be called during sale");
         _;
         clearExpiredSales();
     }
@@ -1332,22 +1332,13 @@ abstract contract SaleFactory is Ownable, ReadingTime {
     modifier outsideOfSale(string memory eventCode) {
         // We are fetching the event directly through a hash, since getEventSale reverts if sale is not initialized
         Sale storage eventSale = _eventSale[hashStr(eventCode)];
-        require(saleIsActive(false, eventSale), "SaleFactory: function can only be called outside of sale");
+        require(!saleIsActive(eventSale), "SaleFactory: function can only be called outside of sale");
 
         _;
     }
 
-    /**
-     * @dev Function returns true if our expectations on status of sale is correct
-     * @param expectActive If we expect the sale to be active set to true
-     * @param sale Sale that is being inspected
-     */
-    function saleIsActive(bool expectActive, Sale memory sale) private view returns (bool) {
-        if (expectActive) {
-            return (time() >= sale.saleStart) && (time() < sale.saleEnd);
-        } else {
-            return (time() < sale.saleStart) || (time() >= sale.saleEnd);
-        }
+    function saleIsActive(Sale memory sale) private view returns (bool) {
+        return (time() >= sale.saleStart) && (time() < sale.saleEnd);
     }
 
     // Returns all active or soon-to-be active sales in an array ordered by sale end time
