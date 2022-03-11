@@ -14,7 +14,7 @@ const tokenContract = contracts['RBNV2Token.sol'].RBNV2Token;
 const tether = require('../compiled/tether.json');
 const {
   useMethodsOn,
-  deploy
+  getDeploy
 } = require('../utils/helper');
 
 describe('RBNToken tests', () => {
@@ -29,14 +29,16 @@ describe('RBNToken tests', () => {
   const tetherInitialSupply = 100000000;
 
   beforeEach(async () => {
+    const deploy = getDeploy(web3);
     accounts = await web3.eth.getAccounts();
+
     RBNToken = await deploy(tokenContract, [
       name,
       symbol,
       initialSupply,
       accounts[0],
       taxPercentage
-    ], web3, accounts[0]);
+    ], accounts[0]);
 
     TetherToken = await new web3.eth.Contract(tether.abi)
       .deploy({

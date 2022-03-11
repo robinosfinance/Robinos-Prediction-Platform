@@ -13,7 +13,6 @@ const {
   randomInt,
   idsFrom,
   useMethodsOn,
-  deploy,
   newArray,
 } = require('../utils/helper');
 
@@ -26,7 +25,6 @@ const nftStakeContract =
   contracts['RobinosGovernanceTokenNFTStake.sol']
   .RobinosGovernanceTokenNFTStake;
 const dbTokenEventContract = contracts['DBTokenEvent.sol'].DBTokenEvent;
-const nftSubscription = contracts['RobinosGovernanceTokenNFTSubscription.sol'].RobinosGovernanceTokenNFTSubscription;
 
 // Local instance of the USDT contract used for testing
 const tether = require('../compiled/tether.json');
@@ -35,7 +33,6 @@ describe('RobinosGovernanceToken tests', () => {
   let RobinosGovernanceToken,
     RobinosGovernanceTokenLuckyDraw,
     RobinosGovernanceTokenNFTStake,
-    RobinosGovernanceTokenNFTSubscription,
     DBToken,
     DBTokenEvent,
     TetherToken,
@@ -142,11 +139,6 @@ describe('RobinosGovernanceToken tests', () => {
         from: accounts[0],
         gas: '1000000000',
       });
-
-    RobinosGovernanceTokenNFTSubscription = await deploy(nftSubscription, [
-      RobinosGovernanceToken.options.address,
-      DBToken.options.address,
-    ], web3, accounts[0]);
   });
 
   describe('RobinosGovernanceToken', () => {
@@ -202,16 +194,10 @@ describe('RobinosGovernanceToken tests', () => {
       const idsPerBatch = 7;
 
       const account = accounts[0];
-      const batches = (() => {
-        const array = [];
-        for (let i = 0; i < totalBatches; i++) {
-          array.push({
-            name: `TestBatch${i + 1}`,
-            tokenIds: idsFrom(i * idsPerBatch + 1, idsPerBatch),
-          });
-        }
-        return array;
-      })();
+      const batches = newArray(totalBatches, i => ({
+        name: `TestBatch${i + 1}`,
+        tokenIds: idsFrom(i * idsPerBatch + 1, idsPerBatch),
+      }));
 
       Promise.all(
           // First we wait until all batches are fully minted
@@ -624,13 +610,7 @@ describe('RobinosGovernanceToken tests', () => {
        *        [11, 12, 13, 14, 15],
        *      ]
        */
-      const tokensForStakingPerUser = (() => {
-        const arr = [];
-        for (let i = 0; i < numOfUsers; i++)
-          arr.push(idsFrom(i * tokensPerUser + 1, tokensPerUser));
-
-        return arr;
-      })();
+      const tokensForStakingPerUser = newArray(numOfUsers, i => (idsFrom(i * tokensPerUser + 1, tokensPerUser)));
       const eventName = 'tokenSale';
 
       Promise.all(
@@ -761,30 +741,6 @@ describe('RobinosGovernanceToken tests', () => {
               });
           }, waitDuration);
         });
-    });
-  });
-
-  describe('RobinosGovernanceTokenNFTSubscription', () => {
-    it('deploys successfully', () => {
-      assert.ok(RobinosGovernanceTokenNFTSubscription.options.address);
-    });
-
-    it('is testing something', () => {
-      const eventCode = 'SomeEvent';
-
-      return useMethodsOn(RobinosGovernanceTokenNFTSubscription, [
-        ...newArray(5, (i) => ({
-          method: 'addUserSubscribed',
-          args: [eventCode, accounts[i]],
-          account: accounts[0],
-        })),
-        {
-          method: 'getUsersSubscribed',
-          args: [eventCode],
-          account: accounts[0],
-          onReturn: (usersSubscribed) => {},
-        },
-      ]);
     });
   });
 });

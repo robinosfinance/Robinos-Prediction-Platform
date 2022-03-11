@@ -14,6 +14,7 @@ const {
   zeroOrOne,
   useMethodsOn,
   newArray,
+  getDeploy,
 } = require('../utils/helper');
 
 const tokenContract = contracts['DBToken.sol'].DBToken;
@@ -56,18 +57,15 @@ describe('DBToken tests', () => {
   const totalSupply = 1 * 10 ** 12;
 
   beforeEach(async () => {
+    const deploy = getDeploy(web3);
     accounts = await web3.eth.getAccounts();
     DBTokens = [];
 
-    DBTokenEvent = await new web3.eth.Contract(eventContract.abi)
-      .deploy({
-        data: eventContract.evm.bytecode.object,
-        arguments: [teamTokenParams.map((params) => params.teamName), eventCode],
-      })
-      .send({
-        from: accounts[0],
-        gas: '1000000000',
-      });
+    DBTokenEvent = await deploy(
+      eventContract,
+      [teamTokenParams.map((params) => params.teamName), eventCode],
+      accounts[0]
+    );
 
     useMethodsOn(
       DBTokenEvent,
@@ -82,25 +80,17 @@ describe('DBToken tests', () => {
 
     // Local USDT instance. Address accounts[0] is the owner of the contract
     // and is immediately minted totalSupply amount of tokens on initialization
-    TetherToken = await new web3.eth.Contract(tether.abi)
-      .deploy({
-        data: tether.bytecode,
-        arguments: [totalSupply, 'Tether', 'USDT', 18],
-      })
-      .send({
-        from: accounts[0],
-        gas: '1000000000',
-      });
+    TetherToken = await deploy(
+      tether,
+      [totalSupply, 'Tether', 'USDT', 18],
+      accounts[0]
+    );
 
-    DBTokenSale = await new web3.eth.Contract(salesContract.abi)
-      .deploy({
-        data: salesContract.evm.bytecode.object,
-        arguments: [TetherToken.options.address, accounts[1]],
-      })
-      .send({
-        from: accounts[0],
-        gas: '1000000000',
-      });
+    DBTokenSale = await deploy(
+      salesContract,
+      [TetherToken.options.address, accounts[1]],
+      accounts[0]
+    );
 
     useMethodsOn(DBTokenSale, [{
       method: 'rate',
@@ -111,29 +101,21 @@ describe('DBToken tests', () => {
       },
     }, ]);
 
-    DBTokenReward = await new web3.eth.Contract(rewardContract.abi)
-      .deploy({
-        data: rewardContract.evm.bytecode.object,
-        arguments: [TetherToken.options.address],
-      })
-      .send({
-        from: accounts[0],
-        gas: '1000000000',
-      });
+    DBTokenReward = await deploy(
+      rewardContract,
+      [TetherToken.options.address],
+      accounts[0]
+    );
 
-    DBTokenSideBet = await new web3.eth.Contract(sideBetContract.abi)
-      .deploy({
-        data: sideBetContract.evm.bytecode.object,
-        arguments: [
-          DBTokens[0].options.address,
-          DBTokens[1].options.address,
-          TetherToken.options.address,
-        ],
-      })
-      .send({
-        from: accounts[0],
-        gas: '1000000000',
-      });
+    DBTokenSideBet = await deploy(
+      sideBetContract,
+      [
+        DBTokens[0].options.address,
+        DBTokens[1].options.address,
+        TetherToken.options.address,
+      ],
+      accounts[0]
+    );
   });
 
 

@@ -57,12 +57,13 @@ const useMethodsOn = (contractInstance, methods) => {
   return recursiveFunction(0, Promise.resolve());
 };
 
-const deploy = ({
+const getDeploy = (web3) => ({
     abi,
-    evm
-  }, args, web3, account) => new web3.eth.Contract(abi)
+    evm,
+    bytecode
+  }, args, account) => new web3.eth.Contract(abi)
   .deploy({
-    data: evm.bytecode.object,
+    data: evm ? evm.bytecode.object : bytecode,
     arguments: args,
   })
   .send({
@@ -87,5 +88,5 @@ module.exports = {
   useMethodsOn,
   zeroOrOne,
   newArray,
-  deploy,
+  getDeploy,
 };
