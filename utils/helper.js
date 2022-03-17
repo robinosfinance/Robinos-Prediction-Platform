@@ -19,7 +19,9 @@ const idsFrom = (fromId, length) => {
 
 const timeInSecs = () => Math.round(Date.now() / 1000);
 
-const useMethodsOn = (contractInstance, methods) => {
+const useMethodsOn = (contractInstance, methodArgs) => {
+  const methods = Array.isArray(methodArgs) ? methodArgs : [methodArgs];
+
   if (methods.length === 0) return Promise.resolve();
 
   const recursiveFunction = (methodIndex, promise) =>
@@ -51,7 +53,7 @@ const useMethodsOn = (contractInstance, methods) => {
       onReturn && onReturn(await requestInstance, await previousReturnValue);
       if (methods[methodIndex + 1])
         return recursiveFunction(methodIndex + 1, requestInstance);
-      else return requestInstance;
+      return requestInstance;
     });
 
   return recursiveFunction(0, Promise.resolve());
