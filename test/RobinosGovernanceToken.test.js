@@ -13,6 +13,7 @@ const {
   randomInt,
   idsFrom,
   useMethodsOn,
+  getDeploy,
   newArray,
 } = require('../utils/helper');
 
@@ -25,6 +26,7 @@ const nftStakeContract =
   contracts['RobinosGovernanceTokenNFTStake.sol']
   .RobinosGovernanceTokenNFTStake;
 const dbTokenEventContract = contracts['DBTokenEvent.sol'].DBTokenEvent;
+const nftSubscription = contracts['RobinosGovernanceTokenNFTSubscription.sol'].RobinosGovernanceTokenNFTSubscription;
 
 // Local instance of the USDT contract used for testing
 const tether = require('../compiled/tether.json');
@@ -33,6 +35,8 @@ describe('RobinosGovernanceToken tests', () => {
   let RobinosGovernanceToken,
     RobinosGovernanceTokenLuckyDraw,
     RobinosGovernanceTokenNFTStake,
+    RobinosGovernanceTokenNFTSubscription,
+    DBTokens,
     DBToken,
     DBTokenEvent,
     TetherToken,
@@ -49,96 +53,61 @@ describe('RobinosGovernanceToken tests', () => {
   const stakeDuration = 2;
   const stakePeriod = 'seconds';
 
-  const dbTokenTeamName = 'Manchester';
+  const dbTokenTeamNames = ['Manchester', 'Liverpool'];
   const dbTokenEventName = 'EPL';
   const dbTokenTotalSupply = 2 * 10 ** 12;
 
   beforeEach(async () => {
+    const deploy = getDeploy(web3);
     accounts = await web3.eth.getAccounts();
 
-    RobinosGovernanceToken = await new web3.eth.Contract(tokenContract.abi)
-      .deploy({
-        data: tokenContract.evm.bytecode.object,
-        arguments: [tokenName, tokenSymbol, baseURI],
-      })
-      .send({
-        from: accounts[0],
-        gas: '1000000000',
-      });
+    RobinosGovernanceToken = await deploy(tokenContract, [tokenName, tokenSymbol, baseURI], accounts[0]);
 
-    /**
-     *  @dev Local USDT instance. Address accounts[0] is the owner of the contract and is immediately minted totalSupply amount of tokens on initialization
-     */
-    TetherToken = await new web3.eth.Contract(tether.abi)
-      .deploy({
-        data: tether.bytecode,
-        arguments: [totalSupply, 'Tether', 'USDT', 18],
-      })
-      .send({
-        from: accounts[0],
-        gas: '1000000000',
-      });
+    // Local USDT instance. Address accounts[0] is the owner of the 
+    // contract and is immediately minted totalSupply amount of tokens on initialization
+    TetherToken = await deploy(tether, [totalSupply, 'Tether', 'USDT', 18], accounts[0]);
 
-    RobinosGovernanceTokenLuckyDraw = await new web3.eth.Contract(
-        luckyDrawContract.abi
-      )
-      .deploy({
-        data: luckyDrawContract.evm.bytecode.object,
-        arguments: [
-          RobinosGovernanceToken.options.address,
-          TetherToken.options.address,
-          stakePeriod,
-          stakeDuration,
-        ],
-      })
-      .send({
-        from: accounts[0],
-        gas: '1000000000',
-      });
+    RobinosGovernanceTokenLuckyDraw = await deploy(luckyDrawContract, [
+      RobinosGovernanceToken.options.address,
+      TetherToken.options.address,
+      stakePeriod,
+      stakeDuration,
+    ], accounts[0]);
 
-    DBTokenEvent = await new web3.eth.Contract(dbTokenEventContract.abi)
-      .deploy({
-        data: dbTokenEventContract.evm.bytecode.object,
-        arguments: [
-          [dbTokenTeamName], dbTokenEventName
-        ],
-      })
-      .send({
-        from: accounts[0],
-        gas: '1000000000',
-      });
+    DBTokenEvent = await deploy(dbTokenEventContract, [
+      dbTokenTeamNames, dbTokenEventName
+    ], accounts[0]);
 
-    const tokenAddress = await DBTokenEvent.methods
-      .getTeamTokenAddress(dbTokenTeamName)
-      .call({
-        from: accounts[0],
-        gas: '10000000000',
-      });
-    DBToken = new web3.eth.Contract(tokenContract.abi, tokenAddress);
+    const mintAndGetContract = async (index) => {
+      const tokenAddress = await useMethodsOn(DBTokenEvent, [{
+        method: 'mintTeamToken',
+        args: [dbTokenTeamNames[index], accounts[0], dbTokenTotalSupply],
+        account: accounts[0],
+      }, {
+        method: 'getTeamTokenAddress',
+        args: [dbTokenTeamNames[index]],
+        account: accounts[0],
+        onReturn: () => {},
+      }]);
 
-    DBTokenEvent.methods
-      .mintTeamToken(dbTokenTeamName, accounts[0], dbTokenTotalSupply)
-      .send({
-        from: accounts[0],
-        gas: '1000000000',
-      });
+      return new web3.eth.Contract(tokenContract.abi, tokenAddress);
+    };
 
-    RobinosGovernanceTokenNFTStake = await new web3.eth.Contract(
-        nftStakeContract.abi
-      )
-      .deploy({
-        data: nftStakeContract.evm.bytecode.object,
-        arguments: [
-          RobinosGovernanceToken.options.address,
-          DBToken.options.address,
-          stakePeriod,
-          stakeDuration,
-        ],
-      })
-      .send({
-        from: accounts[0],
-        gas: '1000000000',
-      });
+    DBTokens = [];
+    DBToken = DBTokens[0] = await mintAndGetContract(0);
+    DBTokens[1] = await mintAndGetContract(1);
+
+    RobinosGovernanceTokenNFTStake = await deploy(nftStakeContract, [
+      RobinosGovernanceToken.options.address,
+      DBToken.options.address,
+      stakePeriod,
+      stakeDuration,
+    ], accounts[0]);
+
+    RobinosGovernanceTokenNFTSubscription = await deploy(nftSubscription, [
+      RobinosGovernanceToken.options.address,
+      DBToken.options.address,
+    ], accounts[0]);
   });
 
   describe('RobinosGovernanceToken', () => {
@@ -741,6 +710,117 @@ describe('RobinosGovernanceToken tests', () => {
               });
           }, waitDuration);
         });
+    });
+  });
+
+  describe('RobinosGovernanceTokenNFTSubscription', () => {
+    it('deploys successfully', () => {
+      assert.ok(RobinosGovernanceTokenNFTSubscription.options.address);
+    });
+
+    it('allows owner to create events to which users can subscribe to rewards', () => {
+      const saleDuration = 3;
+      const numOfUsers = 5;
+      const idsPerBatch = 5;
+      const eventCode = 'SomeEvent';
+      const batches = newArray(numOfUsers, i => ({
+        name: `TestBatch${i + 1}`,
+        tokenIds: idsFrom(i * idsPerBatch + 1, idsPerBatch),
+      }));
+      const reward = 5000;
+
+      return useMethodsOn(RobinosGovernanceToken, batches.map(({
+        name,
+        tokenIds
+      }, i) => ({
+        method: 'mintBatch',
+        args: [accounts[i], tokenIds, name],
+        account: accounts[0],
+      }))).then(() =>
+        useMethodsOn(DBToken, {
+          // Owner approves amount for contract reward
+          method: 'approve',
+          args: [RobinosGovernanceTokenNFTSubscription.options.address, reward],
+          account: accounts[0],
+        })).then(() =>
+        useMethodsOn(RobinosGovernanceTokenNFTSubscription, [{
+            method: 'setSaleStartEnd',
+            args: [eventCode, 0, secondsInTheFuture(saleDuration)],
+            account: accounts[0],
+          },
+          {
+            // Owner deposits the pre-approved amount for reward
+            method: 'depositEventReward',
+            args: [eventCode, reward],
+            account: accounts[0],
+          },
+          ...newArray(numOfUsers, (i) => ({
+            // Each user subscribes after the event has been 
+            // started and the event reward has been deposited
+            method: 'subscribe',
+            args: [eventCode],
+            account: accounts[i],
+          })),
+          {
+            // We check how many tokens are in all the subscribed wallets
+            method: 'tokensInEvent',
+            args: [eventCode],
+            account: accounts[0],
+            onReturn: (tokensInEvent) => {
+              // And compare that we have the calculated total amount of tokens
+              assert.strictEqual(parseInt(tokensInEvent), numOfUsers * idsPerBatch);
+            },
+          }
+        ])).then(() => {
+        const waitDuration = saleDuration * 1000;
+        return new Promise((resolve) => {
+          setTimeout(() => {
+            useMethodsOn(RobinosGovernanceTokenNFTSubscription, newArray(numOfUsers - 1, (i) => ({
+              // After the sale ends, each user can claim their reward
+              method: 'claimReward',
+              args: [eventCode],
+              account: accounts[i],
+            }))).then(() =>
+              useMethodsOn(DBToken, newArray(numOfUsers - 1, (i) => ({
+                method: 'balanceOf',
+                args: [accounts[i]],
+                account: accounts[0],
+                onReturn: (amount) => {
+                  // We check that each user has some reward available in their wallet
+                  assert(parseInt(amount) > 0);
+                },
+              })))
+            ).then(() =>
+              useMethodsOn(RobinosGovernanceTokenNFTSubscription, {
+                // The owner can update the reward token instance on the contract
+                method: 'setRewardToken',
+                args: [DBTokens[1].options.address],
+                account: accounts[0],
+              })
+            ).then(() =>
+              useMethodsOn(RobinosGovernanceTokenNFTSubscription, {
+                // And users can still claim the reward from the old reward
+                // contract instance which was bound to the {eventCode} sale
+                method: 'claimReward',
+                args: [eventCode],
+                account: accounts[numOfUsers - 1],
+              })
+            ).then(() =>
+              useMethodsOn(DBToken, {
+                method: 'balanceOf',
+                args: [accounts[numOfUsers - 1]],
+                account: accounts[0],
+                onReturn: (amount) => {
+                  // We check that the last user has some reward in their pocket
+                  assert(parseInt(amount) > 0);
+                },
+              })
+            ).then(() => {
+              resolve();
+            });
+          }, waitDuration);
+        });
+      });
     });
   });
 });

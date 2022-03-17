@@ -7,6 +7,7 @@ module.exports = [
   'RobinosGovernanceToken.sol',
   'RobinosGovernanceTokenLuckyDraw.sol',
   'RobinosGovernanceTokenNFTStake.sol',
+  'RobinosGovernanceTokenNFTSubscription.sol',
   'RBNV2Token.sol',
   'SideBetV2.sol',
 ];
