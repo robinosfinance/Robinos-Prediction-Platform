@@ -2,6 +2,11 @@ const formatCompileErrors = (compiledInfo) => compiledInfo.errors.map(({
     formattedMessage
 }) => formattedMessage);
 
+/**
+ * Prints all the logs in the contract instance created by the Debugger contract
+ * 
+ * @param contractInstance 
+ */
 const printLogs = async (contractInstance) => {
     const getLogs = async (contractInstance) => {
         return (await contractInstance.getPastEvents('allEvents')).map(({
