@@ -18,6 +18,7 @@ const {
   secondsInTheFuture,
   zeroOrOne,
   newArray,
+  getDeploy,
 } = require('../utils/helper');
 
 describe('SideBetV2 tests', () => {
@@ -30,38 +31,22 @@ describe('SideBetV2 tests', () => {
   const ownerPercent = 5;
 
   beforeEach(async () => {
+    const deploy = getDeploy(web3);
     accounts = await web3.eth.getAccounts();
 
     // Local USDT instance. Address accounts[0] is the 
     // owner of the contract and is immediately minted totalSupply
     // amount of tokens on initialization
-    TetherToken = await new web3.eth.Contract(tether.abi)
-      .deploy({
-        data: tether.bytecode,
-        arguments: [totalSupply, 'Tether', 'USDT', 18],
-      })
-      .send({
-        from: accounts[0],
-        gas: '1000000000',
-      });
-
-    SideBetV2 = await new web3.eth.Contract(sideBetContract.abi)
-      .deploy({
-        data: sideBetContract.evm.bytecode.object,
-        arguments: [
-          TetherToken.options.address,
-          sides[0],
-          sides[1],
-          eventCode,
-          0,
-          secondsInTheFuture(saleDuration),
-          ownerPercent,
-        ],
-      })
-      .send({
-        from: accounts[0],
-        gas: '1000000000',
-      });
+    TetherToken = await deploy(tether, [totalSupply, 'Tether', 'USDT', 18], accounts[0]);
+    SideBetV2 = await deploy(sideBetContract, [
+      TetherToken.options.address,
+      sides[0],
+      sides[1],
+      eventCode,
+      0,
+      secondsInTheFuture(saleDuration),
+      ownerPercent,
+    ], accounts[0]);
   });
 
   describe('SideBetV2', () => {
@@ -119,7 +104,6 @@ describe('SideBetV2 tests', () => {
             })),
             {
               method: 'getEventDepositData',
-              args: [],
               account: accounts[0],
               onReturn: (data) => {
                 // We check that the total amount deposited for this event
@@ -146,7 +130,6 @@ describe('SideBetV2 tests', () => {
                 // withdraw the funds they deposited for their bet
                 ...newArray(numOfUsersToDeposit, (i) => ({
                   method: 'withdraw',
-                  args: [],
                   account: accounts[i + 1],
                 })),
               ]).then(() =>

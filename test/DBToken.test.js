@@ -94,7 +94,6 @@ describe('DBToken tests', () => {
 
     useMethodsOn(DBTokenSale, [{
       method: 'rate',
-      args: [],
       account: accounts[0],
       onReturn: (_rate) => {
         rate = _rate;
@@ -265,7 +264,6 @@ describe('DBToken tests', () => {
         })),
         {
           method: 'getAllSales',
-          args: [],
           account: accounts[0],
           onReturn: (sales) => {
             assert.strictEqual(sales.length, 0);
@@ -426,12 +424,10 @@ describe('DBToken tests', () => {
               // While there are no sales active, the owner can use mintOnePercentToOwner()
               // function to withdraw tokens received
               method: 'mintOnePercentToOwner',
-              args: [],
               account: accounts[0],
             },
             {
               method: 'tokensSold',
-              args: [],
               account: accounts[0],
               onReturn: async (tokensSold) => {
                 tokenBalances = await tokenBalancesEqual(
@@ -563,7 +559,6 @@ describe('DBToken tests', () => {
         DBTokens.map((DBToken, index) =>
           useMethodsOn(DBToken, [{
             method: 'teamName',
-            args: [],
             account: accounts[0],
             onReturn: (tokenTeamName) => {
               const teamName = teamTokenParams[index].teamName;

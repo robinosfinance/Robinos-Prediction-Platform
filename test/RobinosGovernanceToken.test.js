@@ -115,49 +115,53 @@ describe('RobinosGovernanceToken tests', () => {
       assert.ok(RobinosGovernanceToken.options.address); // Check the address
     });
 
-    it('has name and symbol', async () => {
-      const deployedName = await RobinosGovernanceToken.methods.name().call({
-        from: accounts[0],
-        gas: '1000000000',
-      });
-      const deployedSymbol = await RobinosGovernanceToken.methods.symbol().call({
-        from: accounts[0],
-        gas: '1000000000',
-      });
-      assert.strictEqual(deployedName, tokenName);
-      assert.strictEqual(deployedSymbol, tokenSymbol);
-    });
+    it('has name and symbol', () =>
+      useMethodsOn(RobinosGovernanceToken, [{
+          method: 'name',
+          account: accounts[0],
+          onReturn: (name) => {
+            assert.strictEqual(name, tokenName);
+          },
+        },
+        {
+          method: 'symbol',
+          account: accounts[0],
+          onReturn: (symbol) => {
+            assert.strictEqual(symbol, tokenSymbol);
+          },
+        },
+      ]));
 
-    it('mints NFT tokens', async () => {
+    it('mints NFT tokens', () => {
       const account = accounts[0];
       const tokenId = 1;
-      RobinosGovernanceToken.methods
-        .mint(account, tokenId, batchName)
-        .send({
-          from: accounts[0],
-          gas: '1000000000',
-        })
-        .then(async () => {
-          const owner = await RobinosGovernanceToken.methods
-            .ownerOf(tokenId)
-            .call({
-              from: accounts[0],
-              gas: '1000000000',
-            });
 
-          const tokenURI = await RobinosGovernanceToken.methods
-            .tokenURI(tokenId)
-            .call({
-              from: accounts[0],
-              gas: '1000000000',
-            });
-          // We mint one token and check if the owner and tokenURI are correct
-          assert.strictEqual(owner, account);
-          assert.strictEqual(tokenURI, `${baseURI}${tokenId}`);
-        });
+      return useMethodsOn(RobinosGovernanceToken, [{
+          method: 'mint',
+          args: [account, tokenId, batchName],
+          account: accounts[0],
+        },
+        {
+          method: 'ownerOf',
+          args: [tokenId],
+          account: accounts[0],
+          onReturn: (owner) => {
+            // We mint one token and check if the owner and tokenURI are correct
+            assert.strictEqual(owner, account);
+          },
+        },
+        {
+          method: 'tokenURI',
+          args: [tokenId],
+          account: accounts[0],
+          onReturn: (tokenURI) => {
+            assert.strictEqual(tokenURI, `${baseURI}${tokenId}`);
+          },
+        },
+      ]);
     });
 
-    it('mints NFT tokens in batches', async () => {
+    it('mints NFT tokens in batches', () => {
       // Test parameters
       const totalBatches = 5;
       const idsPerBatch = 7;
@@ -168,50 +172,47 @@ describe('RobinosGovernanceToken tests', () => {
         tokenIds: idsFrom(i * idsPerBatch + 1, idsPerBatch),
       }));
 
-      Promise.all(
+      return useMethodsOn(RobinosGovernanceToken, [
+        ...batches.map(({
+          name,
+          tokenIds
+        }) => ({
           // First we wait until all batches are fully minted
-          batches.map((batch) =>
-            Promise.resolve(
-              RobinosGovernanceToken.methods
-              .mintBatch(account, batch.tokenIds, batch.name)
-              .send({
-                from: accounts[0],
-                gas: '1000000000',
-              })
-            )
-          )
-        )
-        // After all promises are finished, we will inspect contract storage
-        .then(async () => {
-          const numOfBatches = await RobinosGovernanceToken.methods
-            .numOfBatches()
-            .call({
-              from: accounts[0],
-              gas: '1000000000',
-            });
-          // We check if the total number of batches is correct
-          assert.strictEqual(parseInt(numOfBatches), batches.length);
-
-          batches.forEach(async (batch) => {
-            const batchData = await RobinosGovernanceToken.methods
-              .getBatchData(batch.name)
-              .call({
-                from: accounts[0],
-                gas: '1000000000',
-              });
-            const [deployedBatchName, deployedNumOfTokens] =
-            Object.values(batchData);
-            // Then for each local batch we check if the storage batch name and num of tokens is correct
-            assert.strictEqual(deployedBatchName, batch.name);
+          method: 'mintBatch',
+          args: [account, tokenIds, name],
+          account: accounts[0],
+        })),
+        {
+          // After all promises are finished, we will inspect contract storage
+          method: 'numOfBatches',
+          account: accounts[0],
+          onReturn: (numOfBatches) => {
+            // We check if the total number of batches is correct
+            assert.strictEqual(parseInt(numOfBatches), batches.length);
+          },
+        },
+        ...batches.map(({
+          name,
+          tokenIds
+        }) => ({
+          method: 'getBatchData',
+          args: [name],
+          account: accounts[0],
+          onReturn: (batchData) => {
+            const [deployedBatchName, deployedNumOfTokens] = Object.values(batchData);
+            // Then for each local batch we check if the 
+            // storage batch name and num of tokens is correct
+            assert.strictEqual(deployedBatchName, name);
             assert.strictEqual(
               parseInt(deployedNumOfTokens),
-              batch.tokenIds.length
+              tokenIds.length
             );
-          });
-        });
+          },
+        }))
+      ]);
     });
 
-    it('allows owner to create polls & whitelisted users to vote', async () => {
+    it('allows owner to create polls & whitelisted users to vote', () => {
       const polls = [{
           question: 'Is George W. Bush a former US president?',
           answers: ['Yes', 'No', 'Maybe', "I don't know"],
@@ -224,64 +225,67 @@ describe('RobinosGovernanceToken tests', () => {
         },
       ];
 
-      polls.forEach(async (poll) => {
-        // As the owner we will create a new poll with given question and array of answers
-        RobinosGovernanceToken.methods
-          .createNewPoll(poll.question, poll.answers)
-          .send({
-            from: accounts[0],
-            gas: '1000000000',
-          })
-          .then(async () => {
-            const pollData = await RobinosGovernanceToken.methods
-              .getPoll(poll.question, poll.answers)
-              .call({
-                from: accounts[0],
-                gas: '1000000000',
-              });
-            // Each created poll should have store the original question, given answers, votes per each answer and total number of votes
-            const [, , answerVotes, totalVotes] = Object.values(pollData);
-            // We expect the initial votes for each answer and total amount of votes to be 0
-            assert(answerVotes.every((answerPoll) => parseInt(answerPoll) === 0));
-            assert.strictEqual(parseInt(totalVotes), 0);
-          });
-      });
+      return useMethodsOn(RobinosGovernanceToken, [
+        ...polls.flatMap(({
+          question,
+          answers
+        }) => [{
+            // As the owner we will create a new poll 
+            // with given question and array of answers
+            method: 'createNewPoll',
+            args: [question, answers],
+            account: accounts[0],
+          },
+          {
+            method: 'getPoll',
+            args: [question, answers],
+            account: accounts[0],
+            onReturn: (pollData) => {
+              // Each created poll should have store the original question, given 
+              // answers, votes per each answer and total number of votes
+              const [, , answerVotes, totalVotes] = Object.values(pollData);
+              // We expect the initial votes for each answer and total amount of votes to be 0
+              assert(answerVotes.every((answerPoll) => parseInt(answerPoll) === 0));
+              assert.strictEqual(parseInt(totalVotes), 0);
+            },
+          },
+        ]),
+        {
+          // For any user to be able to vote, they have 
+          // to be whitelisted by the owner of the contract
+          method: 'whitelistAddress',
+          args: [accounts[1]],
+          account: accounts[0],
+        },
+        ...polls.flatMap(({
+          question,
+          answers,
+          correctAnswerIndex,
+        }) => [{
+            // Now that user has been whitelisted, they can vote by selecting poll question and poll answers
+            // to match the poll signature and they need to select the index of the correct answer which is
+            // within the poll answers array
+            method: 'vote',
+            args: [question, answers, correctAnswerIndex],
+            account: accounts[1],
+          },
+          {
+            method: 'getPoll',
+            args: [question, answers],
+            account: accounts[0],
+            onReturn: (pollData) => {
+              const [, , answerVotes, totalVotes] = Object.values(pollData);
+              // Once the user has voted, we expect the total number of votes and votes for correct answer to be 1
+              assert.strictEqual(
+                parseInt(answerVotes[correctAnswerIndex]),
+                1
+              );
+              assert.strictEqual(parseInt(totalVotes), 1);
+            },
+          },
+        ]),
 
-      RobinosGovernanceToken.methods
-        // For any user to be able to vote, they have to be whitelisted by the owner of the contract
-        .whitelistAddress(accounts[1])
-        .send({
-          from: accounts[0],
-          gas: '1000000000',
-        })
-        .then(() => {
-          polls.forEach((poll) => {
-            RobinosGovernanceToken.methods
-              // Now that user has been whitelisted, they can vote by selecting poll question and poll answers
-              // to match the poll signature and they need to select the index of the correct answer which is
-              // within the poll answers array
-              .vote(poll.question, poll.answers, poll.correctAnswerIndex)
-              .send({
-                from: accounts[1],
-                gas: '1000000000',
-              })
-              .then(async () => {
-                const pollData = await RobinosGovernanceToken.methods
-                  .getPoll(poll.question, poll.answers)
-                  .call({
-                    from: accounts[0],
-                    gas: '1000000000',
-                  });
-                const [, , answerVotes, totalVotes] = Object.values(pollData);
-                // Once the user has voted, we expect the total number of votes and votes for correct answer to be 1
-                assert.strictEqual(
-                  parseInt(answerVotes[poll.correctAnswerIndex]),
-                  1
-                );
-                assert.strictEqual(parseInt(totalVotes), 1);
-              });
-          });
-        });
+      ]);
     });
   });
   describe('TetherToken', () => {
@@ -318,7 +322,6 @@ describe('RobinosGovernanceToken tests', () => {
         })),
         {
           method: 'getAllSales',
-          args: [],
           account: accounts[0],
           onReturn: (sales) => {
             assert.strictEqual(sales.length, 0);
@@ -331,45 +334,35 @@ describe('RobinosGovernanceToken tests', () => {
       const account = accounts[0];
       const tokenIds = idsFrom(1, 5);
 
-      RobinosGovernanceToken.methods
-        // We mint the tokens in one batch
-        .mintBatch(account, tokenIds, batchName)
-        .send({
-          from: accounts[0],
-          gas: '1000000000',
+      return useMethodsOn(RobinosGovernanceToken, [{
+          // We mint the tokens in one batch
+          method: 'mintBatch',
+          args: [account, tokenIds, batchName],
+          account: accounts[0],
+        },
+        ...tokenIds.map(id => ({
+          // Transfer each token to the lucky draw contract address
+          method: 'safeTransferFrom',
+          args: [
+            account,
+            RobinosGovernanceTokenLuckyDraw.options.address,
+            id
+          ],
+          account: accounts[0]
+        })),
+      ]).then(() =>
+        useMethodsOn(RobinosGovernanceTokenLuckyDraw, {
+          method: 'numOfAvailableTokens',
+          account: accounts[0],
+          onReturn: (numOfAvailableTokens) => {
+            // We read the total number of tokens in the contract and compare the amount
+            assert.strictEqual(parseInt(numOfAvailableTokens), tokenIds.length);
+          },
         })
-        .then(() => {
-          return Promise.all(
-            tokenIds.map((id) =>
-              Promise.resolve(
-                // Transfer each token to the lucky draw contract address
-                RobinosGovernanceToken.methods
-                .safeTransferFrom(
-                  account,
-                  RobinosGovernanceTokenLuckyDraw.options.address,
-                  id
-                )
-                .send({
-                  from: accounts[0],
-                  gas: '1000000000',
-                })
-              )
-            )
-          );
-        })
-        .then(async () => {
-          const numOfAvailableTokens =
-            await RobinosGovernanceTokenLuckyDraw.methods
-            .numOfAvailableTokens()
-            .call({
-              from: accounts[0],
-            });
-          // We read the total number of tokens in the contract and compare the amount
-          assert.strictEqual(parseInt(numOfAvailableTokens), tokenIds.length);
-        });
+      );
     });
 
-    it('allows users to stake standard token & unstake to receive awards', (done) => {
+    it('allows users to stake standard token & unstake to receive awards', () => {
       const minimumStake = 100;
       const maximumStake = 100000;
       const numOfRewardTokens = 64;
@@ -386,179 +379,134 @@ describe('RobinosGovernanceToken tests', () => {
         }));
       const tokenIds = idsFrom(1, numOfRewardTokens);
 
-      RobinosGovernanceTokenLuckyDraw.methods
+      return useMethodsOn(RobinosGovernanceTokenLuckyDraw, {
         // The owner must first initialize a sale for users to be able to stake their tokens
-        .setSaleStartEnd(eventName, 0, secondsInTheFuture(1200))
-        .send({
-          from: accounts[0],
-          gas: '10000000000',
+        method: 'setSaleStartEnd',
+        args: [eventName, 0, secondsInTheFuture(1200)],
+        account: accounts[0],
+      }).then(() =>
+        useMethodsOn(TetherToken, accountsSliced.map(({
+          address,
+          stakeAmount
+        }) => ({
+          // We send a random number of tokens to a number of accounts
+          method: 'transfer',
+          args: [address, stakeAmount],
+          account: accounts[0],
+        })))
+      ).then(() =>
+        useMethodsOn(RobinosGovernanceToken, [{
+            // We mint the tokens in one batch
+            method: 'mintBatch',
+            args: [accounts[0], tokenIds, batchName],
+            account: accounts[0],
+          },
+          ...tokenIds.map(id => ({
+            // Transfer each token to the lucky draw contract address
+            method: 'safeTransferFrom',
+            args: [
+              accounts[0],
+              RobinosGovernanceTokenLuckyDraw.options.address,
+              id
+            ],
+            account: accounts[0],
+          }))
+        ])
+      ).then(() =>
+        useMethodsOn(RobinosGovernanceTokenLuckyDraw, {
+          // Since we transfered the whole batch to the lucky draw contract
+          // we want to check if the number of available tokens for reward
+          // matches the amount of minted tokens
+          method: 'numOfAvailableTokens',
+          account: accounts[0],
+          onReturn: (availableTokens) => {
+            assert.strictEqual(parseInt(availableTokens), tokenIds.length);
+          },
         })
-        .then(() =>
-          Promise.all(
-            accountsSliced.map((account) =>
-              Promise.resolve(
-                TetherToken.methods
-                // We send a random number of tokens to a number of accounts
-                .transfer(account.address, account.stakeAmount)
-                .send({
-                  from: accounts[0],
-                })
-              )
-            )
-          )
-        )
-        .then(() =>
-          RobinosGovernanceToken.methods
-          // We mint the tokens in one batch
-          .mintBatch(accounts[0], tokenIds, batchName)
-          .send({
-            from: accounts[0],
-            gas: '1000000000',
-          })
-          .then(() =>
-            Promise.all(
-              tokenIds.map((id) =>
-                Promise.resolve(
-                  // Transfer each token to the lucky draw contract address
-                  RobinosGovernanceToken.methods
-                  .safeTransferFrom(
-                    accounts[0],
-                    RobinosGovernanceTokenLuckyDraw.options.address,
-                    id
-                  )
-                  .send({
-                    from: accounts[0],
-                    gas: '1000000000',
-                  })
-                )
-              )
-            ).then(async () => {
-              const availableTokens =
-                await RobinosGovernanceTokenLuckyDraw.methods
-                // Since we transfered the whole batch to the lucky draw contract
-                // we want to check if the number of available tokens for reward
-                // matches the amount of minted tokens
-                .numOfAvailableTokens()
-                .call({
-                  from: accounts[0],
-                  gas: '10000000000',
-                });
-              assert.strictEqual(parseInt(availableTokens), tokenIds.length);
-            })
-          )
-        )
-        .then(() =>
-          Promise.all(
-            accountsSliced.map((account) =>
-              Promise.resolve(
-                TetherToken.methods
-                // Each account must approve their standard tokens to be transfered by the lucky draw contract
-                .approve(
-                  RobinosGovernanceTokenLuckyDraw.options.address,
-                  account.stakeAmount
-                )
-                .send({
-                  from: account.address,
-                  gas: '10000000000',
-                })
-              )
-            )
-          )
-        )
-        .then(() =>
-          Promise.all(
-            accountsSliced.map((account) =>
-              Promise.resolve(
-                RobinosGovernanceTokenLuckyDraw.methods
-                // Each user will call the stake function on the lucky draw contract
-                .stake(eventName, account.stakeAmount)
-                .send({
-                  from: account.address,
-                  gas: '10000000000',
-                })
-              )
-            )
-          )
-        )
-        .then(async () => {
-          accountsSliced.forEach(async (account) => {
-            const userStaked = await RobinosGovernanceTokenLuckyDraw.methods
+      ).then(() =>
+        useMethodsOn(TetherToken, accountsSliced.map(({
+          stakeAmount,
+          address
+        }) => ({
+          // Each account must approve their standard tokens to be transfered by the lucky draw contract
+          method: 'approve',
+          args: [
+            RobinosGovernanceTokenLuckyDraw.options.address,
+            stakeAmount
+          ],
+          account: address,
+        })))
+      ).then(() =>
+        useMethodsOn(RobinosGovernanceTokenLuckyDraw, [
+          ...accountsSliced.flatMap(({
+            address,
+            stakeAmount
+          }) => [{
+              // Each user will call the stake function on the lucky draw contract
+              method: 'stake',
+              args: [eventName, stakeAmount],
+              account: address,
+            },
+            {
               // We read the amount staked by each user and compare the numbers to local variables
-              .getUserStakeAmount(eventName, account.address)
-              .call({
-                from: accounts[0],
-                gas: '10000000000',
-              });
+              method: 'getUserStakeAmount',
+              args: [eventName, address],
+              account: accounts[0],
+              onReturn: (userStaked) => {
+                assert.strictEqual(parseInt(userStaked), stakeAmount);
+              },
+            },
+          ]),
+          {
+            // Each user will call the stake function on the lucky draw contract
+            method: 'selectWinners',
+            args: [eventName],
+            account: accounts[0],
+          },
+        ])
+      ).then(() => {
+        // For now we just get the amount of ms from stakeDuration and multiply by 1.5 just to be safe
+        // The JS and Solidity timestampts don't always match 100%
+        const waitDuration = stakeDuration * 1000 * 1.5;
+        let totalRewards = 0;
 
-            assert.strictEqual(parseInt(userStaked), account.stakeAmount);
-          });
-        })
-        .then(() =>
-          RobinosGovernanceTokenLuckyDraw.methods
-          // Each user will call the stake function on the lucky draw contract
-          .selectWinners(eventName)
-          .send({
-            from: accounts[0],
-            gas: '10000000000',
-          })
-        )
-        .then(async () => {
-          // For now we just get the amount of ms from stakeDuration and multiply by 1.5 just to be safe
-          // The JS and Solidity timestampts don't always match 100%
-          const waitDuration = stakeDuration * 1000 * 1.5;
-
-          setTimeout(
-            () =>
-            Promise.all(
-              accountsSliced.map((account) =>
-                Promise.resolve(
-                  RobinosGovernanceTokenLuckyDraw.methods
-                  // After the stake duration has passed, the users can all safely unstake their standard tokens
-                  .unstake(eventName)
-                  .send({
-                    from: account.address,
-                    gas: '10000000000',
-                  })
-                )
-              )
-            ).then(() =>
-              Promise.all(
-                accountsSliced.map((account) =>
-                  Promise.resolve(
-                    RobinosGovernanceToken.methods
-                    // We will check the balance of NFTs of each user after unstaking.
-                    // We expect all NFTs have been already distributed as rewards and
-                    // check if the total balance is equal to the amount of minted NFTs
-                    .balanceOf(account.address)
-                    .call({
-                      from: accounts[0],
-                      gas: '10000000000',
-                    })
-                  )
-                )
-              ).then(async (values) => {
-                const totalTokensWon = values.reduce(
-                  (total, value) => total + parseInt(value),
-                  0
-                );
-                const availableTokens =
-                  await RobinosGovernanceTokenLuckyDraw.methods
-                  .numOfAvailableTokens()
-                  .call({
-                    from: accounts[0],
-                    gas: '10000000000',
-                  });
-
-                // We expect all the tokens to be in the totalTokensWon counter and the number
-                // of available tokens to be 0, since they were all marked as sold
-                assert.strictEqual(totalTokensWon, tokenIds.length);
+        return new Promise((resolve) => {
+          setTimeout(() =>
+            useMethodsOn(RobinosGovernanceTokenLuckyDraw, [...accountsSliced.map(({
+              address
+            }) => ({
+              // After the stake duration has passed, the users can all safely unstake their standard tokens
+              method: 'unstake',
+              args: [eventName],
+              account: address,
+            })), {
+              // We will check the balance of NFTs of each user after unstaking.
+              // We expect all NFTs have been already distributed as rewards and
+              // check if the total balance is equal to the amount of minted NFTs
+              method: 'numOfAvailableTokens',
+              account: accounts[0],
+              onReturn: (availableTokens) => {
                 assert.strictEqual(parseInt(availableTokens), 0);
-                done();
-              })
-            ),
-            waitDuration
-          );
+              },
+            }]).then(() =>
+              useMethodsOn(RobinosGovernanceToken, accountsSliced.map(({
+                address
+              }) => ({
+                method: 'balanceOf',
+                args: [address],
+                account: accounts[0],
+                onReturn: (amount) => {
+                  totalRewards += parseInt(amount);
+                },
+              })))
+            ).then(() => {
+              // We expect all the tokens to be in the totalTokensWon counter and the number
+              // of available tokens to be 0, since they were all marked as sold
+              assert.strictEqual(totalRewards, tokenIds.length);
+              resolve();
+            }), waitDuration);
         });
+      });
     });
   });
 
@@ -567,7 +515,7 @@ describe('RobinosGovernanceToken tests', () => {
       assert.ok(RobinosGovernanceTokenNFTStake.options.address); // Check the address
     });
 
-    it('allows staking and unstaking', (done) => {
+    it('allows staking and unstaking', () => {
       const tokensPerUser = 5; // Num of tokens each user will stake
       const numOfUsers = 3; // Total users to stake
       const userToUnstake = 1; // Index of the user which will unstake at the end of test
@@ -582,134 +530,96 @@ describe('RobinosGovernanceToken tests', () => {
       const tokensForStakingPerUser = newArray(numOfUsers, i => (idsFrom(i * tokensPerUser + 1, tokensPerUser)));
       const eventName = 'tokenSale';
 
-      Promise.all(
-          tokensForStakingPerUser.map((tokenIds, index) =>
-            Promise.resolve(
-              RobinosGovernanceToken.methods
-              // First the owner will mint a batch for each of the prepared users and directly deposit them to their address
-              .mintBatch(accounts[index], tokenIds, batchName)
-              .send({
-                from: accounts[0],
-                gas: '1000000000',
-              })
-            )
-          )
-        )
-        .then(() =>
-          DBToken.methods
+      return useMethodsOn(RobinosGovernanceToken, tokensForStakingPerUser.map((tokenIds, index) => ({
+        // First the owner will mint a batch for each of the prepared users and directly deposit them to their address
+        method: 'mintBatch',
+        args: [accounts[index], tokenIds, batchName],
+        account: accounts[0],
+      }))).then(() =>
+        useMethodsOn(DBToken, {
           // The owner then approves their ERC20 tokens for the NFT stake contract to be able to deposit them later
-          .approve(RobinosGovernanceTokenNFTStake.options.address, totalReward)
-          .send({
-            from: accounts[0],
-            gas: '1000000000',
-          })
-        )
-        .then(() =>
-          RobinosGovernanceTokenNFTStake.methods
-          // The owner initiates a sale on the NFT stake contract
-          .setSaleStartEnd(eventName, 0, secondsInTheFuture(120))
-          .send({
-            from: accounts[0],
-            gas: '1000000000',
-          })
-        )
-        .then(() =>
-          RobinosGovernanceTokenNFTStake.methods
-          // The owner deposits the pre-approved ERC20 tokens which will serve as a reward for staking users
-          .depositEventReward(eventName, totalReward)
-          .send({
-            from: accounts[0],
-            gas: '1000000000',
-          })
-        )
-        .then(() =>
-          Promise.all(
-            tokensForStakingPerUser
-            .map((tokenIds, userIndex) =>
-              tokenIds.map((tokenId) =>
-                Promise.resolve(
-                  RobinosGovernanceToken.methods
-                  // Each of the users must individually approve their ERC721 tokens for transfer to the staking contract
-                  .approve(
-                    RobinosGovernanceTokenNFTStake.options.address,
-                    tokenId
-                  )
-                  .send({
-                    from: accounts[userIndex],
-                    gas: '1000000000',
-                  })
-                )
-              )
-            )
-            .flat()
-          )
-        )
-        .then(() =>
-          Promise.all(
-            tokensForStakingPerUser
-            .map((tokenIds, userIndex) =>
-              tokenIds.map((tokenId) =>
-                Promise.resolve(
-                  RobinosGovernanceTokenNFTStake.methods
-                  // Each of the users stakes their tokens individually
-                  .stake(eventName, tokenId)
-                  .send({
-                    from: accounts[userIndex],
-                    gas: '1000000000',
-                  })
-                )
-              )
-            )
-            .flat()
-          )
-        )
-        .then(async () => {
-          const stakedTokens = await RobinosGovernanceTokenNFTStake.methods
-            // We retrive a list of all the staked token IDs for this event
-            .getEventStakedTokens(eventName)
-            .call({
-              from: accounts[0],
-              gas: '1000000000',
-            });
-          // We assert that all the available tokens are staked and retreived in a list in the previous call
-          assert.deepStrictEqual(
-            stakedTokens.map((token) => parseInt(token)),
-            tokensForStakingPerUser.flat()
-          );
+          method: 'approve',
+          args: [RobinosGovernanceTokenNFTStake.options.address, totalReward],
+          account: accounts[0],
         })
-        .then(async () => {
-          const waitDuration = stakeDuration * 1000 * 1.5;
-          // After the min staking period has passed, the users are free to unstake their tokens
-          setTimeout(() => {
-            RobinosGovernanceTokenNFTStake.methods
-              // Only one user marked with userToUnstake will unstake their tokens
-              .unstake(eventName)
-              .send({
-                from: accounts[userToUnstake],
-                gas: '1000000000',
-              })
-              .then(async () => {
-                const stakedTokens = await RobinosGovernanceTokenNFTStake.methods
-                  .getEventStakedTokens(eventName)
-                  .call({
-                    from: accounts[0],
-                    gas: '1000000000',
-                  });
-                const expectedTokens = tokensForStakingPerUser.reduce(
-                  (expected, current, index) =>
-                  index !== userToUnstake ? expected.concat(current) : expected,
-                  []
-                );
-                // We then assert that all the tokens are still staked on the stake contract except the
-                // tokens belonging to the user which just unstaked
-                assert.deepStrictEqual(
-                  stakedTokens.map((token) => parseInt(token)),
-                  expectedTokens
-                );
-                done();
-              });
-          }, waitDuration);
+      ).then(() =>
+        useMethodsOn(RobinosGovernanceTokenNFTStake, [{
+          // The owner initiates a sale on the NFT stake contract
+          method: 'setSaleStartEnd',
+          args: [eventName, 0, secondsInTheFuture(120)],
+          account: accounts[0],
+        }, {
+          // The owner deposits the pre-approved ERC20 tokens which will serve as a reward for staking users
+          method: 'depositEventReward',
+          args: [eventName, totalReward],
+          account: accounts[0],
+        }])
+      ).then(() =>
+        useMethodsOn(RobinosGovernanceToken, tokensForStakingPerUser.flatMap((tokenIds, userIndex) =>
+          tokenIds.map(tokenId => ({
+            // Each of the users must individually approve their ERC721 tokens for transfer to the staking contract
+            method: 'approve',
+            args: [
+              RobinosGovernanceTokenNFTStake.options.address,
+              tokenId
+            ],
+            account: accounts[userIndex],
+          }))))
+      ).then(() =>
+        useMethodsOn(RobinosGovernanceTokenNFTStake, [...tokensForStakingPerUser.flatMap((tokenIds, userIndex) =>
+            tokenIds.map(tokenId => ({
+              // Each of the users stakes their tokens individually
+              method: 'stake',
+              args: [eventName, tokenId],
+              account: accounts[userIndex],
+            }))),
+          {
+            // We retrive a list of all the staked token IDs for this event
+            method: 'getEventStakedTokens',
+            args: [eventName],
+            account: accounts[0],
+            onReturn: (stakedTokens) => {
+              // We assert that all the available tokens are staked and retreived in a list in the previous call
+              assert.deepStrictEqual(
+                stakedTokens.map((token) => parseInt(token)),
+                tokensForStakingPerUser.flat()
+              );
+            },
+          }
+        ])
+      ).then(() => {
+        // After the min staking period has passed, the users are free to unstake their tokens
+        const waitDuration = stakeDuration * 1000 * 1.5;
+        return new Promise((resolve) => {
+          setTimeout(() =>
+            useMethodsOn(RobinosGovernanceTokenNFTStake, [{
+                // Only one user marked with userToUnstake will unstake their tokens
+                method: 'unstake',
+                args: [eventName],
+                account: accounts[userToUnstake],
+              },
+              {
+                method: 'getEventStakedTokens',
+                args: [eventName],
+                account: accounts[0],
+                onReturn: (stakedTokens) => {
+                  const expectedTokens = tokensForStakingPerUser.reduce(
+                    (expected, current, index) =>
+                    index !== userToUnstake ? expected.concat(current) : expected,
+                    []
+                  );
+                  // We then assert that all the tokens are still staked on the stake contract except the
+                  // tokens belonging to the user which just unstaked
+                  assert.deepStrictEqual(
+                    stakedTokens.map((token) => parseInt(token)),
+                    expectedTokens
+                  );
+                  resolve();
+                },
+              }
+            ]), waitDuration);
         });
+      });
     });
   });
 

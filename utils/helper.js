@@ -37,7 +37,7 @@ const useMethodsOn = (contractInstance, methodArgs) => {
       if (!contractInstance.methods[method])
         throw new Error(`Unknown method called ${method}`);
 
-      const requestInstance = contractInstance.methods[method](...args)[onReturn ? 'call' : 'send']({
+      const requestInstance = contractInstance.methods[method](...(args || []))[onReturn ? 'call' : 'send']({
           from: account,
           gas: '1000000000',
         })

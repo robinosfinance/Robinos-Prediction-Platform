@@ -30,10 +30,11 @@ const printLogs = async (contractInstance) => {
 };
 
 const formatArgs = (args) =>
+    args ?
     `(${args.reduce(
     (string, arg, i) => `${string}${i === 0 ? '' : ', '}${arg}`,
     ''
-  )})`;
+  )})` : '';
 
 module.exports = {
     formatCompileErrors,
