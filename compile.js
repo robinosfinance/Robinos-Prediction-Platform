@@ -1,35 +1,33 @@
-const path = require("path");
-const fs = require("fs");
-const solc = require("solc");
+const path = require('path');
+const fs = require('fs');
+const solc = require('solc');
+const files = require('./contracts');
+const {
+  formatCompileErrors
+} = require('./utils/debug');
 
-let files = [
-	"DBToken.sol",
-	"DBTokenSale.sol",
-	"DBTokenReward.sol",
-];
-
-let pathToFile, source;
-
-let input = {
-	language: 'Solidity',
-	sources: {/** Add file names in files array */},
-	settings: {
-		outputSelection: {
-			'*': {
-				'*': ['*']
-			}
-		}
-	}
+const input = {
+  language: 'Solidity',
+  sources: {},
+  settings: {
+    outputSelection: {
+      '*': {
+        '*': ['*'],
+      },
+    },
+  },
 };
 
-files.forEach(file => {
-	pathToFile = path.resolve(__dirname, "contracts", file);
-	source = fs.readFileSync(pathToFile, "utf8");
-	
-	input.sources[file] = { content: source };
+files.forEach((file) => {
+  const pathToFile = path.resolve(__dirname, 'contracts', file);
+  const source = fs.readFileSync(pathToFile, 'utf8');
+
+  input.sources[file] = {
+    content: source,
+  };
 });
 
-// console.log(input);
 const compiledInfo = JSON.parse(solc.compile(JSON.stringify(input)));
-// console.log(compiledInfo);
+if (compiledInfo.errors) console.error(formatCompileErrors(compiledInfo));
+
 module.exports = compiledInfo.contracts;

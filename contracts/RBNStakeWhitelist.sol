@@ -1,11 +1,8 @@
 pragma solidity >=0.6.2 <0.8.0;
 
-
-
 /// This staking contract was previously used in DbookDAO and currently reused in Robinos for staking and reward distribution purposes///
 /// Audit was previously done by Solidity.finance. https://solidity.finance/audits/DBook-2/ ///
 /// Robinos will not be deploying this smart contract as a proxy upgradeable contract. Upgrading of this contract will not be possible ///
-
 
 /**
  * @dev Collection of functions related to the address type
@@ -35,7 +32,9 @@ library AddressUpgradeable {
 
         uint256 size;
         // solhint-disable-next-line no-inline-assembly
-        assembly { size := extcodesize(account) }
+        assembly {
+            size := extcodesize(account)
+        }
         return size > 0;
     }
 
@@ -59,7 +58,7 @@ library AddressUpgradeable {
         require(address(this).balance >= amount, "Address: insufficient balance");
 
         // solhint-disable-next-line avoid-low-level-calls, avoid-call-value
-        (bool success, ) = recipient.call{ value: amount }("");
+        (bool success, ) = recipient.call{value: amount}("");
         require(success, "Address: unable to send value, recipient may have reverted");
     }
 
@@ -82,7 +81,7 @@ library AddressUpgradeable {
      * _Available since v3.1._
      */
     function functionCall(address target, bytes memory data) internal returns (bytes memory) {
-      return functionCall(target, data, "Address: low-level call failed");
+        return functionCall(target, data, "Address: low-level call failed");
     }
 
     /**
@@ -91,7 +90,11 @@ library AddressUpgradeable {
      *
      * _Available since v3.1._
      */
-    function functionCall(address target, bytes memory data, string memory errorMessage) internal returns (bytes memory) {
+    function functionCall(
+        address target,
+        bytes memory data,
+        string memory errorMessage
+    ) internal returns (bytes memory) {
         return functionCallWithValue(target, data, 0, errorMessage);
     }
 
@@ -106,7 +109,11 @@ library AddressUpgradeable {
      *
      * _Available since v3.1._
      */
-    function functionCallWithValue(address target, bytes memory data, uint256 value) internal returns (bytes memory) {
+    function functionCallWithValue(
+        address target,
+        bytes memory data,
+        uint256 value
+    ) internal returns (bytes memory) {
         return functionCallWithValue(target, data, value, "Address: low-level call with value failed");
     }
 
@@ -116,12 +123,17 @@ library AddressUpgradeable {
      *
      * _Available since v3.1._
      */
-    function functionCallWithValue(address target, bytes memory data, uint256 value, string memory errorMessage) internal returns (bytes memory) {
+    function functionCallWithValue(
+        address target,
+        bytes memory data,
+        uint256 value,
+        string memory errorMessage
+    ) internal returns (bytes memory) {
         require(address(this).balance >= value, "Address: insufficient balance for call");
         require(isContract(target), "Address: call to non-contract");
 
         // solhint-disable-next-line avoid-low-level-calls
-        (bool success, bytes memory returndata) = target.call{ value: value }(data);
+        (bool success, bytes memory returndata) = target.call{value: value}(data);
         return _verifyCallResult(success, returndata, errorMessage);
     }
 
@@ -141,7 +153,11 @@ library AddressUpgradeable {
      *
      * _Available since v3.3._
      */
-    function functionStaticCall(address target, bytes memory data, string memory errorMessage) internal view returns (bytes memory) {
+    function functionStaticCall(
+        address target,
+        bytes memory data,
+        string memory errorMessage
+    ) internal view returns (bytes memory) {
         require(isContract(target), "Address: static call to non-contract");
 
         // solhint-disable-next-line avoid-low-level-calls
@@ -149,7 +165,11 @@ library AddressUpgradeable {
         return _verifyCallResult(success, returndata, errorMessage);
     }
 
-    function _verifyCallResult(bool success, bytes memory returndata, string memory errorMessage) private pure returns(bytes memory) {
+    function _verifyCallResult(
+        bool success,
+        bytes memory returndata,
+        string memory errorMessage
+    ) private pure returns (bytes memory) {
         if (success) {
             return returndata;
         } else {
@@ -168,7 +188,6 @@ library AddressUpgradeable {
         }
     }
 }
-
 
 // File @openzeppelin/contracts-upgradeable/proxy/Initializable.sol@v3.4.1
 
@@ -190,7 +209,6 @@ pragma solidity >=0.4.24 <0.8.0;
  * that all initializers are idempotent. This is not verified automatically as constructors are by Solidity.
  */
 abstract contract Initializable {
-
     /**
      * @dev Indicates that the contract has been initialized.
      */
@@ -226,7 +244,6 @@ abstract contract Initializable {
     }
 }
 
-
 // File @openzeppelin/contracts-upgradeable/utils/ContextUpgradeable.sol@v3.4.1
 
 //
@@ -248,8 +265,8 @@ abstract contract ContextUpgradeable is Initializable {
         __Context_init_unchained();
     }
 
-    function __Context_init_unchained() internal initializer {
-    }
+    function __Context_init_unchained() internal initializer {}
+
     function _msgSender() internal view virtual returns (address payable) {
         return msg.sender;
     }
@@ -258,16 +275,15 @@ abstract contract ContextUpgradeable is Initializable {
         this; // silence state mutability warning without generating bytecode - see https://github.com/ethereum/solidity/issues/2691
         return msg.data;
     }
+
     uint256[50] private __gap;
 }
-
 
 // File @openzeppelin/contracts-upgradeable/GSN/ContextUpgradeable.sol@v3.4.1
 
 //
 
 pragma solidity >=0.6.0 <0.8.0;
-
 
 // File @openzeppelin/contracts-upgradeable/token/ERC20/IERC20Upgradeable.sol@v3.4.1
 
@@ -332,7 +348,11 @@ interface IERC20Upgradeable {
      *
      * Emits a {Transfer} event.
      */
-    function transferFrom(address sender, address recipient, uint256 amount) external returns (bool);
+    function transferFrom(
+        address sender,
+        address recipient,
+        uint256 amount
+    ) external returns (bool);
 
     /**
      * @dev Emitted when `value` tokens are moved from one account (`from`) to
@@ -348,7 +368,6 @@ interface IERC20Upgradeable {
      */
     event Approval(address indexed owner, address indexed spender, uint256 value);
 }
-
 
 // File @openzeppelin/contracts-upgradeable/math/MathUpgradeable.sol@v3.4.1
 
@@ -380,10 +399,9 @@ library MathUpgradeable {
      */
     function average(uint256 a, uint256 b) internal pure returns (uint256) {
         // (a + b) / 2 can overflow, so we distribute
-        return (a / 2) + (b / 2) + ((a % 2 + b % 2) / 2);
+        return (a / 2) + (b / 2) + (((a % 2) + (b % 2)) / 2);
     }
 }
-
 
 // File @openzeppelin/contracts-upgradeable/math/SafeMathUpgradeable.sol@v3.4.1
 
@@ -556,7 +574,11 @@ library SafeMathUpgradeable {
      *
      * - Subtraction cannot overflow.
      */
-    function sub(uint256 a, uint256 b, string memory errorMessage) internal pure returns (uint256) {
+    function sub(
+        uint256 a,
+        uint256 b,
+        string memory errorMessage
+    ) internal pure returns (uint256) {
         require(b <= a, errorMessage);
         return a - b;
     }
@@ -576,7 +598,11 @@ library SafeMathUpgradeable {
      *
      * - The divisor cannot be zero.
      */
-    function div(uint256 a, uint256 b, string memory errorMessage) internal pure returns (uint256) {
+    function div(
+        uint256 a,
+        uint256 b,
+        string memory errorMessage
+    ) internal pure returns (uint256) {
         require(b > 0, errorMessage);
         return a / b;
     }
@@ -596,20 +622,21 @@ library SafeMathUpgradeable {
      *
      * - The divisor cannot be zero.
      */
-    function mod(uint256 a, uint256 b, string memory errorMessage) internal pure returns (uint256) {
+    function mod(
+        uint256 a,
+        uint256 b,
+        string memory errorMessage
+    ) internal pure returns (uint256) {
         require(b > 0, errorMessage);
         return a % b;
     }
 }
-
 
 // File @openzeppelin/contracts-upgradeable/token/ERC20/SafeERC20Upgradeable.sol@v3.4.1
 
 //
 
 pragma solidity >=0.6.0 <0.8.0;
-
-
 
 /**
  * @title SafeERC20
@@ -624,11 +651,20 @@ library SafeERC20Upgradeable {
     using SafeMathUpgradeable for uint256;
     using AddressUpgradeable for address;
 
-    function safeTransfer(IERC20Upgradeable token, address to, uint256 value) internal {
+    function safeTransfer(
+        IERC20Upgradeable token,
+        address to,
+        uint256 value
+    ) internal {
         _callOptionalReturn(token, abi.encodeWithSelector(token.transfer.selector, to, value));
     }
 
-    function safeTransferFrom(IERC20Upgradeable token, address from, address to, uint256 value) internal {
+    function safeTransferFrom(
+        IERC20Upgradeable token,
+        address from,
+        address to,
+        uint256 value
+    ) internal {
         _callOptionalReturn(token, abi.encodeWithSelector(token.transferFrom.selector, from, to, value));
     }
 
@@ -639,24 +675,40 @@ library SafeERC20Upgradeable {
      * Whenever possible, use {safeIncreaseAllowance} and
      * {safeDecreaseAllowance} instead.
      */
-    function safeApprove(IERC20Upgradeable token, address spender, uint256 value) internal {
+    function safeApprove(
+        IERC20Upgradeable token,
+        address spender,
+        uint256 value
+    ) internal {
         // safeApprove should only be called when setting an initial allowance,
         // or when resetting it to zero. To increase and decrease it, use
         // 'safeIncreaseAllowance' and 'safeDecreaseAllowance'
         // solhint-disable-next-line max-line-length
-        require((value == 0) || (token.allowance(address(this), spender) == 0),
+        require(
+            (value == 0) || (token.allowance(address(this), spender) == 0),
             "SafeERC20: approve from non-zero to non-zero allowance"
         );
         _callOptionalReturn(token, abi.encodeWithSelector(token.approve.selector, spender, value));
     }
 
-    function safeIncreaseAllowance(IERC20Upgradeable token, address spender, uint256 value) internal {
+    function safeIncreaseAllowance(
+        IERC20Upgradeable token,
+        address spender,
+        uint256 value
+    ) internal {
         uint256 newAllowance = token.allowance(address(this), spender).add(value);
         _callOptionalReturn(token, abi.encodeWithSelector(token.approve.selector, spender, newAllowance));
     }
 
-    function safeDecreaseAllowance(IERC20Upgradeable token, address spender, uint256 value) internal {
-        uint256 newAllowance = token.allowance(address(this), spender).sub(value, "SafeERC20: decreased allowance below zero");
+    function safeDecreaseAllowance(
+        IERC20Upgradeable token,
+        address spender,
+        uint256 value
+    ) internal {
+        uint256 newAllowance = token.allowance(address(this), spender).sub(
+            value,
+            "SafeERC20: decreased allowance below zero"
+        );
         _callOptionalReturn(token, abi.encodeWithSelector(token.approve.selector, spender, newAllowance));
     }
 
@@ -672,13 +724,13 @@ library SafeERC20Upgradeable {
         // the target address contains contract code and also asserts for success in the low-level call.
 
         bytes memory returndata = address(token).functionCall(data, "SafeERC20: low-level call failed");
-        if (returndata.length > 0) { // Return data is optional
+        if (returndata.length > 0) {
+            // Return data is optional
             // solhint-disable-next-line max-line-length
             require(abi.decode(returndata, (bool)), "SafeERC20: ERC20 operation did not succeed");
         }
     }
 }
-
 
 // File @openzeppelin/contracts-upgradeable/utils/ReentrancyGuardUpgradeable.sol@v3.4.1
 
@@ -750,7 +802,6 @@ abstract contract ReentrancyGuardUpgradeable is Initializable {
     uint256[49] private __gap;
 }
 
-
 // File @openzeppelin/contracts-upgradeable/utils/EnumerableSetUpgradeable.sol@v3.4.1
 
 //
@@ -794,10 +845,9 @@ library EnumerableSetUpgradeable {
     struct Set {
         // Storage of set values
         bytes32[] _values;
-
         // Position of the value in the `values` array, plus 1 because index 0
         // means a value is not in the set.
-        mapping (bytes32 => uint256) _indexes;
+        mapping(bytes32 => uint256) _indexes;
     }
 
     /**
@@ -828,7 +878,8 @@ library EnumerableSetUpgradeable {
         // We read and store the value's index to prevent multiple reads from the same storage slot
         uint256 valueIndex = set._indexes[value];
 
-        if (valueIndex != 0) { // Equivalent to contains(set, value)
+        if (valueIndex != 0) {
+            // Equivalent to contains(set, value)
             // To delete an element from the _values array in O(1), we swap the element to delete with the last one in
             // the array, and then remove the last element (sometimes called as 'swap and pop').
             // This modifies the order of the array, as noted in {at}.
@@ -872,16 +923,16 @@ library EnumerableSetUpgradeable {
         return set._values.length;
     }
 
-   /**
-    * @dev Returns the value stored at position `index` in the set. O(1).
-    *
-    * Note that there are no guarantees on the ordering of values inside the
-    * array, and it may change when more values are added or removed.
-    *
-    * Requirements:
-    *
-    * - `index` must be strictly less than {length}.
-    */
+    /**
+     * @dev Returns the value stored at position `index` in the set. O(1).
+     *
+     * Note that there are no guarantees on the ordering of values inside the
+     * array, and it may change when more values are added or removed.
+     *
+     * Requirements:
+     *
+     * - `index` must be strictly less than {length}.
+     */
     function _at(Set storage set, uint256 index) private view returns (bytes32) {
         require(set._values.length > index, "EnumerableSet: index out of bounds");
         return set._values[index];
@@ -927,16 +978,16 @@ library EnumerableSetUpgradeable {
         return _length(set._inner);
     }
 
-   /**
-    * @dev Returns the value stored at position `index` in the set. O(1).
-    *
-    * Note that there are no guarantees on the ordering of values inside the
-    * array, and it may change when more values are added or removed.
-    *
-    * Requirements:
-    *
-    * - `index` must be strictly less than {length}.
-    */
+    /**
+     * @dev Returns the value stored at position `index` in the set. O(1).
+     *
+     * Note that there are no guarantees on the ordering of values inside the
+     * array, and it may change when more values are added or removed.
+     *
+     * Requirements:
+     *
+     * - `index` must be strictly less than {length}.
+     */
     function at(Bytes32Set storage set, uint256 index) internal view returns (bytes32) {
         return _at(set._inner, index);
     }
@@ -981,20 +1032,19 @@ library EnumerableSetUpgradeable {
         return _length(set._inner);
     }
 
-   /**
-    * @dev Returns the value stored at position `index` in the set. O(1).
-    *
-    * Note that there are no guarantees on the ordering of values inside the
-    * array, and it may change when more values are added or removed.
-    *
-    * Requirements:
-    *
-    * - `index` must be strictly less than {length}.
-    */
+    /**
+     * @dev Returns the value stored at position `index` in the set. O(1).
+     *
+     * Note that there are no guarantees on the ordering of values inside the
+     * array, and it may change when more values are added or removed.
+     *
+     * Requirements:
+     *
+     * - `index` must be strictly less than {length}.
+     */
     function at(AddressSet storage set, uint256 index) internal view returns (address) {
         return address(uint160(uint256(_at(set._inner, index))));
     }
-
 
     // UintSet
 
@@ -1036,30 +1086,26 @@ library EnumerableSetUpgradeable {
         return _length(set._inner);
     }
 
-   /**
-    * @dev Returns the value stored at position `index` in the set. O(1).
-    *
-    * Note that there are no guarantees on the ordering of values inside the
-    * array, and it may change when more values are added or removed.
-    *
-    * Requirements:
-    *
-    * - `index` must be strictly less than {length}.
-    */
+    /**
+     * @dev Returns the value stored at position `index` in the set. O(1).
+     *
+     * Note that there are no guarantees on the ordering of values inside the
+     * array, and it may change when more values are added or removed.
+     *
+     * Requirements:
+     *
+     * - `index` must be strictly less than {length}.
+     */
     function at(UintSet storage set, uint256 index) internal view returns (uint256) {
         return uint256(_at(set._inner, index));
     }
 }
-
 
 // File @openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol@v3.4.1
 
 //
 
 pragma solidity >=0.6.0 <0.8.0;
-
-
-
 
 /**
  * @dev Contract module that allows children to implement role-based access
@@ -1102,8 +1148,8 @@ abstract contract AccessControlUpgradeable is Initializable, ContextUpgradeable 
         __AccessControl_init_unchained();
     }
 
-    function __AccessControl_init_unchained() internal initializer {
-    }
+    function __AccessControl_init_unchained() internal initializer {}
+
     using EnumerableSetUpgradeable for EnumerableSetUpgradeable.AddressSet;
     using AddressUpgradeable for address;
 
@@ -1112,7 +1158,7 @@ abstract contract AccessControlUpgradeable is Initializable, ContextUpgradeable 
         bytes32 adminRole;
     }
 
-    mapping (bytes32 => RoleData) private _roles;
+    mapping(bytes32 => RoleData) private _roles;
 
     bytes32 public constant DEFAULT_ADMIN_ROLE = 0x00;
 
@@ -1276,16 +1322,15 @@ abstract contract AccessControlUpgradeable is Initializable, ContextUpgradeable 
             emit RoleRevoked(role, account, _msgSender());
         }
     }
+
     uint256[49] private __gap;
 }
-
 
 // File @openzeppelin/contracts-upgradeable/utils/PausableUpgradeable.sol@v3.4.1
 
 //
 
 pragma solidity >=0.6.0 <0.8.0;
-
 
 /**
  * @dev Contract module which allows children to implement an emergency stop
@@ -1375,9 +1420,9 @@ abstract contract PausableUpgradeable is Initializable, ContextUpgradeable {
         _paused = false;
         emit Unpaused(_msgSender());
     }
+
     uint256[49] private __gap;
 }
-
 
 // File contracts/DBKStake.sol
 
@@ -1385,11 +1430,7 @@ abstract contract PausableUpgradeable is Initializable, ContextUpgradeable {
 
 pragma solidity >=0.6.0 <0.8.0;
 
-contract DBKStake is
-    ReentrancyGuardUpgradeable,
-    PausableUpgradeable,
-    AccessControlUpgradeable
-{
+contract DBKStake is ReentrancyGuardUpgradeable, PausableUpgradeable, AccessControlUpgradeable {
     using SafeMathUpgradeable for uint256;
     using SafeERC20Upgradeable for IERC20Upgradeable;
 
@@ -1456,14 +1497,8 @@ contract DBKStake is
     }
 
     // Set start time, length, and deposit into
-    function seedFirstPool(uint256 _poolSeedAmount, uint256 _poolSeedStartTime)
-        public
-        onlyAdmin
-    {
-        require(
-            !init_first_pool_flag,
-            "DBKStake: First Pool has already been seeded!"
-        );
+    function seedFirstPool(uint256 _poolSeedAmount, uint256 _poolSeedStartTime) public onlyAdmin {
+        require(!init_first_pool_flag, "DBKStake: First Pool has already been seeded!");
 
         currentCycle = 1;
 
@@ -1472,15 +1507,9 @@ contract DBKStake is
             end: _poolSeedStartTime.add(_durationForCycle[1])
         });
         _totalRewardSupplyOnCycle[currentCycle] = _poolSeedAmount;
-        _baseReward[currentCycle] = _poolSeedAmount.div(
-            _durationForCycle[1].mul(16)
-        ); // token/s
+        _baseReward[currentCycle] = _poolSeedAmount.div(_durationForCycle[1].mul(16)); // token/s
 
-        _rewardTokenForCycle[currentCycle].safeTransferFrom(
-            _msgSender(),
-            address(this),
-            _poolSeedAmount
-        );
+        _rewardTokenForCycle[currentCycle].safeTransferFrom(_msgSender(), address(this), _poolSeedAmount);
         init_first_pool_flag = true;
 
         emit firstPoolSeeded(_poolSeedStartTime, _poolSeedAmount);
@@ -1497,28 +1526,17 @@ contract DBKStake is
             "DBKStake: attempting to stake in a cycle that has not yet started"
         );
         require(
-            block.timestamp <=
-                _poolTimes[currentCycle].start + uint256(2).mul(duration),
+            block.timestamp <= _poolTimes[currentCycle].start + uint256(2).mul(duration),
             "DBKStake: Too late to deposit, wait for next cycle!"
         );
-        require(
-            currentCycle > 0,
-            "DBKStake: First Pool has not been seeded yet!"
-        );
+        require(currentCycle > 0, "DBKStake: First Pool has not been seeded yet!");
 
-        _totalStakingSupplyOnCycle[currentCycle] = _totalStakingSupplyOnCycle[
-            currentCycle
-        ]
-            .add(amount);
+        _totalStakingSupplyOnCycle[currentCycle] = _totalStakingSupplyOnCycle[currentCycle].add(amount);
 
         if (!_userStakedOnCycle[currentCycle][_msgSender()]) {
-            _stakeOnCycle[currentCycle][msg.sender] = Stake({
-                timeStaked: block.timestamp,
-                amountStaked: amount
-            });
+            _stakeOnCycle[currentCycle][msg.sender] = Stake({timeStaked: block.timestamp, amountStaked: amount});
         } else {
-            _stakeOnCycle[currentCycle][msg.sender]
-                .amountStaked = _stakeOnCycle[currentCycle][msg.sender]
+            _stakeOnCycle[currentCycle][msg.sender].amountStaked = _stakeOnCycle[currentCycle][msg.sender]
                 .amountStaked
                 .add(amount);
         }
@@ -1545,8 +1563,7 @@ contract DBKStake is
         _rewardTokenForCycle[_cycle].safeTransfer(_msgSender(), rewardAmount);
 
         //reset their stake for this cycle and update total cycle reward amount accordingly
-        _totalRewardSupplyOnCycle[_cycle] = _totalRewardSupplyOnCycle[_cycle]
-            .sub(rewardAmount);
+        _totalRewardSupplyOnCycle[_cycle] = _totalRewardSupplyOnCycle[_cycle].sub(rewardAmount);
         _stakeOnCycle[_cycle][_msgSender()].amountStaked = 0;
         _userStakedOnCycle[_cycle][_msgSender()] = false;
 
@@ -1602,11 +1619,7 @@ contract DBKStake is
         );
 
         //transfer into pool
-        IERC20Upgradeable(rewardToken).safeTransferFrom(
-            _msgSender(),
-            address(this),
-            amount
-        );
+        IERC20Upgradeable(rewardToken).safeTransferFrom(_msgSender(), address(this), amount);
 
         _rewardTokenForCycle[currentCycle + 1] = IERC20Upgradeable(rewardToken);
         _durationForCycle[currentCycle + 1] = _days.mul(duration);
@@ -1614,8 +1627,7 @@ contract DBKStake is
         //set times for next pool
         _poolTimes[currentCycle + 1] = PoolTimes({
             start: (_poolTimes[currentCycle].end).add(_stakeOffset),
-            end: (_poolTimes[currentCycle].end).add(_stakeOffset) +
-                _days.mul(duration)
+            end: (_poolTimes[currentCycle].end).add(_stakeOffset) + _days.mul(duration)
         });
         _totalRewardSupplyOnCycle[currentCycle + 1] = amount;
 
@@ -1666,10 +1678,7 @@ contract DBKStake is
             //  if over withdraw occurs, contract assumes the overwithdraw amount will
             //  be manually depositted into the contract via an ERC20 transfer
             require(
-                amount <
-                    IERC20Upgradeable(token).balanceOf(address(this)).sub(
-                        _totalRewardSupplyOnCycle[currentCycle]
-                    ),
+                amount < IERC20Upgradeable(token).balanceOf(address(this)).sub(_totalRewardSupplyOnCycle[currentCycle]),
                 "DBKStake: Amount attmepting to withdraw exceeds the allocated awards!"
             );
         }
@@ -1680,9 +1689,7 @@ contract DBKStake is
             //  be manually depositted into the contract via an ERC20 transfer
             require(
                 amount <
-                    IERC20Upgradeable(token).balanceOf(address(this)).sub(
-                        _totalStakingSupplyOnCycle[currentCycle]
-                    ),
+                    IERC20Upgradeable(token).balanceOf(address(this)).sub(_totalStakingSupplyOnCycle[currentCycle]),
                 "DBKStake: Amount attmepting to withdraw exceeds the allocated awards!"
             );
         }
@@ -1694,53 +1701,28 @@ contract DBKStake is
 
     /* ========== INTERNAL FUNCTIONS ========== */
 
-    function _userStakedRequirements(address _user, uint256 _cycle)
-        internal
-        view
-        returns (bool)
-    {
-        require(
-            _cycle <= currentCycle && _cycle > 0,
-            "DBKStake: Invalid Cycle given for Unstake Attempt!"
-        );
+    function _userStakedRequirements(address _user, uint256 _cycle) internal view returns (bool) {
+        require(_cycle <= currentCycle && _cycle > 0, "DBKStake: Invalid Cycle given for Unstake Attempt!");
         require(_userStakedOnCycle[_cycle][_user], "DBKStake: Must be staked");
         require(
-            block.timestamp.sub(_stakeOnCycle[_cycle][_user].timeStaked) >
-                1 days,
+            block.timestamp.sub(_stakeOnCycle[_cycle][_user].timeStaked) > 1 days,
             "24 hour staked requirement has not been met!"
         );
         return true;
     }
 
-    function _calculateReward(uint256 _cycle, address _user)
-        internal
-        view
-        returns (uint256)
-    {
+    function _calculateReward(uint256 _cycle, address _user) internal view returns (uint256) {
         // depends on pool withdrawing from, pool start, pool end, multiplier, and total time staked
         Stake memory _stake = _stakeOnCycle[_cycle][_user];
-        uint256 multiplier =
-            _calculateMultiplier(durationStaked(_cycle, _user));
+        uint256 multiplier = _calculateMultiplier(durationStaked(_cycle, _user));
 
         return
-            (
-                (
-                    (
-                        _stake.amountStaked.mul(_baseReward[_cycle]).mul(
-                            multiplier
-                        )
-                    )
-                        .mul(durationStaked(_cycle, _user))
-                )
-            )
-                .div(_totalStakingSupplyOnCycle[_cycle]);
+            (((_stake.amountStaked.mul(_baseReward[_cycle]).mul(multiplier)).mul(durationStaked(_cycle, _user)))).div(
+                _totalStakingSupplyOnCycle[_cycle]
+            );
     }
 
-    function _calculateMultiplier(uint256 _duration)
-        internal
-        view
-        returns (uint256)
-    {
+    function _calculateMultiplier(uint256 _duration) internal view returns (uint256) {
         //map the duration to a multiplier 1-2 days = 1x, 3 = 2x, 4 = 4x, 5 = 8x, 6+ = 16x
         uint256 _days = _duration.div(duration); //intrinsic floor division
 
@@ -1776,11 +1758,7 @@ contract DBKStake is
 
     /* ========== VIEWS ========== */
 
-    function totalStakingSupplyOnCylce(uint256 cycle)
-        internal
-        view
-        returns (uint256)
-    {
+    function totalStakingSupplyOnCylce(uint256 cycle) internal view returns (uint256) {
         require(cycle <= currentCycle, "Cycle does not exist");
         return _totalStakingSupplyOnCycle[cycle];
     }
@@ -1789,15 +1767,9 @@ contract DBKStake is
         return _calculateReward(_cycle, _msgSender());
     }
 
-    function durationStaked(uint256 _cycle, address _user)
-        public
-        view
-        returns (uint256)
-    {
+    function durationStaked(uint256 _cycle, address _user) public view returns (uint256) {
         return
-            (MathUpgradeable.min(block.timestamp, _poolTimes[_cycle].end)).sub(
-                _stakeOnCycle[_cycle][_user].timeStaked
-            );
+            (MathUpgradeable.min(block.timestamp, _poolTimes[_cycle].end)).sub(_stakeOnCycle[_cycle][_user].timeStaked);
     }
 
     function isAdmin(address _address) public view returns (bool) {
@@ -1815,10 +1787,7 @@ contract DBKStake is
     /* ========== MODIFIERS ========== */
 
     modifier onlyAdmin() {
-        require(
-            hasRole(ADMIN_ROLE, _msgSender()),
-            "DBKCrowdsale: must have admin role to use this function"
-        );
+        require(hasRole(ADMIN_ROLE, _msgSender()), "DBKCrowdsale: must have admin role to use this function");
         _;
     }
 
@@ -1830,12 +1799,7 @@ contract DBKStake is
     event Unstaked(address indexed user, uint256 amount, uint256 cycle);
     event RewardPaid(address indexed user, uint256 reward);
     event RewardsDurationUpdated(uint256 newDuration);
-    event nextPoolUpdated(
-        uint256 _cycle,
-        uint256 _startTime,
-        uint256 _poolAmount,
-        uint256 _duration
-    );
+    event nextPoolUpdated(uint256 _cycle, uint256 _startTime, uint256 _poolAmount, uint256 _duration);
     event cycleUpdated(uint256 _cycle);
     event AdminRescueTokens(address token, address recipient, uint256 amount);
     event adminAdded(address admin);

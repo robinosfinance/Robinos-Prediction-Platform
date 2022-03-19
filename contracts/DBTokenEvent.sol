@@ -231,12 +231,6 @@ abstract contract Pausable {
     }
 }
 
-/**********************************************************************
- ***********************************************************************
- ********************         DB  TOKEN         ************************
- ***********************************************************************
- **********************************************************************/
-
 contract DBToken is IERC20, IERC20Metadata, Ownable {
     mapping(address => uint256) private _balances;
     mapping(address => mapping(address => uint256)) private _allowances;
@@ -363,5 +357,90 @@ contract DBToken is IERC20, IERC20Metadata, Ownable {
 
         _allowances[owner][spender] = amount;
         emit Approval(owner, spender, amount);
+    }
+}
+
+/**********************************************************************
+ ***********************************************************************
+ *****************         DB  TOKEN EVENT      ************************
+ ***********************************************************************
+ **********************************************************************/
+
+contract DBTokenEvent is Ownable {
+    string private _name;
+    string private _symbol;
+    string private _eventCode;
+    DBToken[] private teamTokens;
+    struct tokenReference {
+        uint256 index;
+        bool initialized;
+    }
+    mapping(bytes32 => tokenReference) private teamTokensArrayMapping;
+
+    constructor(string[] memory tokenNames, string memory eventCode_) Ownable() {
+        string memory tokenName;
+        _eventCode = eventCode_;
+        for (uint256 i = 0; i < tokenNames.length; i++) {
+            tokenName = tokenNames[i];
+            addTeamToken(tokenName, tokenName, tokenName);
+        }
+    }
+
+    function getTeamTokenHash(string memory teamName) private pure returns (bytes32) {
+        return keccak256(bytes(teamName));
+    }
+
+    function getTeamTokenIndex(string memory teamName) private view returns (uint256) {
+        bytes32 tokenHash = getTeamTokenHash(teamName);
+        require(
+            teamTokensArrayMapping[tokenHash].initialized,
+            "DBTokenEvent: DBToken with team name is not initialized"
+        );
+        return teamTokensArrayMapping[tokenHash].index;
+    }
+
+    function getTeamToken(string memory teamName) private view returns (DBToken) {
+        uint256 index = getTeamTokenIndex(teamName);
+        return teamTokens[index];
+    }
+
+    function getTeamTokenAddress(string memory teamName) public view returns (address) {
+        DBToken token = getTeamToken(teamName);
+        return address(token);
+    }
+
+    function numOfTeamTokens() public view returns (uint256) {
+        return teamTokens.length;
+    }
+
+    function addTeamToken(
+        string memory name,
+        string memory symbol,
+        string memory teamName
+    ) public onlyOwner {
+        bytes32 tokenHash = getTeamTokenHash(teamName);
+        require(
+            !teamTokensArrayMapping[tokenHash].initialized,
+            "DBTokenEvent: DBToken with team name is already initialized"
+        );
+        teamTokensArrayMapping[tokenHash] = tokenReference(numOfTeamTokens(), true);
+        teamTokens.push(new DBToken(name, symbol, _eventCode, teamName));
+    }
+
+    function transferOwnershipOfEventAndTokens(address newOwner) public onlyOwner returns (bool) {
+        transferOwnership(newOwner);
+        for (uint256 i = 0; i < numOfTeamTokens(); i++) {
+            teamTokens[i].transferOwnership(newOwner);
+        }
+        return true;
+    }
+
+    function mintTeamToken(
+        string memory teamName,
+        address account,
+        uint256 amount
+    ) public onlyOwner returns (bool) {
+        DBToken token = getTeamToken(teamName);
+        return token._mint(account, amount);
     }
 }
