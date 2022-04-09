@@ -28,16 +28,24 @@ const useMethodsOn = (contractInstance, methodArgs) => {
     promise.then(async (previousReturnValue) => {
       const {
         method,
-        args,
+        args = [],
         account,
         onReturn,
+        wait = null,
         catch: catchCallback,
       } = methods[methodIndex];
+
+      if (wait && typeof wait === 'number') {
+        const waitPromise = new Promise((resolve) => {
+          setTimeout(() => resolve(), wait);
+        });
+        return recursiveFunction(methodIndex + 1, waitPromise);
+      }
 
       if (!contractInstance.methods[method])
         throw new Error(`Unknown method called ${method}`);
 
-      const requestInstance = contractInstance.methods[method](...(args || []))[onReturn ? 'call' : 'send']({
+      const requestInstance = contractInstance.methods[method](...args)[onReturn ? 'call' : 'send']({
           from: account,
           gas: '1000000000',
         })

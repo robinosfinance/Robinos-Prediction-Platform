@@ -113,54 +113,47 @@ describe('SideBetV2 tests', () => {
                 assert.strictEqual(totalDeposited, expectedDeposit);
               },
             },
+            {
+              wait: saleDuration * 1000,
+            },
+            {
+              // After the sale ends, the owner 
+              // must select the winning side
+              method: 'selectWinningSide',
+              args: [winningSide],
+              account: accounts[0],
+            },
+            // Only after the owner has selected the winning side, each user can
+            // withdraw the funds they deposited for their bet
+            ...newArray(numOfUsersToDeposit, (i) => ({
+              method: 'withdraw',
+              account: accounts[i + 1],
+            })),
           ])
-        )
-        .then(() => {
-          const waitDuration = saleDuration * 1000;
-          return new Promise((resolve) => {
-            setTimeout(() => {
-              useMethodsOn(SideBetV2, [{
-                  // After the sale ends, the owner 
-                  // must select the winning side
-                  method: 'selectWinningSide',
-                  args: [winningSide],
-                  account: accounts[0],
+        ).then(() =>
+          useMethodsOn(
+            TetherToken,
+            [{
+                method: 'balanceOf',
+                args: [accounts[0]],
+                account: accounts[0],
+                onReturn: (amount) => {
+                  assert.strictEqual(parseInt(amount), ownerBalance + expectedOwnerCut);
                 },
-                // Only after the owner has selected the winning side, each user can
-                // withdraw the funds they deposited for their bet
-                ...newArray(numOfUsersToDeposit, (i) => ({
-                  method: 'withdraw',
-                  account: accounts[i + 1],
-                })),
-              ]).then(() =>
-                useMethodsOn(
-                  TetherToken,
-                  [{
-                      method: 'balanceOf',
-                      args: [accounts[0]],
-                      account: accounts[0],
-                      onReturn: (amount) => {
-                        assert.strictEqual(parseInt(amount), ownerBalance + expectedOwnerCut);
-                      },
-                    },
-                    ...newArray(numOfUsersToDeposit, (i) => ({
-                      method: 'balanceOf',
-                      args: [accounts[i + 1]],
-                      account: accounts[0],
-                      onReturn: (amount) => {
-                        // We check if each user has received their expected reward
-                        const expectedReward =
-                          sideToDepositFor[i] === winningSide ? rewardPerUser : 0;
-                        assert.strictEqual(parseInt(amount), expectedReward);
-                      },
-                    }))
-                  ]).then(() => {
-                  resolve();
-                })
-              );
-            }, waitDuration);
-          });
-        });
+              },
+              ...newArray(numOfUsersToDeposit, (i) => ({
+                method: 'balanceOf',
+                args: [accounts[i + 1]],
+                account: accounts[0],
+                onReturn: (amount) => {
+                  // We check if each user has received their expected reward
+                  const expectedReward =
+                    sideToDepositFor[i] === winningSide ? rewardPerUser : 0;
+                  assert.strictEqual(parseInt(amount), expectedReward);
+                },
+              }))
+            ])
+        );
     });
   });
 });
