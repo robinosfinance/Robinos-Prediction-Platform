@@ -299,9 +299,10 @@ abstract contract SaleFactory is Ownable {
 
 contract SideBetV2 is SaleFactory {
     StandardToken standardToken;
-    string private eventCode;
     uint256 private ownerCutPercent;
     uint256 constant maxOwnerCutPercent = 80;
+    string constant sideADef = "sideA";
+    string constant sideBDef = "sideB";
 
     struct SideDepositData {
         uint256 totalDeposit;
@@ -309,21 +310,9 @@ contract SideBetV2 is SaleFactory {
         address[] usersDeposited;
     }
 
-    string sideA;
-    string sideB;
-
-    mapping(bytes32 => SideDepositData) private sideADepositData;
-    mapping(bytes32 => SideDepositData) private sideBDepositData;
-    mapping(bytes32 => uint256) private totalDeposited;
-
     struct UserHasDeposited {
         bool sideA;
         bool sideB;
-    }
-
-    enum Side {
-        A,
-        B
     }
 
     struct EventResult {
@@ -332,57 +321,81 @@ contract SideBetV2 is SaleFactory {
         mapping(address => bool) userWithdrawn;
     }
 
+    struct Sides {
+        string sideA;
+        string sideB;
+    }
+
+    mapping(bytes32 => Sides) private eventSides;
+    mapping(bytes32 => SideDepositData) private sideADepositData;
+    mapping(bytes32 => SideDepositData) private sideBDepositData;
+    mapping(bytes32 => uint256) private totalDeposited;
+
+    enum Side {
+        A,
+        B
+    }
+
     mapping(bytes32 => mapping(address => UserHasDeposited)) private userHasDeposited;
     mapping(bytes32 => EventResult) private eventResults;
 
-    constructor(
-        StandardToken _standardToken,
-        string memory _sideA,
-        string memory _sideB,
-        string memory _eventCode,
-        uint256 startTime,
-        uint256 endTime,
-        uint256 _ownerCutPercent
-    ) {
+    constructor(StandardToken _standardToken, uint256 _ownerCutPercent) {
         require(_ownerCutPercent <= maxOwnerCutPercent, "SideBetV2: owner cut percentage too high");
         standardToken = _standardToken;
-        sideA = _sideA;
-        sideB = _sideB;
-        eventCode = _eventCode;
-        setSaleStartEnd(eventCode, startTime, endTime);
         ownerCutPercent = _ownerCutPercent;
     }
 
-    modifier eventNotFinished() {
+    modifier eventNotFinished(string memory eventCode) {
         require(!eventResults[hashStr(eventCode)].eventFinished, "SideBetV2: event is already finished");
         _;
     }
 
-    modifier eventFinished() {
+    modifier eventFinished(string memory eventCode) {
         require(eventResults[hashStr(eventCode)].eventFinished, "SideBetV2: event is not finished");
         _;
     }
 
-    modifier userNotWithdrawn(address user) {
-        require(!hasUserWithdrawn(user), "SideBetV2: user has already withdrawn in this event");
+    modifier userNotWithdrawn(string memory eventCode, address user) {
+        require(!hasUserWithdrawn(eventCode, user), "SideBetV2: user has already withdrawn in this event");
         _;
     }
 
-    function getUserDeposited(address user) private view returns (UserHasDeposited storage) {
+    function getUserDeposited(string memory eventCode, address user) private view returns (UserHasDeposited storage) {
         return userHasDeposited[hashStr(eventCode)][user];
     }
 
-    function hasUserDeposited(Side side, address user) private view returns (bool) {
-        UserHasDeposited storage _userHasDeposited = getUserDeposited(user);
+    function hasUserDeposited(
+        string memory eventCode,
+        Side side,
+        address user
+    ) private view returns (bool) {
+        UserHasDeposited storage _userHasDeposited = getUserDeposited(eventCode, user);
         return side == Side.A ? _userHasDeposited.sideA : _userHasDeposited.sideB;
     }
 
-    function hasUserWithdrawn(address user) private view returns (bool) {
+    function getSideName(string memory eventCode, Side side) private view returns (string memory) {
+        Sides memory sides = eventSides[hashStr(eventCode)];
+
+        string memory sideA = matchStrings(sides.sideA, "") ? sideADef : sides.sideA;
+        string memory sideB = matchStrings(sides.sideB, "") ? sideBDef : sides.sideB;
+
+        return side == Side.A ? sideA : sideB;
+    }
+
+    function matchStrings(string memory a, string memory b) private pure returns (bool) {
+        return keccak256(bytes(a)) == keccak256(bytes(b));
+    }
+
+    function hasUserWithdrawn(string memory eventCode, address user) private view returns (bool) {
         return eventResults[hashStr(eventCode)].userWithdrawn[user];
     }
 
-    function setUserDeposited(Side side, address user) private {
-        UserHasDeposited storage _userHasDeposited = getUserDeposited(user);
+    function setUserDeposited(
+        string memory eventCode,
+        Side side,
+        address user
+    ) private {
+        UserHasDeposited storage _userHasDeposited = getUserDeposited(eventCode, user);
         string memory errorMessage = "SideBetV2: user has already deposited to this side";
         if (side == Side.A) {
             require(!_userHasDeposited.sideA, errorMessage);
@@ -393,38 +406,43 @@ contract SideBetV2 is SaleFactory {
         }
     }
 
-    function setUserWithdrawn(address user) private {
+    function setUserWithdrawn(string memory eventCode, address user) private {
         eventResults[hashStr(eventCode)].userWithdrawn[user] = true;
     }
 
-    function calculateSideReward(address user, Side side) private view returns (uint256) {
-        SideDepositData storage sideDepositData = getSideDepositData(side);
+    function calculateSideReward(
+        string memory eventCode,
+        address user,
+        Side side
+    ) private view returns (uint256) {
+        SideDepositData storage sideDepositData = getSideDepositData(eventCode, side);
         uint256 _totalDeposit = totalDeposited[hashStr(eventCode)];
         // If no user has deposited for the winning side, the reward is always 0
         if (sideDepositData.totalDeposit == 0) return 0;
         return (sideDepositData.userDeposit[user] * _totalDeposit) / sideDepositData.totalDeposit;
     }
 
-    function calculateUserReward(address user) private view returns (uint256) {
+    function calculateUserReward(string memory eventCode, address user) private view returns (uint256) {
         EventResult storage _eventResults = eventResults[hashStr(eventCode)];
         Side winningSide = _eventResults.winningSide;
-        return calculateSideReward(user, winningSide);
+        return calculateSideReward(eventCode, user, winningSide);
     }
 
-    function getSideDepositData(Side side) private view returns (SideDepositData storage) {
+    function getSideDepositData(string memory eventCode, Side side) private view returns (SideDepositData storage) {
         return side == Side.A ? sideADepositData[hashStr(eventCode)] : sideBDepositData[hashStr(eventCode)];
     }
 
     function recordDeposit(
+        string memory eventCode,
         address user,
         Side side,
         uint256 amount
     ) private {
-        SideDepositData storage sideDepositData = getSideDepositData(side);
+        SideDepositData storage sideDepositData = getSideDepositData(eventCode, side);
 
-        if (!hasUserDeposited(side, user)) {
+        if (!hasUserDeposited(eventCode, side, user)) {
             sideDepositData.usersDeposited.push(user);
-            setUserDeposited(side, user);
+            setUserDeposited(eventCode, side, user);
         }
 
         sideDepositData.totalDeposit += amount;
@@ -432,18 +450,43 @@ contract SideBetV2 is SaleFactory {
         totalDeposited[hashStr(eventCode)] += amount;
     }
 
-    function calculateOwnerCut() public view returns (uint256) {
+    function calculateOwnerCut(string memory eventCode) public view returns (uint256) {
         uint256 _totalDeposit = totalDeposited[hashStr(eventCode)];
         return (_totalDeposit * ownerCutPercent) / 100;
     }
 
     /**
      * Allows users to check how much has been deposited towards each side in the event
+     *
+     * @param eventCode of the event to get data for
      */
-    function getEventDepositData() public view returns (uint256, uint256) {
-        uint256 sideATotalDeposit = getSideDepositData(Side.A).totalDeposit;
-        uint256 sideBTotalDeposit = getSideDepositData(Side.B).totalDeposit;
+    function getEventDepositData(string memory eventCode) public view returns (uint256, uint256) {
+        uint256 sideATotalDeposit = getSideDepositData(eventCode, Side.A).totalDeposit;
+        uint256 sideBTotalDeposit = getSideDepositData(eventCode, Side.B).totalDeposit;
         return (sideATotalDeposit, sideBTotalDeposit);
+    }
+
+    /**
+     * Allows the owner to set the side names for a particular event.
+     * The sides are purely informational and are not required to run a sale.
+     *
+     * @param eventCode to set the side names for
+     * @param sideA name of first side
+     * @param sideB name of second side
+     */
+    function setEventSides(
+        string memory eventCode,
+        string memory sideA,
+        string memory sideB
+    ) public onlyOwner {
+        eventSides[hashStr(eventCode)] = Sides(sideA, sideB);
+    }
+
+    function getEventSides(string memory eventCode) public view returns (string memory, string memory) {
+        string memory sideA = getSideName(eventCode, Side.A);
+        string memory sideB = getSideName(eventCode, Side.B);
+
+        return (sideA, sideB);
     }
 
     /**
@@ -451,15 +494,28 @@ contract SideBetV2 is SaleFactory {
      *
      * @param side A or B which will be set as winner
      */
-    function selectWinningSide(Side side) public onlyOwner outsideOfSale(eventCode) eventNotFinished {
+    function selectWinningSide(string memory eventCode, Side side)
+        public
+        onlyOwner
+        outsideOfSale(eventCode)
+        eventNotFinished(eventCode)
+    {
         EventResult storage _eventResults = eventResults[hashStr(eventCode)];
         _eventResults.eventFinished = true;
         _eventResults.winningSide = side;
-        uint256 ownerCut = calculateOwnerCut();
+        uint256 ownerCut = calculateOwnerCut(eventCode);
         unchecked {
             totalDeposited[hashStr(eventCode)] -= ownerCut;
         }
         standardToken.transfer(owner(), ownerCut);
+    }
+
+    function getWinningSide(string memory eventCode) public view eventFinished(eventCode) returns (string memory) {
+        bytes32 eventHash = hashStr(eventCode);
+
+        Side winningSide = eventResults[eventHash].winningSide;
+
+        return getSideName(eventCode, winningSide);
     }
 
     /**
@@ -469,12 +525,16 @@ contract SideBetV2 is SaleFactory {
      * @param side A or B on which you are betting
      * @param amount of standardToken you want to deposit
      */
-    function deposit(Side side, uint256 amount) public duringSale(eventCode) {
+    function deposit(
+        string memory eventCode,
+        Side side,
+        uint256 amount
+    ) public duringSale(eventCode) {
         uint256 allowance = standardToken.allowance(_msgSender(), address(this));
         require(allowance >= amount, "SideBetV2: insufficient allowance for deposit");
 
         standardToken.transferFrom(_msgSender(), address(this), amount);
-        recordDeposit(_msgSender(), side, amount);
+        recordDeposit(eventCode, _msgSender(), side, amount);
     }
 
     /**
@@ -482,9 +542,13 @@ contract SideBetV2 is SaleFactory {
      * owner has selected the winning side. Only the users which have bet on the winning side
      * will receive rewards proportional to the amount they deposited
      */
-    function withdraw() public eventFinished userNotWithdrawn(_msgSender()) {
-        uint256 reward = calculateUserReward(_msgSender());
+    function withdraw(string memory eventCode)
+        public
+        eventFinished(eventCode)
+        userNotWithdrawn(eventCode, _msgSender())
+    {
+        uint256 reward = calculateUserReward(eventCode, _msgSender());
         if (reward != 0) standardToken.transfer(_msgSender(), reward);
-        setUserWithdrawn(_msgSender());
+        setUserWithdrawn(eventCode, _msgSender());
     }
 }
