@@ -1,6 +1,4 @@
-const {
-  formatArgs
-} = require("./debug");
+const { formatArgs } = require('./debug');
 
 const secondsInTheFuture = (seconds) => Math.floor(Date.now() / 1000) + seconds;
 
@@ -26,26 +24,35 @@ const useMethodsOn = (contractInstance, methodArgs) => {
 
   const recursiveFunction = (methodIndex, promise) =>
     promise.then(async (previousReturnValue) => {
+      if (!methods[methodIndex]) return previousReturnValue;
+
       const {
         method,
         args = [],
         account,
         onReturn,
         wait = null,
+        then = null,
         catch: catchCallback,
       } = methods[methodIndex];
 
-      if (wait && typeof wait === 'number') {
+      if (wait) {
         const waitPromise = new Promise((resolve) => {
           setTimeout(() => resolve(), wait);
         });
         return recursiveFunction(methodIndex + 1, waitPromise);
       }
 
+      if (then) {
+        then(await previousReturnValue);
+        return recursiveFunction(methodIndex + 1, Promise.resolve());
+      }
+
       if (!contractInstance.methods[method])
         throw new Error(`Unknown method called ${method}`);
 
-      const requestInstance = contractInstance.methods[method](...args)[onReturn ? 'call' : 'send']({
+      const requestInstance = contractInstance.methods[method](...args)
+        [onReturn ? 'call' : 'send']({
           from: account,
           gas: '1000000000',
         })
@@ -59,27 +66,24 @@ const useMethodsOn = (contractInstance, methodArgs) => {
         });
 
       onReturn && onReturn(await requestInstance, await previousReturnValue);
-      if (methods[methodIndex + 1])
-        return recursiveFunction(methodIndex + 1, requestInstance);
-      return requestInstance;
+      return recursiveFunction(methodIndex + 1, requestInstance);
     });
 
   return recursiveFunction(0, Promise.resolve());
 };
 
-const getDeploy = (web3) => ({
-    abi,
-    evm,
-    bytecode
-  }, args, account) => new web3.eth.Contract(abi)
-  .deploy({
-    data: evm ? evm.bytecode.object : bytecode,
-    arguments: args,
-  })
-  .send({
-    from: account,
-    gas: '1000000000',
-  });
+const getDeploy =
+  (web3) =>
+  ({ abi, evm, bytecode }, args, account) =>
+    new web3.eth.Contract(abi)
+      .deploy({
+        data: evm ? evm.bytecode.object : bytecode,
+        arguments: args,
+      })
+      .send({
+        from: account,
+        gas: '1000000000',
+      });
 
 const zeroOrOne = () => randomInt(0, 2) - 1;
 
@@ -88,7 +92,6 @@ const newArray = (length, callback) => {
   for (let i = 0; i < length; i++) array.push(callback(i));
   return array;
 };
-
 
 module.exports = {
   secondsInTheFuture,

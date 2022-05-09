@@ -449,7 +449,7 @@ abstract contract SaleFactory is Ownable {
         return block.timestamp;
     }
 
-    function hashStr(string memory str) private pure returns (bytes32) {
+    function hashStr(string memory str) internal pure returns (bytes32) {
         return bytes32(keccak256(bytes(str)));
     }
 
@@ -775,6 +775,13 @@ contract DBTokenSale is StoringDBTokens, RecordingTradePairs, RecordingTokensSol
 
     StandardToken private _standardToken;
 
+    struct Rate {
+        uint256 numerator;
+        uint256 denominator;
+    }
+
+    mapping(bytes32 => Rate) private rate;
+
     /**
      * @param standardToken_ Standard token is the USDT contract from which the sale contract will allow income of funds from. The contract should extend the StandardToken interface
      * @param withrawable Address where the funds can be withdrawn to
@@ -812,11 +819,11 @@ contract DBTokenSale is StoringDBTokens, RecordingTradePairs, RecordingTokensSol
         uint256 senderAllowance = _standardToken.allowance(_msgSender(), address(this));
         require(senderAllowance >= amount, "DBTokenSale: insufficient allowance for standard token transaction");
 
-        uint256 dbtokenAmount = amount * rate();
-        _standardToken.transferFrom(_msgSender(), address(this), amount);
-        dbtoken._mint(_msgSender(), dbtokenAmount);
+        uint256 stAmount = dbtToSt(getRate(_eventCode), amount);
+        _standardToken.transferFrom(_msgSender(), address(this), stAmount);
+        dbtoken._mint(_msgSender(), amount);
 
-        recordTokensSold(_eventCode, _teamName, dbtokenAmount);
+        recordTokensSold(_eventCode, _teamName, amount);
 
         return true;
     }
@@ -872,8 +879,23 @@ contract DBTokenSale is StoringDBTokens, RecordingTradePairs, RecordingTokensSol
         return true;
     }
 
-    // Rate represents how many DBTokens can be purchased with 1 USDT
-    function rate() public pure returns (uint256) {
-        return 1;
+    function stToDbt(Rate memory _rate, uint256 stAmount) private pure returns (uint256) {
+        return (stAmount * _rate.numerator) / _rate.denominator;
+    }
+
+    function dbtToSt(Rate memory _rate, uint256 dbAmount) private pure returns (uint256) {
+        return (dbAmount * _rate.denominator) / _rate.numerator;
+    }
+
+    function setRate(
+        string memory _eventCode,
+        uint256 numerator,
+        uint256 denominator
+    ) public onlyOwner {
+        rate[hashStr(_eventCode)] = Rate(numerator, denominator);
+    }
+
+    function getRate(string memory _eventCode) public view returns (Rate memory) {
+        return rate[hashStr(_eventCode)];
     }
 }

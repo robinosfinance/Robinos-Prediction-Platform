@@ -25,10 +25,10 @@ const sideBetContract = contracts['DBTokenSideBet.sol'].DBTokenSideBet;
 
 // Local instance of the USDT contract used for testing
 const tether = require('../compiled/tether.json');
+const { printLogs } = require('../utils/debug');
 
 describe('DBToken tests', () => {
   let accounts,
-    rate,
     DBTokenSale,
     DBTokenEvent,
     DBTokens,
@@ -37,7 +37,8 @@ describe('DBToken tests', () => {
     DBTokenSideBet;
 
   // Teams and event code default info for testing
-  const teamTokenParams = [{
+  const teamTokenParams = [
+    {
       name: 'DBToken',
       symbol: 'DBT',
       teamName: 'Manchester',
@@ -55,6 +56,8 @@ describe('DBToken tests', () => {
   ];
   const eventCode = 'EPL';
   const totalSupply = 1 * 10 ** 12;
+  const rateComplex = [1, 2]; // 1 / 2
+  const rate = rateComplex[0] / rateComplex[1];
 
   beforeEach(async () => {
     const deploy = getDeploy(web3);
@@ -92,14 +95,6 @@ describe('DBToken tests', () => {
       accounts[0]
     );
 
-    useMethodsOn(DBTokenSale, [{
-      method: 'rate',
-      account: accounts[0],
-      onReturn: (_rate) => {
-        rate = _rate;
-      },
-    }, ]);
-
     DBTokenReward = await deploy(
       rewardContract,
       [TetherToken.options.address],
@@ -116,7 +111,6 @@ describe('DBToken tests', () => {
       accounts[0]
     );
   });
-
 
   describe('DBTokens', () => {
     it('all deployed successfully', () => {
@@ -138,7 +132,8 @@ describe('DBToken tests', () => {
     it('allows user to approve funds for transfer', () => {
       const approveAmount = 200;
       // This test is required to work for the DBTokenSale purchase to work below
-      return useMethodsOn(TetherToken, [{
+      return useMethodsOn(TetherToken, [
+        {
           method: 'approve',
           args: [DBTokenSale.options.address, approveAmount],
           account: accounts[0],
@@ -157,10 +152,10 @@ describe('DBToken tests', () => {
 
   describe('DBTokenSale', () => {
     beforeEach(() =>
-      DBTokenEvent.methods
-      .transferOwnershipOfEventAndTokens(DBTokenSale.options.address)
-      .send({
-        from: accounts[0],
+      useMethodsOn(DBTokenEvent, {
+        method: 'transferOwnershipOfEventAndTokens',
+        args: [DBTokenSale.options.address],
+        account: accounts[0],
       })
     );
 
@@ -174,7 +169,8 @@ describe('DBToken tests', () => {
           // Each DBToken instance is passed as a reference to the DBTokenSale contract.
           // Arguments eventCode and teamName are used for security purposes
 
-          useMethodsOn(DBTokenSale, [{
+          useMethodsOn(DBTokenSale, [
+            {
               method: 'addDBTokenReference',
               args: [
                 DBToken.options.address,
@@ -197,7 +193,8 @@ describe('DBToken tests', () => {
 
     it('allows to start, end and read sale time', () =>
       // We have 3 tests for checking the sale status. This functions are available for any account to use.
-      useMethodsOn(DBTokenSale, [{
+      useMethodsOn(DBTokenSale, [
+        {
           // Sale start and end times have not yet been defined. We expect sale not to be active.
           method: 'isSaleOn',
           args: [eventCode],
@@ -242,9 +239,17 @@ describe('DBToken tests', () => {
       ]));
 
     it('allows having multiple sales', () => {
-      const eventCodes = ['EPL', 'Champs', 'Fifa', 'Junior', 'Senior', 'London'];
+      const eventCodes = [
+        'EPL',
+        'Champs',
+        'Fifa',
+        'Junior',
+        'Senior',
+        'London',
+      ];
 
-      return useMethodsOn(DBTokenSale, [{
+      return useMethodsOn(DBTokenSale, [
+        {
           method: 'isSaleOn',
           args: ['SomeEvent'],
           account: accounts[0],
@@ -268,6 +273,58 @@ describe('DBToken tests', () => {
           onReturn: (sales) => {
             assert.strictEqual(sales.length, 0);
           },
+        },
+      ]);
+    });
+
+    it('allows to extend existing sale events and set different rates', () => {
+      const saleDuration = 3;
+      const firstRate = [1, 2];
+      const secondRate = [1, 1];
+
+      return useMethodsOn(DBTokenSale, [
+        {
+          method: 'setSaleStartEnd',
+          args: [eventCode, 0, secondsInTheFuture(saleDuration)],
+          account: accounts[0],
+        },
+        {
+          method: 'setRate',
+          args: [eventCode, ...firstRate],
+          account: accounts[0],
+        },
+        {
+          method: 'getRate',
+          args: [eventCode],
+          onReturn: (rate) => {
+            const { numerator, denominator } = rate;
+            assert.strictEqual(parseInt(numerator), firstRate[0]);
+            assert.strictEqual(parseInt(denominator), firstRate[1]);
+          },
+          account: accounts[0],
+        },
+        {
+          wait: saleDuration * 1000,
+        },
+        {
+          method: 'setSaleStartEnd',
+          args: [eventCode, 0, secondsInTheFuture(10)],
+          account: accounts[0],
+        },
+        {
+          method: 'setRate',
+          args: [eventCode, ...secondRate],
+          account: accounts[0],
+        },
+        {
+          method: 'getRate',
+          args: [eventCode],
+          onReturn: (rate) => {
+            const { numerator, denominator } = rate;
+            assert.strictEqual(parseInt(numerator), secondRate[0]);
+            assert.strictEqual(parseInt(denominator), secondRate[1]);
+          },
+          account: accounts[0],
         },
       ]);
     });
@@ -300,13 +357,16 @@ describe('DBToken tests', () => {
           from: accounts[0],
         });
 
-      return useMethodsOn(TetherToken, [{
+      return useMethodsOn(TetherToken, [
+        {
           method: 'approve',
           args: [DBTokenSale.options.address, purchaseUSDTFunds],
           account: accounts[0],
-        }, ])
+        },
+      ])
         .then(() =>
-          useMethodsOn(DBTokenSale, [{
+          useMethodsOn(DBTokenSale, [
+            {
               method: 'addDBTokenReference',
               args: [DBToken.options.address, eventCode, teamName],
               account: accounts[0],
@@ -317,8 +377,13 @@ describe('DBToken tests', () => {
               account: accounts[0],
             },
             {
+              method: 'setRate',
+              args: [eventCode, ...rateComplex],
+              account: accounts[0],
+            },
+            {
               method: 'buyTokens',
-              args: [eventCode, teamName, purchaseUSDTFunds],
+              args: [eventCode, teamName, purchaseDBTfunds],
               account: accounts[0],
             },
           ])
@@ -333,18 +398,20 @@ describe('DBToken tests', () => {
           const contractDBBalance = parseInt(await promises[1]);
           const userDBBalance = parseInt(await promises[2]);
 
-          // Variables purchaseUSDTFunds and purchaseDBTfunds can be different only if DBTokenSale.rate() != 1
+          // Variables purchaseUSDTFunds and purchaseDBTfunds can be different only if DBTokenSale.getRate() != 1
           assert.strictEqual(contractUSDTBalance, purchaseUSDTFunds);
           assert.strictEqual(contractDBBalance, 0);
           assert.strictEqual(userDBBalance, purchaseDBTfunds);
           return Promise.all(promises);
         })
         .then(() =>
-          useMethodsOn(DBTokenSale, [{
-            method: 'withdraw',
-            args: [purchaseUSDTFunds],
-            account: accounts[0],
-          }, ])
+          useMethodsOn(DBTokenSale, [
+            {
+              method: 'withdraw',
+              args: [purchaseUSDTFunds],
+              account: accounts[0],
+            },
+          ])
         )
         .then(async () => {
           const promise = getTetherBalance(accounts[1]);
@@ -356,100 +423,111 @@ describe('DBToken tests', () => {
     });
 
     it('allows owner to record sold supply and mint 1% at the end of sale', () => {
-      const tokenPurchaseAmount = 100000;
+      const usdtTokenAmount = 100000;
+      const dbTokenAmount = usdtTokenAmount * rate;
       let tokenBalances;
 
-      const tokenBalancesEqual = async (checkAmount = null) => new Promise((resolve) => {
-        let equal = true;
-        let _amount;
-        useMethodsOn(DBTokenSale, teamTokenParams.map(({
-          teamName
-        }, i) => ({
-          method: 'balanceOf',
-          args: [eventCode, teamName, accounts[0]],
-          account: accounts[0],
-          onReturn: (amountSt, previousAmountSt) => {
-            const amount = parseInt(amountSt);
-            const previousAmount = parseInt(previousAmountSt);
-            if ((checkAmount && amount !== checkAmount) ||
-              (previousAmount && amount !== previousAmount)) equal = false;
-            _amount = amount;
-          },
-        }))).then(() => {
-          if (!equal) resolve(null);
-          else resolve(_amount);
+      const tokenBalancesEqual = async (checkAmount = null) =>
+        new Promise((resolve) => {
+          let equal = true;
+          let _amount;
+          useMethodsOn(
+            DBTokenSale,
+            teamTokenParams.map(({ teamName }) => ({
+              method: 'balanceOf',
+              args: [eventCode, teamName, accounts[0]],
+              account: accounts[0],
+              onReturn: (amountSt, previousAmountSt) => {
+                const amount = parseInt(amountSt);
+                const previousAmount = parseInt(previousAmountSt);
+                if (
+                  (checkAmount && amount !== checkAmount) ||
+                  (previousAmount && amount !== previousAmount)
+                )
+                  equal = false;
+                _amount = amount;
+              },
+            }))
+          ).then(() => {
+            if (!equal) resolve(null);
+            else resolve(_amount);
+          });
         });
-      });
 
-      return useMethodsOn(TetherToken, [{
+      return useMethodsOn(TetherToken, [
+        {
           method: 'approve',
           args: [
             DBTokenSale.options.address,
-            tokenPurchaseAmount * DBTokens.length,
+            usdtTokenAmount * DBTokens.length,
           ],
           account: accounts[0],
-        }, ])
-        .then(() =>
-          useMethodsOn(DBTokenSale, [{
-              method: 'setSaleStartEnd',
-              args: [eventCode, 0, secondsInTheFuture(60)],
-              account: accounts[0],
+        },
+      ]).then(() =>
+        useMethodsOn(DBTokenSale, [
+          {
+            method: 'setSaleStartEnd',
+            args: [eventCode, 0, secondsInTheFuture(60)],
+            account: accounts[0],
+          },
+          {
+            method: 'setRate',
+            args: [eventCode, ...rateComplex],
+            account: accounts[0],
+          },
+          ...newArray(DBTokens.length, (i) => ({
+            method: 'addDBTokenReference',
+            args: [
+              DBTokens[i].options.address,
+              eventCode,
+              teamTokenParams[i].teamName,
+            ],
+            account: accounts[0],
+          })),
+          ...newArray(DBTokens.length, (i) => ({
+            method: 'buyTokens',
+            args: [eventCode, teamTokenParams[i].teamName, dbTokenAmount],
+            account: accounts[0],
+          })),
+          {
+            then: async () => {
+              tokenBalances = await tokenBalancesEqual();
             },
-            ...newArray(DBTokens.length, (i) => ({
-              method: 'addDBTokenReference',
-              args: [
-                DBTokens[i].options.address,
-                eventCode,
-                teamTokenParams[i].teamName,
-              ],
-              account: accounts[0],
-            })),
-            ...newArray(DBTokens.length, (i) => ({
-              method: 'buyTokens',
-              args: [eventCode, teamTokenParams[i].teamName, tokenPurchaseAmount],
-              account: accounts[0],
-            })),
-          ])
-        )
-        .then(async () => {
-          tokenBalances = await tokenBalancesEqual();
-        })
-        .then(() =>
-          useMethodsOn(DBTokenSale, [{
-              method: 'endSaleNow',
-              args: [eventCode],
-              account: accounts[0],
+          },
+          {
+            method: 'endSaleNow',
+            args: [eventCode],
+            account: accounts[0],
+          },
+          {
+            // While there are no sales active, the owner can use mintOnePercentToOwner()
+            // function to withdraw tokens received
+            method: 'mintOnePercentToOwner',
+            account: accounts[0],
+          },
+          {
+            method: 'tokensSold',
+            account: accounts[0],
+            onReturn: async (tokensSold) => {
+              tokenBalances = await tokenBalancesEqual(
+                tokenBalances + dbTokenAmount / 100
+              );
+              assert.ok(tokenBalances);
+              assert(!tokensSold.length);
             },
-            {
-              // While there are no sales active, the owner can use mintOnePercentToOwner()
-              // function to withdraw tokens received
-              method: 'mintOnePercentToOwner',
-              account: accounts[0],
-            },
-            {
-              method: 'tokensSold',
-              account: accounts[0],
-              onReturn: async (tokensSold) => {
-                tokenBalances = await tokenBalancesEqual(
-                  tokenBalances + tokenPurchaseAmount / 100
-                );
-
-                assert.ok(tokenBalances);
-                assert(!tokensSold.length);
-              },
-            },
-          ])
-        );
+          },
+        ])
+      );
     });
   });
 
   describe('DBTokenReward', () => {
     beforeEach(() =>
       DBTokenEvent.methods
-      .transferOwnershipOfEventAndTokens(DBTokenSale.options.address)
-      .send({
-        from: accounts[0],
-      })
+        .transferOwnershipOfEventAndTokens(DBTokenSale.options.address)
+        .send({
+          from: accounts[0],
+        })
     );
     it('allows dynamic rates', () => {
       const DBToken = DBTokens[0];
@@ -457,7 +535,8 @@ describe('DBToken tests', () => {
       const DBtokenAmount = 10000;
       const ratio = [5, 2]; // You can play with different ratios here. ratio[0] is numerator, ratio[1] is denominator
 
-      return useMethodsOn(DBTokenReward, [{
+      return useMethodsOn(DBTokenReward, [
+        {
           method: 'addDBTokenReference',
           args: [DBToken.options.address, eventCode, teamName],
           account: accounts[0],
@@ -486,13 +565,16 @@ describe('DBToken tests', () => {
       const teamName = teamTokenParams[0].teamName;
       const purchaseAmount = 500;
 
-      return useMethodsOn(TetherToken, [{
+      return useMethodsOn(TetherToken, [
+        {
           method: 'approve',
           args: [DBTokenSale.options.address, purchaseAmount],
           account: accounts[0],
-        }, ])
+        },
+      ])
         .then(() =>
-          useMethodsOn(DBTokenSale, [{
+          useMethodsOn(DBTokenSale, [
+            {
               method: 'addDBTokenReference',
               args: [DBToken.options.address, eventCode, teamName],
               account: accounts[0],
@@ -515,21 +597,26 @@ describe('DBToken tests', () => {
           ])
         )
         .then(() =>
-          useMethodsOn(TetherToken, [{
-            method: 'transfer',
-            args: [DBTokenReward.options.address, purchaseAmount],
-            account: accounts[0],
-          }, ])
+          useMethodsOn(TetherToken, [
+            {
+              method: 'transfer',
+              args: [DBTokenReward.options.address, purchaseAmount],
+              account: accounts[0],
+            },
+          ])
         )
         .then(() =>
-          useMethodsOn(DBToken, [{
-            method: 'approve',
-            args: [DBTokenReward.options.address, purchaseAmount],
-            account: accounts[0],
-          }, ])
+          useMethodsOn(DBToken, [
+            {
+              method: 'approve',
+              args: [DBTokenReward.options.address, purchaseAmount],
+              account: accounts[0],
+            },
+          ])
         )
         .then(() =>
-          useMethodsOn(DBTokenReward, [{
+          useMethodsOn(DBTokenReward, [
+            {
               method: 'addDBTokenReference',
               args: [DBToken.options.address, eventCode, teamName],
               account: accounts[0],
@@ -557,14 +644,16 @@ describe('DBToken tests', () => {
     it('creates multiple tokens', () =>
       Promise.all(
         DBTokens.map((DBToken, index) =>
-          useMethodsOn(DBToken, [{
-            method: 'teamName',
-            account: accounts[0],
-            onReturn: (tokenTeamName) => {
-              const teamName = teamTokenParams[index].teamName;
-              assert.strictEqual(tokenTeamName, teamName);
+          useMethodsOn(DBToken, [
+            {
+              method: 'teamName',
+              account: accounts[0],
+              onReturn: (tokenTeamName) => {
+                const teamName = teamTokenParams[index].teamName;
+                assert.strictEqual(tokenTeamName, teamName);
+              },
             },
-          }, ])
+          ])
         )
       ));
   });
@@ -591,29 +680,31 @@ describe('DBToken tests', () => {
         teamTokenParams[0].teamName,
         teamTokenParams[1].teamName,
       ];
+      let winningAccountIndex = 0;
+      let biggestReward;
+      let totalCalculatedReward = 0;
 
       return useMethodsOn(
-          DBTokenEvent,
-          stakingParams.map(({
-            teamIndex,
-            account,
-            amount
-          }) => ({
-            method: 'mintTeamToken',
-            args: [teamNames[teamIndex], account, amount],
-            account: accounts[0],
-          }))
+        DBTokenEvent,
+        stakingParams.map(({ teamIndex, account, amount }) => ({
+          method: 'mintTeamToken',
+          args: [teamNames[teamIndex], account, amount],
+          account: accounts[0],
+        }))
+      )
+        .then(() =>
+          useMethodsOn(TetherToken, [
+            {
+              // The owner approves stardard token for the reward deposit
+              method: 'approve',
+              args: [DBTokenSideBet.options.address, totalReward],
+              account: accounts[0],
+            },
+          ])
         )
         .then(() =>
-          useMethodsOn(TetherToken, [{
-            // The owner approves stardard token for the reward deposit
-            method: 'approve',
-            args: [DBTokenSideBet.options.address, totalReward],
-            account: accounts[0],
-          }, ])
-        )
-        .then(() =>
-          useMethodsOn(DBTokenSideBet, [{
+          useMethodsOn(DBTokenSideBet, [
+            {
               // The owner initializes a sale and sets start and end time
               method: 'setSaleStartEnd',
               args: [eventName, 0, secondsInTheFuture(saleDuration)],
@@ -629,37 +720,27 @@ describe('DBToken tests', () => {
         )
         .then(() =>
           Promise.all(
-            stakingParams.map(({
-                teamIndex,
-                account,
-                amount
-              }) =>
-              useMethodsOn(DBTokens[teamIndex], [{
-                // Each user approves the amount of DBTokens for their prefered team towards the side bet contract
-                method: 'approve',
-                args: [DBTokenSideBet.options.address, amount],
-                account,
-              }, ])
+            stakingParams.map(({ teamIndex, account, amount }) =>
+              useMethodsOn(DBTokens[teamIndex], [
+                {
+                  // Each user approves the amount of DBTokens for their prefered team towards the side bet contract
+                  method: 'approve',
+                  args: [DBTokenSideBet.options.address, amount],
+                  account,
+                },
+              ])
             )
           )
         )
         .then(() =>
           useMethodsOn(DBTokenSideBet, [
-            ...stakingParams.map(({
-              teamIndex,
-              account,
-              amount
-            }) => ({
+            ...stakingParams.map(({ teamIndex, account, amount }) => ({
               // Each user then stakes their DBTokens for their chosen team
               method: 'stake',
               args: [eventName, DBTokens[teamIndex].options.address, amount],
               account,
             })),
-            ...stakingParams.map(({
-              teamIndex,
-              account,
-              amount
-            }) => ({
+            ...stakingParams.map(({ teamIndex, account, amount }) => ({
               // We check how much each user has staked
               method: 'getUserStaked',
               args: [eventName, account, DBTokens[teamIndex].options.address],
@@ -669,73 +750,71 @@ describe('DBToken tests', () => {
                 assert.strictEqual(parseInt(userStaked), amount);
               },
             })),
+            {
+              wait: saleDuration * 1000,
+            },
+            {
+              method: 'selectWinningTeam',
+              args: [eventName, DBTokens[winningTeamIndex].options.address],
+              account: accounts[0],
+            },
+            ...stakingParams.map(({ account }, index) => ({
+              // We check how many standard tokens each user will be rewarded
+              method: 'getUserReward',
+              args: [eventName, account],
+              account: accounts[0],
+              onReturn: (_userReward) => {
+                const userReward = parseInt(_userReward);
+                // console.log('userReward', index, userReward);
+                if (!biggestReward || biggestReward < userReward) {
+                  biggestReward = userReward;
+                  winningAccountIndex = index;
+                }
+
+                // We sum up all the rewards
+                totalCalculatedReward += userReward;
+              },
+            })),
+            {
+              then: () => {
+                // And we expect the total reward is equal to the local reward. Every single token must be distributed
+                assert.strictEqual(totalCalculatedReward, totalReward);
+                // console.log('winningAccountIndex', winningAccountIndex);
+                // console.log(stakingParams);
+                // console.log('writing something');
+              },
+            },
+            {
+              // The user with the biggest reward will unstake
+              method: 'unstake',
+              args: [
+                eventName,
+                DBTokens[stakingParams[winningAccountIndex].teamIndex].options
+                  .address,
+              ],
+              account: accounts[winningAccountIndex],
+            },
+            {
+              then: () => {
+                printLogs(DBTokenSideBet);
+              },
+            },
           ])
         )
-        .then(() => {
-          const waitDuration = Math.round(saleDuration * 1000);
-          // To select a winning team we must wait until the sale ends
-          return new Promise((resolve) => {
-            setTimeout(() => {
-              let winningAccountIndex;
-              let biggestReward;
-              let totalCalculatedReward = 0;
-
-              useMethodsOn(DBTokenSideBet, [{
-                    method: 'selectWinningTeam',
-                    args: [eventName, DBTokens[winningTeamIndex].options.address],
-                    account: accounts[0],
-                  },
-                  ...stakingParams.map(({
-                    account
-                  }, index) => ({
-                    // We check how many standard tokens each user will be rewarded
-                    method: 'getUserReward',
-                    args: [eventName, account],
-                    account: accounts[0],
-                    onReturn: (_userReward) => {
-                      const userReward = parseInt(_userReward);
-                      if (!biggestReward || biggestReward < userReward) {
-                        biggestReward = userReward;
-                        winningAccountIndex = index;
-                      }
-
-                      // We sum up all the rewards
-                      totalCalculatedReward += userReward;
-                    },
-                  })),
-                ])
-                .then(() => {
-                  // And we expect the total reward is equal to the local reward. Every single token must be distributed
-                  assert.strictEqual(totalCalculatedReward, totalReward);
-                })
-                .then(() =>
-                  useMethodsOn(DBTokenSideBet, [{
-                    // The user with the biggest reward will unstake
-                    method: 'unstake',
-                    args: [
-                      eventName,
-                      DBTokens[stakingParams[winningAccountIndex].teamIndex]
-                      .options.address,
-                    ],
-                    account: accounts[winningAccountIndex],
-                  }, ])
-                )
-                .then(() =>
-                  useMethodsOn(TetherToken, [{
-                    // And check their standard token balance for the reward
-                    method: 'balanceOf',
-                    args: [accounts[winningAccountIndex]],
-                    account: accounts[0],
-                    onReturn: (winnerReward) => {
-                      // We check if the exact amount of standard token has been transfered
-                      assert.strictEqual(parseInt(winnerReward), biggestReward);
-                      resolve();
-                    },
-                  }, ])
-                );
-            }, waitDuration);
-          });
-        });
+        .then(() =>
+          useMethodsOn(TetherToken, [
+            {
+              // And check their standard token balance for the reward
+              method: 'balanceOf',
+              args: [accounts[winningAccountIndex]],
+              account: accounts[0],
+              onReturn: (winnerReward) => {
+                // We check if the exact amount of standard token has been transfered
+                assert.strictEqual(parseInt(winnerReward), biggestReward);
+              },
+            },
+          ])
+        );
     });
   });
 });
