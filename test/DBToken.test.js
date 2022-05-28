@@ -560,15 +560,17 @@ describe('DBToken tests', () => {
       ]);
     });
 
-    it('allows rewards', () => {
+    it('allows rewards and stores standard tokens received per event', () => {
       const DBToken = DBTokens[0];
       const teamName = teamTokenParams[0].teamName;
+      const rate = [4, 5];
       const purchaseAmount = 500;
+      const stAmount = (purchaseAmount * rate[1]) / rate[0];
 
       return useMethodsOn(TetherToken, [
         {
           method: 'approve',
-          args: [DBTokenSale.options.address, purchaseAmount],
+          args: [DBTokenSale.options.address, stAmount],
           account: accounts[0],
         },
       ])
@@ -577,6 +579,11 @@ describe('DBToken tests', () => {
             {
               method: 'addDBTokenReference',
               args: [DBToken.options.address, eventCode, teamName],
+              account: accounts[0],
+            },
+            {
+              method: 'setRate',
+              args: [eventCode, ...rate],
               account: accounts[0],
             },
             {
@@ -593,6 +600,14 @@ describe('DBToken tests', () => {
               method: 'endSaleNow',
               args: [eventCode],
               account: accounts[0],
+            },
+            {
+              method: 'getStandardTokensReceived',
+              args: [eventCode],
+              account: accounts[0],
+              onReturn: (tokensReceived) => {
+                assert.strictEqual(parseInt(tokensReceived), stAmount);
+              },
             },
           ])
         )
