@@ -467,6 +467,18 @@ contract SideBetV2 is SaleFactory {
     }
 
     /**
+     * Allows users to check how much a specific user has deposited towards each side in the event
+     *
+     * @param eventCode of the event to get data for
+     * @param user who deposited
+     */
+    function getEventUserDepositData(string memory eventCode, address user) public view returns (uint256, uint256) {
+        uint256 sideATotalDeposit = getSideDepositData(eventCode, Side.A).userDeposit[user];
+        uint256 sideBTotalDeposit = getSideDepositData(eventCode, Side.B).userDeposit[user];
+        return (sideATotalDeposit, sideBTotalDeposit);
+    }
+
+    /**
      * Allows the owner to set the side names for a particular event.
      * The sides are purely informational and are not required to run a sale.
      *

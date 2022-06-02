@@ -57,7 +57,7 @@ describe('SideBetV2 tests', () => {
     it('allows to set side names for event', () =>
       useMethodsOn(SideBetV2, [
         {
-          // If the side names haven't been set by the 
+          // If the side names haven't been set by the
           // owner, we should see the default name for each side
           method: 'getEventSides',
           args: [eventCode],
@@ -69,14 +69,14 @@ describe('SideBetV2 tests', () => {
           },
         },
         {
-          // The owner can set the side names at any time, 
+          // The owner can set the side names at any time,
           // even if the event hasn't been defined yet
           method: 'setEventSides',
           args: [eventCode, sides[0], sides[1]],
           account: accounts[0],
         },
         {
-          // No we can check if the contract 
+          // No we can check if the contract
           // has the correct name for each side
           method: 'getEventSides',
           args: [eventCode],
@@ -145,12 +145,25 @@ describe('SideBetV2 tests', () => {
               args: [eventCode, sides[0], sides[1]],
               account: accounts[0],
             },
-            // Each user will deposit their USDT and choose
-            // which side they are betting on
             ...newArray(numOfUsersToDeposit, (i) => ({
+              // Each user will deposit their USDT and choose
+              // which side they are betting on
               method: 'deposit',
               args: [eventCode, sideToDepositFor[i], transferAmount],
               account: accounts[i + 1],
+            })),
+            ...newArray(numOfUsersToDeposit, (i) => ({
+              // We check how much each user deposited
+              method: 'getEventUserDepositData',
+              args: [eventCode, accounts[i + 1]],
+              account: accounts[0],
+              onReturn: (amounts) => {
+                const side = sideToDepositFor[i];
+                const userDeposited = Object.values(amounts)[side];
+
+                // And check if they deposited the right amount
+                assert.strictEqual(parseInt(userDeposited), transferAmount);
+              },
             })),
             {
               method: 'getEventDepositData',
@@ -175,7 +188,7 @@ describe('SideBetV2 tests', () => {
               account: accounts[0],
             },
             {
-              // We should be able to read which side 
+              // We should be able to read which side
               // won after the winner has been selected
               method: 'getWinningSide',
               args: [eventCode],
