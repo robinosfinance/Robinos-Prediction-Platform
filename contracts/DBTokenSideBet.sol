@@ -590,6 +590,7 @@ contract DBTokenSideBet is SaleFactory {
 
     mapping(bytes32 => mapping(address => uint256)) private userEventReward;
     mapping(bytes32 => uint256) private totalEventReward;
+    mapping(bytes32 => DBToken) private winningTeamToken;
     mapping(bytes32 => bool) private rewardDistributed;
 
     constructor(
@@ -665,6 +666,14 @@ contract DBTokenSideBet is SaleFactory {
 
     function setTotalReward(string memory eventCode, uint256 amount) private {
         totalEventReward[hashStr(eventCode)] = amount;
+    }
+
+    function getWinningTeam(string memory eventCode) public view returns (DBToken) {
+        return winningTeamToken[hashStr(eventCode)];
+    }
+
+    function setWinningTeam(string memory eventCode, DBToken token) private {
+        winningTeamToken[hashStr(eventCode)] = token;
     }
 
     function getEventStakingUsers(string memory eventCode, DBToken teamToken)
@@ -840,6 +849,7 @@ contract DBTokenSideBet is SaleFactory {
         distributeLeftOverReward(eventCode, totalReward - totalRewardDistributed, _eventStakingUsers);
 
         setRewardDistributed(eventCode, true);
+        setWinningTeam(eventCode, winningTeam);
     }
 
     /**
@@ -873,10 +883,12 @@ contract DBTokenSideBet is SaleFactory {
         oneOfTeamTokens(teamToken)
     {
         uint256 userStakedTokens = getUserStaked(eventCode, _msgSender(), teamToken);
+        DBToken _winningTeamToken = getWinningTeam(eventCode);
+        bool eligibleForReward = address(_winningTeamToken) == address(teamToken);
         require(userStakedTokens != 0, "DBTokenSideBet: user has not staked this token in this event");
 
         uint256 reward = getUserReward(eventCode, _msgSender());
-        if (reward != 0) standardToken.transfer(_msgSender(), reward);
+        if (eligibleForReward && reward != 0) standardToken.transfer(_msgSender(), reward);
         removeStakedTokens(eventCode, teamToken, _msgSender(), userStakedTokens);
         teamToken.transfer(_msgSender(), userStakedTokens);
     }
