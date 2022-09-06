@@ -943,6 +943,15 @@ contract DBTokenSale is
         return true;
     }
 
+    function transferOwnershipOEventTokens(string memory eventCode, address newOwner) public onlyOwner {
+        bytes32[] memory tokenHashes = _eventTokenHashes[hashStr(eventCode)];
+
+        for (uint256 i = 0; i < tokenHashes.length; i++) {
+            DBToken tokenToTrasferOwnershipOf = _dbtokens[tokenHashes[i]];
+            tokenToTrasferOwnershipOf.transferOwnership(newOwner);
+        }
+    }
+
     function dbtToSt(Rate memory _rate, uint256 dbAmount) private pure returns (uint256) {
         uint256 d = _rate.denominator;
         uint256 n = _rate.numerator;
