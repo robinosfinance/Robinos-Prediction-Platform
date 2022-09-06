@@ -973,19 +973,16 @@ contract DBTokenSale is
  ***********************************************************************
  **********************************************************************/
 
-contract DBTokenReward is StoringDBTokens, SaleFactory {
-    /**
-     * The DBTokenReward shares a lot of similarities with DBTokenSale contract. Notable differences are:
-     * 1) This contract uses SaleFactory in the same way DBTokenSale does, but the sale here signifies when the tokens for the given event can be sold to this contract. DBTokenSale uses it for other way around.
-     * 2) Rate for each token can be set individually by the owner. Rate is a ratio between getToken(eventCode, teamName)/standard token
-     * 3) Instead of buyTokens, we have a sellTokens function which performs an immediate exchange taking in DBTokens from the user and providing Standard Tokens
-     */
-
+contract DBTokenReward is Ownable, TokenHash, UsingEventHash {
     StandardToken private _standardToken;
 
-    constructor(StandardToken standardToken_) Ownable() {
-        _standardToken = standardToken_;
+    struct EventTokenDistribution {
+        address[] tokenAddresses;
+        bool rewardDistributed;
     }
+
+    mapping(bytes32 => EventTokenDistribution) private eventTokenRewards;
+    mapping(bytes32 => address[]) private tokenHashToUsersPurchased;
 
     /**
      * @dev getRate(eventCode, teamName) returns a ratio between getToken(eventCode, teamName)/standard token
@@ -1001,6 +998,14 @@ contract DBTokenReward is StoringDBTokens, SaleFactory {
         uint256 denominator;
     }
     mapping(bytes32 => Ratio) private _rates;
+
+    constructor(StandardToken standardToken_) Ownable() {
+        _standardToken = standardToken_;
+    }
+
+    function time() public view returns (uint256) {
+        return block.timestamp;
+    }
 
     /**
      * @dev Allows the owner to set a rate for specific token. Numerator and denominator must be greater than 0
@@ -1039,41 +1044,54 @@ contract DBTokenReward is StoringDBTokens, SaleFactory {
         return uint256((amount * rate.numerator) / rate.denominator);
     }
 
-    // We override the function so we can set the rate for the token to one immediately
-    function addDBTokenReference(
-        DBToken _token,
-        string memory _eventCode,
-        string memory _teamName
-    ) public override onlyOwner returns (bool) {
-        super.addDBTokenReference(_token, _eventCode, _teamName);
-        setRate(_eventCode, _teamName, 1, 1);
+    function addSaleReference(DBTokenSale dbTokenSale, string memory eventCode) public onlyOwner {
+        (, , uint256 saleEnd) = dbTokenSale.isSaleOn(eventCode);
 
-        return true;
+        require(saleEnd <= time(), "DBTokenReward: can only add referance for a sale that already passed");
+
+        TokenSaleData[] memory tokenSaleData = dbTokenSale.getEventSaleData(eventCode);
+        bytes32 eventHash = hashStr(eventCode);
+        address[] storage eventTokenAddresses = eventTokenRewards[eventHash].tokenAddresses;
+
+        for (uint256 i = 0; i < tokenSaleData.length; i++) {
+            address tokenAddress = tokenSaleData[i].tokenAddress;
+            eventTokenAddresses.push(tokenAddress);
+
+            string memory teamName = DBToken(tokenAddress).teamName();
+            address[] memory usersWhoBoughtToken = tokenSaleData[i].usersPurchased;
+            bytes32 tokenHash = getTokenHash(eventCode, teamName);
+
+            for (uint256 j = 0; j < usersWhoBoughtToken.length; j++) {
+                address userAddress = usersWhoBoughtToken[j];
+
+                tokenHashToUsersPurchased[tokenHash].push(userAddress);
+            }
+        }
     }
 
-    // Function is basically the same as buyTokens from DBTokenSale contract, except the transfer is done the other way around
-    // Contract has to have at least the given amount of standardToken tokens for this function to work
-    function sellTokens(
-        string memory eventCode,
-        string memory teamName,
-        uint256 amount
-    ) public duringSale(eventCode) returns (bool) {
-        DBToken token = getToken(eventCode, teamName);
+    function exchangeUserTokens(string memory eventCode) public onlyOwner {
+        EventTokenDistribution storage tokenRewardsData = eventTokenRewards[hashStr(eventCode)];
+        address[] storage addressesArray = tokenRewardsData.tokenAddresses;
 
-        uint256 allowance = token.allowance(_msgSender(), address(this));
-        require(allowance >= amount, "DBTokenReward: insufficient token allowance");
+        require(addressesArray.length != 0, "DBTokenReward: no reward token addresses to check");
+        require(!tokenRewardsData.rewardDistributed, "DBTokenReward: reward already distributed for event");
 
-        uint256 standardTokenAmount = standardTokensFor(amount, eventCode, teamName);
-        uint256 standardTokenBalance = _standardToken.balanceOf(address(this));
+        for (uint256 i = 0; i < addressesArray.length; i++) {
+            DBToken tokenToExchange = DBToken(addressesArray[i]);
+            string memory teamName = tokenToExchange.teamName();
+            bytes32 tokenHash = getTokenHash(eventCode, teamName);
+            address[] memory usersWhoPurchasedToken = tokenHashToUsersPurchased[tokenHash];
 
-        require(
-            standardTokenBalance >= standardTokenAmount,
-            "DBTokenReward: insufficient contract reward token balance"
-        );
+            for (uint256 j = 0; j < usersWhoPurchasedToken.length; j++) {
+                address user = usersWhoPurchasedToken[j];
+                uint256 userBalance = tokenToExchange.balanceOf(user);
+                uint256 rewardAmount = standardTokensFor(userBalance, eventCode, teamName);
 
-        token.transferFrom(_msgSender(), address(this), amount);
-        _standardToken.transfer(_msgSender(), standardTokenAmount);
+                _standardToken.transfer(user, rewardAmount);
+                tokenToExchange.transferFrom(user, address(this), userBalance);
+            }
+        }
 
-        return true;
+        tokenRewardsData.rewardDistributed = true;
     }
 }
