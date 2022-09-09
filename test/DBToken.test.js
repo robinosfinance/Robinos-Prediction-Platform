@@ -550,11 +550,14 @@ describe('DBToken tests', () => {
         TetherToken,
         newArray(numOfTeams, (index) => [
           {
+            // Owner initially sends each of the users participating
+            // usdt funds necessary to compete
             method: 'transfer',
             args: [accounts[index + 1], stAmount],
             account: accounts[0],
           },
           {
+            // Each user approves the set amount of funds towards the sale contract
             method: 'approve',
             args: [DBTokenSale.options.address, stAmount],
             account: accounts[index + 1],
@@ -564,31 +567,39 @@ describe('DBToken tests', () => {
         .then(() =>
           useMethodsOn(DBTokenSale, [
             ...teamTokenParams.map(({ teamName }, index) => ({
+              // The owner adds each DBToken reference in the DBTokenSale contract
+              // that is available for purchase
               method: 'addDBTokenReference',
               args: [DBTokens[index].options.address, eventCode, teamName],
               account: accounts[0],
             })),
             {
+              // The owner must set the rate for each coin before they are distributed
               method: 'setRate',
               args: [eventCode, ...rate],
               account: accounts[0],
             },
             {
+              // The sale starts on the DBTokenSale contract
               method: 'setSaleStartEnd',
               args: [eventCode, 0, secondsInTheFuture(60)],
               account: accounts[0],
             },
             ...teamTokenParams.map(({ teamName }, index) => ({
+              // Each user buys tokens in the DBTokenSale contract
               method: 'buyTokens',
               args: [eventCode, teamName, purchaseAmount],
               account: accounts[index + 1],
             })),
             {
+              // Sale ends
               method: 'endSaleNow',
               args: [eventCode],
               account: accounts[0],
             },
             {
+              // We check the total amount of standard tokens received in the
+              // DBTokenSale contract
               method: 'getStandardTokensReceived',
               args: [eventCode],
               account: accounts[0],
@@ -604,6 +615,8 @@ describe('DBToken tests', () => {
         .then(() =>
           useMethodsOn(TetherToken, [
             {
+              // The owner sends the usdt funds towards the DBTokenReward contract
+              // required for user rewards
               method: 'transfer',
               args: [DBTokenReward.options.address, totalUsdtNeeded],
               account: accounts[0],
@@ -615,6 +628,9 @@ describe('DBToken tests', () => {
             DBTokens.map((DBToken, index) =>
               useMethodsOn(DBToken, [
                 {
+                  // Each user must approve the bought amount of DBToken
+                  // funds towards the DBTokenReward contract. This step can be done also
+                  // immediately after the user buys the tokens from the DBTokenSale contract
                   method: 'approve',
                   args: [DBTokenReward.options.address, purchaseAmount],
                   account: accounts[index + 1],
@@ -626,11 +642,14 @@ describe('DBToken tests', () => {
         .then(() =>
           useMethodsOn(DBTokenReward, [
             {
+              // After the sale has finished, the owner can pass the reference
+              // to the DBTokenSale contract and sale event
               method: 'addSaleReference',
               args: [DBTokenSale.options.address, eventCode],
               account: accounts[0],
             },
             ...teamTokenParams.map(({ teamName }, index) => ({
+              // The owner must set the rate for each token in the added sale
               method: 'setRate',
               args: [eventCode, teamName, ...rewardRates[index]],
               account: accounts[0],
@@ -648,12 +667,14 @@ describe('DBToken tests', () => {
               accounts[i + 1]
             );
 
+            // We check that each participating user has the purchased DBToken funds
             assert.strictEqual(dbTokenBalance, purchaseAmount);
             assert.strictEqual(usdtBalance, 0);
           }
         })
         .then(() =>
           useMethodsOn(DBTokenReward, {
+            // The user can call this method after they set the rate for each DBToken in the event
             method: 'exchangeUserTokens',
             args: [eventCode],
             account: accounts[0],
@@ -672,7 +693,9 @@ describe('DBToken tests', () => {
 
             const [num, dem] = rewardRates[i];
             const expectedStReward = (purchaseAmount * num) / dem;
+            // Now we check that each user doesn't have any DBTokens in their wallet
             assert.strictEqual(dbTokenBalance, 0);
+            // And that they have the expected amount of reward tokens
             assert.strictEqual(usdtBalance, expectedStReward);
           }
         });
