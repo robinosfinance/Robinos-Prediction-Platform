@@ -624,13 +624,6 @@ describe('DBToken tests', () => {
           )
         )
         .then(() =>
-          useMethodsOn(DBTokenSale, {
-            method: 'transferOwnershipOEventTokens',
-            args: [eventCode, DBTokenReward.options.address],
-            account: accounts[0],
-          })
-        )
-        .then(() =>
           useMethodsOn(DBTokenReward, [
             {
               method: 'addSaleReference',
