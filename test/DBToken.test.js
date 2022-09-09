@@ -15,6 +15,7 @@ const {
   useMethodsOn,
   newArray,
   getDeploy,
+  getBalanceOfUser,
 } = require('../utils/helper');
 
 const tokenContract = contracts['DBToken.sol'].DBToken;
@@ -522,65 +523,51 @@ describe('DBToken tests', () => {
   });
 
   describe('DBTokenReward', () => {
-    beforeEach(() =>
-      DBTokenEvent.methods
-        .transferOwnershipOfEventAndTokens(DBTokenSale.options.address)
-        .send({
-          from: accounts[0],
-        })
-    );
-    it('allows dynamic rates', () => {
-      const DBToken = DBTokens[0];
-      const teamName = teamTokenParams[0].teamName;
-      const DBtokenAmount = 10000;
-      const ratio = [5, 2]; // You can play with different ratios here. ratio[0] is numerator, ratio[1] is denominator
-
-      return useMethodsOn(DBTokenReward, [
-        {
-          method: 'addDBTokenReference',
-          args: [DBToken.options.address, eventCode, teamName],
-          account: accounts[0],
-        },
-        {
-          method: 'setRate',
-          args: [eventCode, teamName, ratio[0], ratio[1]],
-          account: accounts[0],
-        },
-        {
-          method: 'standardTokensFor',
-          args: [DBtokenAmount, eventCode, teamName],
-          account: accounts[0],
-          onReturn: (standardTokenAmount) => {
-            assert.strictEqual(
-              parseInt(standardTokenAmount),
-              parseInt(DBtokenAmount * (ratio[0] / ratio[1]))
-            );
-          },
-        },
-      ]);
+    beforeEach(() => {
+      useMethodsOn(DBTokenEvent, {
+        method: 'transferOwnershipOfEventAndTokens',
+        args: [DBTokenSale.options.address],
+        account: accounts[0],
+      });
     });
 
     it('allows rewards and stores standard tokens received per event', () => {
-      const DBToken = DBTokens[0];
-      const teamName = teamTokenParams[0].teamName;
       const rate = [4, 5];
       const purchaseAmount = 500;
       const stAmount = (purchaseAmount * rate[1]) / rate[0];
+      const numOfTeams = teamTokenParams.length;
+      const rewardRates = [
+        [5, 1],
+        [2, 1],
+        [3, 2],
+      ];
+      const totalUsdtNeeded = rewardRates.reduce(
+        (total, [num, dem]) => total + Math.round((num / dem) * stAmount),
+        0
+      );
 
-      return useMethodsOn(TetherToken, [
-        {
-          method: 'approve',
-          args: [DBTokenSale.options.address, stAmount],
-          account: accounts[0],
-        },
-      ])
+      return useMethodsOn(
+        TetherToken,
+        newArray(numOfTeams, (index) => [
+          {
+            method: 'transfer',
+            args: [accounts[index + 1], stAmount],
+            account: accounts[0],
+          },
+          {
+            method: 'approve',
+            args: [DBTokenSale.options.address, stAmount],
+            account: accounts[index + 1],
+          },
+        ]).flat()
+      )
         .then(() =>
           useMethodsOn(DBTokenSale, [
-            {
+            ...teamTokenParams.map(({ teamName }, index) => ({
               method: 'addDBTokenReference',
-              args: [DBToken.options.address, eventCode, teamName],
+              args: [DBTokens[index].options.address, eventCode, teamName],
               account: accounts[0],
-            },
+            })),
             {
               method: 'setRate',
               args: [eventCode, ...rate],
@@ -591,11 +578,11 @@ describe('DBToken tests', () => {
               args: [eventCode, 0, secondsInTheFuture(60)],
               account: accounts[0],
             },
-            {
+            ...teamTokenParams.map(({ teamName }, index) => ({
               method: 'buyTokens',
               args: [eventCode, teamName, purchaseAmount],
-              account: accounts[0],
-            },
+              account: accounts[index + 1],
+            })),
             {
               method: 'endSaleNow',
               args: [eventCode],
@@ -606,7 +593,10 @@ describe('DBToken tests', () => {
               args: [eventCode],
               account: accounts[0],
               onReturn: (tokensReceived) => {
-                assert.strictEqual(parseInt(tokensReceived), stAmount);
+                assert.strictEqual(
+                  parseInt(tokensReceived),
+                  stAmount * numOfTeams
+                );
               },
             },
           ])
@@ -615,39 +605,84 @@ describe('DBToken tests', () => {
           useMethodsOn(TetherToken, [
             {
               method: 'transfer',
-              args: [DBTokenReward.options.address, purchaseAmount],
+              args: [DBTokenReward.options.address, totalUsdtNeeded],
               account: accounts[0],
             },
           ])
         )
         .then(() =>
-          useMethodsOn(DBToken, [
-            {
-              method: 'approve',
-              args: [DBTokenReward.options.address, purchaseAmount],
-              account: accounts[0],
-            },
-          ])
+          Promise.all(
+            DBTokens.map((DBToken, index) =>
+              useMethodsOn(DBToken, [
+                {
+                  method: 'approve',
+                  args: [DBTokenReward.options.address, purchaseAmount],
+                  account: accounts[index + 1],
+                },
+              ])
+            )
+          )
+        )
+        .then(() =>
+          useMethodsOn(DBTokenSale, {
+            method: 'transferOwnershipOEventTokens',
+            args: [eventCode, DBTokenReward.options.address],
+            account: accounts[0],
+          })
         )
         .then(() =>
           useMethodsOn(DBTokenReward, [
             {
-              method: 'addDBTokenReference',
-              args: [DBToken.options.address, eventCode, teamName],
+              method: 'addSaleReference',
+              args: [DBTokenSale.options.address, eventCode],
               account: accounts[0],
             },
-            {
-              method: 'setSaleStartEnd',
-              args: [eventCode, 0, secondsInTheFuture(60)],
+            ...teamTokenParams.map(({ teamName }, index) => ({
+              method: 'setRate',
+              args: [eventCode, teamName, ...rewardRates[index]],
               account: accounts[0],
-            },
-            {
-              method: 'sellTokens',
-              args: [eventCode, teamName, purchaseAmount],
-              account: accounts[0],
-            },
+            })),
           ])
-        );
+        )
+        .then(async () => {
+          for (let i = 0; i < numOfTeams; i++) {
+            const dbTokenBalance = await getBalanceOfUser(
+              DBTokens[i],
+              accounts[i + 1]
+            );
+            const usdtBalance = await getBalanceOfUser(
+              TetherToken,
+              accounts[i + 1]
+            );
+
+            assert.strictEqual(dbTokenBalance, purchaseAmount);
+            assert.strictEqual(usdtBalance, 0);
+          }
+        })
+        .then(() =>
+          useMethodsOn(DBTokenReward, {
+            method: 'exchangeUserTokens',
+            args: [eventCode],
+            account: accounts[0],
+          })
+        )
+        .then(async () => {
+          for (let i = 0; i < numOfTeams; i++) {
+            const dbTokenBalance = await getBalanceOfUser(
+              DBTokens[i],
+              accounts[i + 1]
+            );
+            const usdtBalance = await getBalanceOfUser(
+              TetherToken,
+              accounts[i + 1]
+            );
+
+            const [num, dem] = rewardRates[i];
+            const expectedStReward = (purchaseAmount * num) / dem;
+            assert.strictEqual(dbTokenBalance, 0);
+            assert.strictEqual(usdtBalance, expectedStReward);
+          }
+        });
     });
   });
 

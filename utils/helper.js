@@ -93,6 +93,17 @@ const newArray = (length, callback) => {
   return array;
 };
 
+const getBalanceOfUser = async (TokenContract, account) => {
+  const balance = await useMethodsOn(TokenContract, {
+    method: 'balanceOf',
+    args: [account],
+    onReturn: () => {},
+    account,
+  });
+
+  return parseInt(balance);
+};
+
 module.exports = {
   secondsInTheFuture,
   randomInt,
@@ -102,4 +113,5 @@ module.exports = {
   zeroOrOne,
   newArray,
   getDeploy,
+  getBalanceOfUser,
 };
