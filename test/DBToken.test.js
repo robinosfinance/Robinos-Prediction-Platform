@@ -20,7 +20,7 @@ const {
 
 const tokenContract = contracts['DBToken.sol'].DBToken;
 const eventContract = contracts['DBTokenEvent.sol'].DBTokenEvent;
-const salesContract = contracts['DBTokenSale.sol'].DBTokenSale;
+const salesContract = contracts['DBTokenSaleV2.sol'].DBTokenSale;
 const rewardContract = contracts['DBTokenReward.sol'].DBTokenReward;
 const sideBetContract = contracts['DBTokenSideBet.sol'].DBTokenSideBet;
 

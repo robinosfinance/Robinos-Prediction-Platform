@@ -365,6 +365,11 @@ struct ArrayElRef {
     uint256 arrayIndex;
 }
 
+struct TokenSaleData {
+    address tokenAddress;
+    address[] usersPurchased;
+}
+
 abstract contract UsingEventHash {
     function hashStr(string memory str) internal pure returns (bytes32) {
         return bytes32(keccak256(bytes(str)));
@@ -628,16 +633,17 @@ abstract contract RecordingTokensSold is TokenHash, Ownable {
         bytes32 eventHash;
         bytes32 tokenHash;
         uint256 amountSold;
+        address[] usersPurchased;
     }
     TokensSold[] _currentSale;
-    mapping(bytes32 => ArrayElRef) private _saleArrayMapping;
+    mapping(bytes32 => ArrayElRef) internal _saleArrayMapping;
 
     struct EventTokensSold {
         bytes32 eventHash;
         uint256 amountSold;
     }
     EventTokensSold[] _currentEventSale;
-    mapping(bytes32 => ArrayElRef) private _saleEventArrayMapping;
+    mapping(bytes32 => ArrayElRef) internal _saleEventArrayMapping;
 
     function tokensSold() public view onlyOwner returns (TokensSold[] memory) {
         return _currentSale;
@@ -650,22 +656,38 @@ abstract contract RecordingTokensSold is TokenHash, Ownable {
     function initTokensSold(
         bytes32 tokenHash,
         bytes32 eventHash,
-        uint256 initialAmount
+        uint256 initialAmount,
+        address userPurchased
     ) private returns (bool) {
         require(!_saleArrayMapping[tokenHash].status, "DBTokenSale: TokenSold reference already initialized");
 
         uint256 tokenSoldIndex = _currentSale.length;
+        address[] memory usersPurchased = new address[](1);
+        usersPurchased[0] = userPurchased;
 
-        _currentSale.push(TokensSold(eventHash, tokenHash, initialAmount));
+        _currentSale.push(TokensSold(eventHash, tokenHash, initialAmount, usersPurchased));
         _saleArrayMapping[tokenHash] = ArrayElRef(true, tokenSoldIndex);
 
         return true;
     }
 
-    function increaseTokensSold(bytes32 tokenHash, uint256 amount) private returns (bool) {
+    function increaseTokensSold(
+        bytes32 tokenHash,
+        uint256 amount,
+        address userPurchased
+    ) private returns (bool) {
         require(_saleArrayMapping[tokenHash].status, "DBTokenSale: TokenSold reference is not initialized");
 
-        _currentSale[_saleArrayMapping[tokenHash].arrayIndex].amountSold += amount;
+        TokensSold storage saleTokenData = _currentSale[_saleArrayMapping[tokenHash].arrayIndex];
+
+        saleTokenData.amountSold += amount;
+        bool userRecorder = false;
+
+        for (uint256 i = 0; i < saleTokenData.usersPurchased.length; i++) {
+            if (saleTokenData.usersPurchased[i] == userPurchased) userRecorder = true;
+        }
+
+        if (!userRecorder) saleTokenData.usersPurchased.push(userPurchased);
 
         return true;
     }
@@ -673,7 +695,8 @@ abstract contract RecordingTokensSold is TokenHash, Ownable {
     function recordTokensSold(
         string memory _eventCode,
         string memory _teamName,
-        uint256 amount
+        uint256 amount,
+        address userPurchased
     ) internal returns (bool) {
         bytes32 tokenHash = getTokenHash(_eventCode, _teamName);
         bytes32 eventHash = bytes32(keccak256(bytes(_eventCode)));
@@ -681,9 +704,9 @@ abstract contract RecordingTokensSold is TokenHash, Ownable {
         recordEventTokensSold(eventHash, amount);
 
         if (!_saleArrayMapping[tokenHash].status) {
-            initTokensSold(tokenHash, eventHash, amount);
+            initTokensSold(tokenHash, eventHash, amount, userPurchased);
         } else {
-            increaseTokensSold(tokenHash, amount);
+            increaseTokensSold(tokenHash, amount, userPurchased);
         }
 
         return true;
@@ -732,6 +755,7 @@ abstract contract RecordingStandardTokens is UsingEventHash {
 
 contract StoringDBTokens is TokenHash, Pausable, Ownable {
     mapping(bytes32 => DBToken) internal _dbtokens;
+    mapping(bytes32 => bytes32[]) internal _eventTokenHashes;
 
     function pause() public override onlyOwner whileNotPaused returns (bool) {
         return super.pause();
@@ -763,9 +787,11 @@ contract StoringDBTokens is TokenHash, Pausable, Ownable {
 
         bytes32 tokenHash = getTokenHash(_eventCode, _teamName);
 
-        _dbtokens[tokenHash] = _token;
+        require(address(_dbtokens[tokenHash]) == address(0), "DBTokenSale: token already added");
 
-        // _dbtokens[tokenHash]._mint(address(this), initialAmount);
+        _dbtokens[tokenHash] = _token;
+        _eventTokenHashes[tokenEventCode].push(tokenHash);
+
         return true;
     }
 
@@ -844,9 +870,26 @@ contract DBTokenSale is
         dbtoken._mint(_msgSender(), amount);
 
         recordStandardTokensReceived(_eventCode, stAmount);
-        recordTokensSold(_eventCode, _teamName, amount);
+        recordTokensSold(_eventCode, _teamName, amount, _msgSender());
 
         return true;
+    }
+
+    function getEventSaleData(string memory eventCode) public view returns (TokenSaleData[] memory) {
+        bytes32[] memory tokenHashes = _eventTokenHashes[hashStr(eventCode)];
+        TokenSaleData[] memory tokenSaleData = new TokenSaleData[](tokenHashes.length);
+
+        for (uint256 i = 0; i < tokenHashes.length; i++) {
+            bytes32 tokenHash = tokenHashes[i];
+
+            address tokenAddress = address(_dbtokens[tokenHash]);
+            uint256 tokenDataIndex = _saleArrayMapping[tokenHash].arrayIndex;
+            address[] memory usersWhoBoughtToken = _currentSale[tokenDataIndex].usersPurchased;
+
+            tokenSaleData[i] = TokenSaleData(tokenAddress, usersWhoBoughtToken);
+        }
+
+        return tokenSaleData;
     }
 
     function mintOnePercentToOwner() public onlyOwner noActiveSale returns (bool) {
@@ -900,10 +943,19 @@ contract DBTokenSale is
         return true;
     }
 
+    function transferOwnershipOEventTokens(string memory eventCode, address newOwner) public onlyOwner {
+        bytes32[] memory tokenHashes = _eventTokenHashes[hashStr(eventCode)];
+
+        for (uint256 i = 0; i < tokenHashes.length; i++) {
+            DBToken tokenToTrasferOwnershipOf = _dbtokens[tokenHashes[i]];
+            tokenToTrasferOwnershipOf.transferOwnership(newOwner);
+        }
+    }
+
     function dbtToSt(Rate memory _rate, uint256 dbAmount) private pure returns (uint256) {
         uint256 d = _rate.denominator;
         uint256 n = _rate.numerator;
-        require (d != 0 && n != 0, "DBTokenSale: rate is not set");
+        require(d != 0 && n != 0, "DBTokenSale: rate is not set");
 
         return (dbAmount * d) / n;
     }
