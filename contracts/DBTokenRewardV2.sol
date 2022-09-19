@@ -365,7 +365,18 @@ struct ArrayElRef {
     uint256 arrayIndex;
 }
 
-abstract contract SaleFactory is Ownable {
+struct TokenSaleData {
+    address tokenAddress;
+    address[] usersPurchased;
+}
+
+abstract contract UsingEventHash {
+    function hashStr(string memory str) internal pure returns (bytes32) {
+        return bytes32(keccak256(bytes(str)));
+    }
+}
+
+abstract contract SaleFactory is Ownable, UsingEventHash {
     // Each sale has an entry in the eventCode hash table with start and end time.
     // If both saleStart and saleEnd are 0, sale is not initialized
     struct Sale {
@@ -447,10 +458,6 @@ abstract contract SaleFactory is Ownable {
     // Return current timestamp
     function time() public view returns (uint256) {
         return block.timestamp;
-    }
-
-    function hashStr(string memory str) private pure returns (bytes32) {
-        return bytes32(keccak256(bytes(str)));
     }
 
     /**
@@ -559,7 +566,7 @@ abstract contract SaleFactory is Ownable {
     }
 }
 
-abstract contract TokenHash is Ownable {
+abstract contract TokenHash {
     function getTokenHash(string memory _eventCode, string memory _teamName) internal pure returns (bytes32) {
         return keccak256(bytes(abi.encodePacked(_eventCode, _teamName)));
     }
@@ -621,21 +628,22 @@ abstract contract RecordingTradePairs is Ownable {
     }
 }
 
-abstract contract RecordingTokensSold is TokenHash {
+abstract contract RecordingTokensSold is TokenHash, Ownable {
     struct TokensSold {
         bytes32 eventHash;
         bytes32 tokenHash;
         uint256 amountSold;
+        address[] usersPurchased;
     }
     TokensSold[] _currentSale;
-    mapping(bytes32 => ArrayElRef) private _saleArrayMapping;
+    mapping(bytes32 => ArrayElRef) internal _saleArrayMapping;
 
     struct EventTokensSold {
         bytes32 eventHash;
         uint256 amountSold;
     }
     EventTokensSold[] _currentEventSale;
-    mapping(bytes32 => ArrayElRef) private _saleEventArrayMapping;
+    mapping(bytes32 => ArrayElRef) internal _saleEventArrayMapping;
 
     function tokensSold() public view onlyOwner returns (TokensSold[] memory) {
         return _currentSale;
@@ -648,22 +656,38 @@ abstract contract RecordingTokensSold is TokenHash {
     function initTokensSold(
         bytes32 tokenHash,
         bytes32 eventHash,
-        uint256 initialAmount
+        uint256 initialAmount,
+        address userPurchased
     ) private returns (bool) {
         require(!_saleArrayMapping[tokenHash].status, "DBTokenSale: TokenSold reference already initialized");
 
         uint256 tokenSoldIndex = _currentSale.length;
+        address[] memory usersPurchased = new address[](1);
+        usersPurchased[0] = userPurchased;
 
-        _currentSale.push(TokensSold(eventHash, tokenHash, initialAmount));
+        _currentSale.push(TokensSold(eventHash, tokenHash, initialAmount, usersPurchased));
         _saleArrayMapping[tokenHash] = ArrayElRef(true, tokenSoldIndex);
 
         return true;
     }
 
-    function increaseTokensSold(bytes32 tokenHash, uint256 amount) private returns (bool) {
+    function increaseTokensSold(
+        bytes32 tokenHash,
+        uint256 amount,
+        address userPurchased
+    ) private returns (bool) {
         require(_saleArrayMapping[tokenHash].status, "DBTokenSale: TokenSold reference is not initialized");
 
-        _currentSale[_saleArrayMapping[tokenHash].arrayIndex].amountSold += amount;
+        TokensSold storage saleTokenData = _currentSale[_saleArrayMapping[tokenHash].arrayIndex];
+
+        saleTokenData.amountSold += amount;
+        bool userRecorder = false;
+
+        for (uint256 i = 0; i < saleTokenData.usersPurchased.length; i++) {
+            if (saleTokenData.usersPurchased[i] == userPurchased) userRecorder = true;
+        }
+
+        if (!userRecorder) saleTokenData.usersPurchased.push(userPurchased);
 
         return true;
     }
@@ -671,7 +695,8 @@ abstract contract RecordingTokensSold is TokenHash {
     function recordTokensSold(
         string memory _eventCode,
         string memory _teamName,
-        uint256 amount
+        uint256 amount,
+        address userPurchased
     ) internal returns (bool) {
         bytes32 tokenHash = getTokenHash(_eventCode, _teamName);
         bytes32 eventHash = bytes32(keccak256(bytes(_eventCode)));
@@ -679,9 +704,9 @@ abstract contract RecordingTokensSold is TokenHash {
         recordEventTokensSold(eventHash, amount);
 
         if (!_saleArrayMapping[tokenHash].status) {
-            initTokensSold(tokenHash, eventHash, amount);
+            initTokensSold(tokenHash, eventHash, amount, userPurchased);
         } else {
-            increaseTokensSold(tokenHash, amount);
+            increaseTokensSold(tokenHash, amount, userPurchased);
         }
 
         return true;
@@ -716,8 +741,21 @@ abstract contract RecordingTokensSold is TokenHash {
     }
 }
 
-contract StoringDBTokens is TokenHash, Pausable {
+abstract contract RecordingStandardTokens is UsingEventHash {
+    mapping(bytes32 => uint256) private standardTokensReceived;
+
+    function getStandardTokensReceived(string memory eventCode) public view returns (uint256) {
+        return standardTokensReceived[hashStr(eventCode)];
+    }
+
+    function recordStandardTokensReceived(string memory eventCode, uint256 amount) internal {
+        standardTokensReceived[hashStr(eventCode)] += amount;
+    }
+}
+
+contract StoringDBTokens is TokenHash, Pausable, Ownable {
     mapping(bytes32 => DBToken) internal _dbtokens;
+    mapping(bytes32 => bytes32[]) internal _eventTokenHashes;
 
     function pause() public override onlyOwner whileNotPaused returns (bool) {
         return super.pause();
@@ -749,9 +787,11 @@ contract StoringDBTokens is TokenHash, Pausable {
 
         bytes32 tokenHash = getTokenHash(_eventCode, _teamName);
 
-        _dbtokens[tokenHash] = _token;
+        require(address(_dbtokens[tokenHash]) == address(0), "DBTokenSale: token already added");
 
-        // _dbtokens[tokenHash]._mint(address(this), initialAmount);
+        _dbtokens[tokenHash] = _token;
+        _eventTokenHashes[tokenEventCode].push(tokenHash);
+
         return true;
     }
 
@@ -763,25 +803,186 @@ contract StoringDBTokens is TokenHash, Pausable {
     }
 }
 
+contract DBTokenSale is
+    StoringDBTokens,
+    RecordingTradePairs,
+    RecordingTokensSold,
+    RecordingStandardTokens,
+    SaleFactory
+{
+    address private _owner;
+    address private _withrawable;
+
+    StandardToken private _standardToken;
+
+    struct Rate {
+        uint256 numerator;
+        uint256 denominator;
+    }
+
+    mapping(bytes32 => Rate) private rate;
+
+    /**
+     * @param standardToken_ Standard token is the USDT contract from which the sale contract will allow income of funds from. The contract should extend the StandardToken interface
+     * @param withrawable Address where the funds can be withdrawn to
+     */
+    constructor(StandardToken standardToken_, address withrawable) Ownable() {
+        _standardToken = standardToken_;
+        _withrawable = withrawable;
+    }
+
+    // High level call. Function will revert if token not found.
+    function calculateCirculatingSupply(string memory _eventCode, string memory _teamName)
+        public
+        view
+        returns (uint256)
+    {
+        DBToken token = getToken(_eventCode, _teamName);
+        return _calculateCirculatingSupply(token);
+    }
+
+    /**
+     * @dev Public function from which users can buy token from. A requirement for this purchase is that the user has approved
+     * at least the given amount of standardToken funds for transfer to contract address. The user has to input the event code
+     * and the team name of the token they are looking to purchase and the amount of tokens they are looking to purchase.
+     * @param _eventCode Event code of the DBToken
+     * @param _teamName Team name of the DBToken
+     * @param amount Amount of tokens the user wants to purchase. Has to have pre-approved amount of USDT tokens for transfer.
+     */
+    function buyTokens(
+        string memory _eventCode,
+        string memory _teamName,
+        uint256 amount
+    ) public duringSale(_eventCode) returns (bool) {
+        DBToken dbtoken = getToken(_eventCode, _teamName);
+
+        uint256 senderAllowance = _standardToken.allowance(_msgSender(), address(this));
+        require(senderAllowance >= amount, "DBTokenSale: insufficient allowance for standard token transaction");
+
+        uint256 stAmount = dbtToSt(getRate(_eventCode), amount);
+        _standardToken.transferFrom(_msgSender(), address(this), stAmount);
+        dbtoken._mint(_msgSender(), amount);
+
+        recordStandardTokensReceived(_eventCode, stAmount);
+        recordTokensSold(_eventCode, _teamName, amount, _msgSender());
+
+        return true;
+    }
+
+    function getEventSaleData(string memory eventCode) public view returns (TokenSaleData[] memory) {
+        bytes32[] memory tokenHashes = _eventTokenHashes[hashStr(eventCode)];
+        TokenSaleData[] memory tokenSaleData = new TokenSaleData[](tokenHashes.length);
+
+        for (uint256 i = 0; i < tokenHashes.length; i++) {
+            bytes32 tokenHash = tokenHashes[i];
+
+            address tokenAddress = address(_dbtokens[tokenHash]);
+            uint256 tokenDataIndex = _saleArrayMapping[tokenHash].arrayIndex;
+            address[] memory usersWhoBoughtToken = _currentSale[tokenDataIndex].usersPurchased;
+
+            tokenSaleData[i] = TokenSaleData(tokenAddress, usersWhoBoughtToken);
+        }
+
+        return tokenSaleData;
+    }
+
+    function mintOnePercentToOwner() public onlyOwner noActiveSale returns (bool) {
+        bytes32 tokenHash;
+        uint256 amountToMint;
+
+        for (uint256 i; i < _currentSale.length; i++) {
+            tokenHash = _currentSale[i].tokenHash;
+            amountToMint = _currentSale[i].amountSold / 100;
+
+            _dbtokens[tokenHash]._mint(owner(), amountToMint);
+        }
+
+        delete _currentSale;
+        return true;
+    }
+
+    function mint(
+        string memory _eventCode,
+        string memory _teamName,
+        address mintTo,
+        uint256 amount
+    ) public returns (bool) {
+        DBToken dbtoken = getToken(_eventCode, _teamName);
+        dbtoken._mint(mintTo, amount);
+
+        return true;
+    }
+
+    function balanceOf(
+        string memory _eventCode,
+        string memory _teamName,
+        address _account
+    ) public view returns (uint256) {
+        DBToken dbtoken = getToken(_eventCode, _teamName);
+        return dbtoken.balanceOf(_account);
+    }
+
+    /**
+     * @dev Allows the owner of the contract to withdraw the funds from to contract to the address in the variable withdrawable
+     * @param amount Amount of tokens standardTokens the owner wants to withdraw. If the amount is more than the current balance, all tokens are withdrawn.
+     */
+    function withdraw(uint256 amount) public onlyOwner returns (bool) {
+        require(_withrawable != address(0), "DBTokenSale: withdrawable address is zero address");
+        uint256 tokenBalance = _standardToken.balanceOf(address(this));
+        if (amount > tokenBalance) {
+            amount = tokenBalance;
+        }
+
+        _standardToken.transfer(_withrawable, amount);
+        return true;
+    }
+
+    function transferOwnershipOEventTokens(string memory eventCode, address newOwner) public onlyOwner {
+        bytes32[] memory tokenHashes = _eventTokenHashes[hashStr(eventCode)];
+
+        for (uint256 i = 0; i < tokenHashes.length; i++) {
+            DBToken tokenToTrasferOwnershipOf = _dbtokens[tokenHashes[i]];
+            tokenToTrasferOwnershipOf.transferOwnership(newOwner);
+        }
+    }
+
+    function dbtToSt(Rate memory _rate, uint256 dbAmount) private pure returns (uint256) {
+        uint256 d = _rate.denominator;
+        uint256 n = _rate.numerator;
+        require(d != 0 && n != 0, "DBTokenSale: rate is not set");
+
+        return (dbAmount * d) / n;
+    }
+
+    function setRate(
+        string memory _eventCode,
+        uint256 numerator,
+        uint256 denominator
+    ) public onlyOwner {
+        rate[hashStr(_eventCode)] = Rate(numerator, denominator);
+    }
+
+    function getRate(string memory _eventCode) public view returns (Rate memory) {
+        return rate[hashStr(_eventCode)];
+    }
+}
+
 /**********************************************************************
  ***********************************************************************
  ********************      DB TOKEN REWARD      ************************
  ***********************************************************************
  **********************************************************************/
 
-contract DBTokenReward is StoringDBTokens, SaleFactory {
-    /**
-     * The DBTokenReward shares a lot of similarities with DBTokenSale contract. Notable differences are:
-     * 1) This contract uses SaleFactory in the same way DBTokenSale does, but the sale here signifies when the tokens for the given event can be sold to this contract. DBTokenSale uses it for other way around.
-     * 2) Rate for each token can be set individually by the owner. Rate is a ratio between getToken(eventCode, teamName)/standard token
-     * 3) Instead of buyTokens, we have a sellTokens function which performs an immediate exchange taking in DBTokens from the user and providing Standard Tokens
-     */
-
+contract DBTokenReward is Ownable, TokenHash, UsingEventHash {
     StandardToken private _standardToken;
 
-    constructor(StandardToken standardToken_) Ownable() {
-        _standardToken = standardToken_;
+    struct EventTokenDistribution {
+        address[] tokenAddresses;
+        bool rewardDistributed;
     }
+
+    mapping(bytes32 => EventTokenDistribution) private eventTokenRewards;
+    mapping(bytes32 => address[]) private tokenHashToUsersPurchased;
 
     /**
      * @dev getRate(eventCode, teamName) returns a ratio between getToken(eventCode, teamName)/standard token
@@ -797,6 +998,14 @@ contract DBTokenReward is StoringDBTokens, SaleFactory {
         uint256 denominator;
     }
     mapping(bytes32 => Ratio) private _rates;
+
+    constructor(StandardToken standardToken_) Ownable() {
+        _standardToken = standardToken_;
+    }
+
+    function time() public view returns (uint256) {
+        return block.timestamp;
+    }
 
     /**
      * @dev Allows the owner to set a rate for specific token. Numerator and denominator must be greater than 0
@@ -835,41 +1044,54 @@ contract DBTokenReward is StoringDBTokens, SaleFactory {
         return uint256((amount * rate.numerator) / rate.denominator);
     }
 
-    // We override the function so we can set the rate for the token to one immediately
-    function addDBTokenReference(
-        DBToken _token,
-        string memory _eventCode,
-        string memory _teamName
-    ) public override onlyOwner returns (bool) {
-        super.addDBTokenReference(_token, _eventCode, _teamName);
-        setRate(_eventCode, _teamName, 1, 1);
+    function addSaleReference(DBTokenSale dbTokenSale, string memory eventCode) public onlyOwner {
+        (, , uint256 saleEnd) = dbTokenSale.isSaleOn(eventCode);
 
-        return true;
+        require(saleEnd <= time(), "DBTokenReward: can only add referance for a sale that already passed");
+
+        TokenSaleData[] memory tokenSaleData = dbTokenSale.getEventSaleData(eventCode);
+        bytes32 eventHash = hashStr(eventCode);
+        address[] storage eventTokenAddresses = eventTokenRewards[eventHash].tokenAddresses;
+
+        for (uint256 i = 0; i < tokenSaleData.length; i++) {
+            address tokenAddress = tokenSaleData[i].tokenAddress;
+            eventTokenAddresses.push(tokenAddress);
+
+            string memory teamName = DBToken(tokenAddress).teamName();
+            address[] memory usersWhoBoughtToken = tokenSaleData[i].usersPurchased;
+            bytes32 tokenHash = getTokenHash(eventCode, teamName);
+
+            for (uint256 j = 0; j < usersWhoBoughtToken.length; j++) {
+                address userAddress = usersWhoBoughtToken[j];
+
+                tokenHashToUsersPurchased[tokenHash].push(userAddress);
+            }
+        }
     }
 
-    // Function is basically the same as buyTokens from DBTokenSale contract, except the transfer is done the other way around
-    // Contract has to have at least the given amount of standardToken tokens for this function to work
-    function sellTokens(
-        string memory eventCode,
-        string memory teamName,
-        uint256 amount
-    ) public duringSale(eventCode) returns (bool) {
-        DBToken token = getToken(eventCode, teamName);
+    function exchangeUserTokens(string memory eventCode) public onlyOwner {
+        EventTokenDistribution storage tokenRewardsData = eventTokenRewards[hashStr(eventCode)];
+        address[] storage addressesArray = tokenRewardsData.tokenAddresses;
 
-        uint256 allowance = token.allowance(_msgSender(), address(this));
-        require(allowance >= amount, "DBTokenReward: insufficient token allowance");
+        require(addressesArray.length != 0, "DBTokenReward: no reward token addresses to check");
+        require(!tokenRewardsData.rewardDistributed, "DBTokenReward: reward already distributed for event");
 
-        uint256 standardTokenAmount = standardTokensFor(amount, eventCode, teamName);
-        uint256 standardTokenBalance = _standardToken.balanceOf(address(this));
+        for (uint256 i = 0; i < addressesArray.length; i++) {
+            DBToken tokenToExchange = DBToken(addressesArray[i]);
+            string memory teamName = tokenToExchange.teamName();
+            bytes32 tokenHash = getTokenHash(eventCode, teamName);
+            address[] memory usersWhoPurchasedToken = tokenHashToUsersPurchased[tokenHash];
 
-        require(
-            standardTokenBalance >= standardTokenAmount,
-            "DBTokenReward: insufficient contract reward token balance"
-        );
+            for (uint256 j = 0; j < usersWhoPurchasedToken.length; j++) {
+                address user = usersWhoPurchasedToken[j];
+                uint256 userBalance = tokenToExchange.balanceOf(user);
+                uint256 rewardAmount = standardTokensFor(userBalance, eventCode, teamName);
 
-        token.transferFrom(_msgSender(), address(this), amount);
-        _standardToken.transfer(_msgSender(), standardTokenAmount);
+                _standardToken.transfer(user, rewardAmount);
+                tokenToExchange.transferFrom(user, address(this), userBalance);
+            }
+        }
 
-        return true;
+        tokenRewardsData.rewardDistributed = true;
     }
 }

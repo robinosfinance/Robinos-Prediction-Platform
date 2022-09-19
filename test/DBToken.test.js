@@ -21,7 +21,7 @@ const {
 const tokenContract = contracts['DBToken.sol'].DBToken;
 const eventContract = contracts['DBTokenEvent.sol'].DBTokenEvent;
 const salesContract = contracts['DBTokenSaleV2.sol'].DBTokenSale;
-const rewardContract = contracts['DBTokenReward.sol'].DBTokenReward;
+const rewardContract = contracts['DBTokenRewardV2.sol'].DBTokenReward;
 const sideBetContract = contracts['DBTokenSideBet.sol'].DBTokenSideBet;
 
 // Local instance of the USDT contract used for testing
