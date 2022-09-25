@@ -6,6 +6,7 @@ const {
   secondsInTheFuture,
   zeroOrOne,
   newArray,
+  timeInSecs,
 } = require('../utils/helper');
 const { deploy, getAccounts } = require('../utils/useWeb3');
 
@@ -79,11 +80,12 @@ describe('SideBetV2 tests', () => {
 
     it('allows to set and edit sale start and end time', () => {
       const [inTenS, inTwentyS, inThirtyS] = [10, 20, 30].map(secs => secondsInTheFuture(secs));
+      const timestamp = timeInSecs();
 
       return useMethodsOn(SideBetV2, [
         {
           method: 'setSaleStartEnd',
-          args: [eventCode, inTenS, inTwentyS],
+          args: [eventCode, 0, inTenS],
           account: accounts[0],
         },
         {
@@ -94,8 +96,8 @@ describe('SideBetV2 tests', () => {
             const startTime = parseInt(data.saleStart);
             const endTime = parseInt(data.saleEnd);
             
-            assert.strictEqual(startTime, inTenS);
-            assert.strictEqual(endTime, inTwentyS);
+            assert.strictEqual(startTime, timestamp);
+            assert.strictEqual(endTime, inTenS);
           },
         },
         {
