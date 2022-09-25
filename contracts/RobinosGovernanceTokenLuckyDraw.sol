@@ -1430,7 +1430,7 @@ abstract contract SaleFactory is Ownable, ReadingTime {
         string memory eventCode,
         uint256 start,
         uint256 end
-    ) public onlyOwner outsideOfSale(eventCode) returns (bool) {
+    ) public onlyOwner returns (bool) {
         bool initialized;
         bytes32 saleHash = hashStr(eventCode);
         Sale storage eventSale = _eventSale[saleHash];
