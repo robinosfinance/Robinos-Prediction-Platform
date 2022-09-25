@@ -77,6 +77,47 @@ describe('SideBetV2 tests', () => {
         },
       ]));
 
+    it('allows to set and edit sale start and end time', () => {
+      const [inTenS, inTwentyS, inThirtyS] = [10, 20, 30].map(secs => secondsInTheFuture(secs));
+
+      return useMethodsOn(SideBetV2, [
+        {
+          method: 'setSaleStartEnd',
+          args: [eventCode, inTenS, inTwentyS],
+          account: accounts[0],
+        },
+        {
+          method: 'isSaleOn',
+          args: [eventCode],
+          account: accounts[0],
+          onReturn: (data) => {
+            const startTime = parseInt(data.saleStart);
+            const endTime = parseInt(data.saleEnd);
+            
+            assert.strictEqual(startTime, inTenS);
+            assert.strictEqual(endTime, inTwentyS);
+          },
+        },
+        {
+          method: 'setSaleStartEnd',
+          args: [eventCode, inTwentyS, inThirtyS],
+          account: accounts[0],
+        },
+        {
+          method: 'isSaleOn',
+          args: [eventCode],
+          account: accounts[0],
+          onReturn: (data) => {
+            const startTime = parseInt(data.saleStart);
+            const endTime = parseInt(data.saleEnd);
+            
+            assert.strictEqual(startTime, inTwentyS);
+            assert.strictEqual(endTime, inThirtyS);
+          },
+        },
+      ]);
+    });
+
     it('allows users to deposit, owner to select winning side and distribute rewards', () => {
       const transferAmount = 10000;
       const numOfUsersToDeposit = 7;
