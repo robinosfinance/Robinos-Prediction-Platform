@@ -17,7 +17,7 @@ describe('SideBetV2 tests', () => {
   const totalSupply = 100000000;
   const sides = ['Machester', 'Liverpool'];
   const eventCode = 'Man v. Liv';
-  const saleDuration = 8;
+  const saleDuration = 5;
   const ownerPercent = 5;
 
   beforeEach(async () => {
@@ -257,6 +257,116 @@ describe('SideBetV2 tests', () => {
                 const expectedReward =
                   sideToDepositFor[i] === winningSide ? rewardPerUser : 0;
                 assert.strictEqual(parseInt(amount), expectedReward);
+              },
+            })),
+          ])
+        );
+    });
+
+    it('allows owner to cancel event and users to withdraw deposited funds', () => {
+      const transferAmount = 10000;
+      const numOfUsersToDeposit = 7;
+      const sideToDepositFor = newArray(numOfUsersToDeposit, () => zeroOrOne());
+
+      return useMethodsOn(TetherToken, [
+        // We first transfer some amount of USDT to
+        // each user participating
+        ...newArray(numOfUsersToDeposit, (i) => ({
+          method: 'transfer',
+          args: [accounts[i + 1], transferAmount],
+          account: accounts[0],
+        })),
+        // Each user must approve the USDT tokens they want
+        // to deposit towards the SideBet contract
+        ...newArray(numOfUsersToDeposit, (i) => ({
+          method: 'approve',
+          args: [SideBetV2.options.address, transferAmount],
+          account: accounts[i + 1],
+        })),
+      ])
+        .then(() =>
+          useMethodsOn(SideBetV2, [
+            {
+              // The owner starts the sale immediately
+              method: 'setSaleStartEnd',
+              args: [eventCode, 0, secondsInTheFuture(saleDuration)],
+              account: accounts[0],
+            },
+            {
+              // And sets the name for each side in the event
+              method: 'setEventSides',
+              args: [eventCode, sides[0], sides[1]],
+              account: accounts[0],
+            },
+            ...newArray(numOfUsersToDeposit, (i) => ({
+              // Each user will deposit their USDT and choose
+              // which side they are betting on
+              method: 'deposit',
+              args: [eventCode, sideToDepositFor[i], transferAmount],
+              account: accounts[i + 1],
+            })),
+            ...newArray(numOfUsersToDeposit, (i) => ({
+              // We check how much each user deposited
+              method: 'getEventUserDepositData',
+              args: [eventCode, accounts[i + 1]],
+              account: accounts[0],
+              onReturn: (amounts) => {
+                const side = sideToDepositFor[i];
+                const userDeposited = Object.values(amounts)[side];
+
+                // And check if they deposited the right amount
+                assert.strictEqual(parseInt(userDeposited), transferAmount);
+              },
+            })),
+            {
+              method: 'getEventDepositData',
+              args: [eventCode],
+              account: accounts[0],
+              onReturn: (data) => {
+                // We check that the total amount deposited for this event
+                // is equal to the expected amount
+                const totalDeposited = parseInt(data[0]) + parseInt(data[1]);
+                const expectedDeposit = transferAmount * numOfUsersToDeposit;
+                assert.strictEqual(totalDeposited, expectedDeposit);
+              },
+            },
+            {
+              wait: saleDuration * 1000,
+            },
+            {
+              // After the sale ends, the cancels the event
+              method: 'cancelEvent',
+              args: [eventCode],
+              account: accounts[0],
+            },
+            {
+              // We should be able to read which side
+              // won after the winner has been selected
+              method: 'getWinningSide',
+              args: [eventCode],
+              account: accounts[0],
+              catch: (error) => {
+                assert.strictEqual(error, 'SideBetV2: event is cancelled, no winning side selected');
+              },
+            },
+            // Only after the owner has cancelled the event, each user can
+            // withdraw the funds they deposited for their bet
+            ...newArray(numOfUsersToDeposit, (i) => ({
+              method: 'withdraw',
+              args: [eventCode],
+              account: accounts[i + 1],
+            })),
+          ])
+        )
+        .then(() =>
+          useMethodsOn(TetherToken, [
+            ...newArray(numOfUsersToDeposit, (i) => ({
+              method: 'balanceOf',
+              args: [accounts[i + 1]],
+              account: accounts[0],
+              onReturn: (amount) => {
+                // We check if each user has received their expected reward
+                assert.strictEqual(parseInt(amount), transferAmount);
               },
             })),
           ])

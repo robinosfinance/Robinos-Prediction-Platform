@@ -316,6 +316,7 @@ contract SideBetV2 is SaleFactory {
     }
 
     struct EventResult {
+        bool eventCancelled;
         bool eventFinished;
         Side winningSide;
         mapping(address => bool) userWithdrawn;
@@ -410,22 +411,23 @@ contract SideBetV2 is SaleFactory {
         eventResults[hashStr(eventCode)].userWithdrawn[user] = true;
     }
 
-    function calculateSideReward(
-        string memory eventCode,
-        address user,
-        Side side
-    ) private view returns (uint256) {
-        SideDepositData storage sideDepositData = getSideDepositData(eventCode, side);
+    function calculateUserReward(string memory eventCode, address user) private view returns (uint256) {
+        EventResult storage _eventResults = eventResults[hashStr(eventCode)];
+        SideDepositData storage sideDepositData = getSideDepositData(eventCode, _eventResults.winningSide);
         uint256 _totalDeposit = totalDeposited[hashStr(eventCode)];
         // If no user has deposited for the winning side, the reward is always 0
         if (sideDepositData.totalDeposit == 0) return 0;
         return (sideDepositData.userDeposit[user] * _totalDeposit) / sideDepositData.totalDeposit;
     }
 
-    function calculateUserReward(string memory eventCode, address user) private view returns (uint256) {
-        EventResult storage _eventResults = eventResults[hashStr(eventCode)];
-        Side winningSide = _eventResults.winningSide;
-        return calculateSideReward(eventCode, user, winningSide);
+    function getUserTotalDeposited(string memory eventCode, address user) private view returns (uint256) {
+        SideDepositData storage sideAData = getSideDepositData(eventCode, Side.A);
+        SideDepositData storage sideBData = getSideDepositData(eventCode, Side.B);
+
+        uint256 userDepositedA = sideAData.userDeposit[user];
+        uint256 userDepositedB = sideBData.userDeposit[user];
+
+        return userDepositedA + userDepositedB;
     }
 
     function getSideDepositData(string memory eventCode, Side side) private view returns (SideDepositData storage) {
@@ -501,6 +503,17 @@ contract SideBetV2 is SaleFactory {
         return (sideA, sideB);
     }
 
+    function cancelEvent(string memory eventCode)
+        public
+        onlyOwner
+        outsideOfSale(eventCode)
+        eventNotFinished(eventCode)
+    {
+        EventResult storage _eventResults = eventResults[hashStr(eventCode)];
+        _eventResults.eventCancelled = true;
+        _eventResults.eventFinished = true;
+    }
+
     /**
      * Allows the owner to select the winning side after the sale for this event has ended
      *
@@ -523,11 +536,10 @@ contract SideBetV2 is SaleFactory {
     }
 
     function getWinningSide(string memory eventCode) public view eventFinished(eventCode) returns (string memory) {
-        bytes32 eventHash = hashStr(eventCode);
+        EventResult storage eventResult = eventResults[hashStr(eventCode)];
+        require(!eventResult.eventCancelled, "SideBetV2: event is cancelled, no winning side selected");
 
-        Side winningSide = eventResults[eventHash].winningSide;
-
-        return getSideName(eventCode, winningSide);
+        return getSideName(eventCode, eventResult.winningSide);
     }
 
     /**
@@ -559,8 +571,16 @@ contract SideBetV2 is SaleFactory {
         eventFinished(eventCode)
         userNotWithdrawn(eventCode, _msgSender())
     {
-        uint256 reward = calculateUserReward(eventCode, _msgSender());
-        if (reward != 0) standardToken.transfer(_msgSender(), reward);
+        bool isEventCancelled = eventResults[hashStr(eventCode)].eventCancelled;
+
+        if (isEventCancelled) {
+            uint256 userDeposit = getUserTotalDeposited(eventCode, _msgSender());
+            if (userDeposit != 0) standardToken.transfer(_msgSender(), userDeposit);
+        } else {
+            uint256 reward = calculateUserReward(eventCode, _msgSender());
+            if (reward != 0) standardToken.transfer(_msgSender(), reward);
+        }
+
         setUserWithdrawn(eventCode, _msgSender());
     }
 }
