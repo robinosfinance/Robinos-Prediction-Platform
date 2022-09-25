@@ -1,25 +1,15 @@
 const assert = require('assert');
-const ganache = require('ganache-cli');
-const Web3 = require('web3');
-const web3 = new Web3(
-  ganache.provider({
-    gasLimit: 1000000000000,
-  })
-);
-
 const contracts = require('../compile');
-
-const sideBetContract = contracts['SideBetV2.sol'].SideBetV2;
-
-// Local instance of the USDT contract used for testing
 const tether = require('../compiled/tether.json');
 const {
   useMethodsOn,
   secondsInTheFuture,
   zeroOrOne,
   newArray,
-  getDeploy,
 } = require('../utils/helper');
+const { deploy, getAccounts } = require('../utils/useWeb3');
+
+const sideBetContract = contracts['SideBetV2.sol'].SideBetV2;
 
 describe('SideBetV2 tests', () => {
   let accounts, SideBetV2, TetherToken;
@@ -31,9 +21,7 @@ describe('SideBetV2 tests', () => {
   const ownerPercent = 5;
 
   beforeEach(async () => {
-    const deploy = getDeploy(web3);
-    accounts = await web3.eth.getAccounts();
-
+    accounts = await getAccounts();
     // Local USDT instance. Address accounts[0] is the
     // owner of the contract and is immediately minted totalSupply
     // amount of tokens on initialization

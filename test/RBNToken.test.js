@@ -1,21 +1,10 @@
 const assert = require('assert');
-const ganache = require('ganache-cli');
-const Web3 = require('web3');
-const web3 = new Web3(
-  ganache.provider({
-    gasLimit: 1000000000000,
-  })
-);
-
 const contracts = require('../compile');
+const tether = require('../compiled/tether.json');
+const { useMethodsOn } = require('../utils/helper');
+const { getAccounts, deploy } = require('../utils/useWeb3');
 
 const tokenContract = contracts['RBNV2Token.sol'].RBNV2Token;
-
-const tether = require('../compiled/tether.json');
-const {
-  useMethodsOn,
-  getDeploy
-} = require('../utils/helper');
 
 describe('RBNToken tests', () => {
   let accounts, RBNToken, TetherToken;
@@ -29,26 +18,19 @@ describe('RBNToken tests', () => {
   const tetherInitialSupply = 100000000;
 
   beforeEach(async () => {
-    const deploy = getDeploy(web3);
-    accounts = await web3.eth.getAccounts();
+    accounts = await getAccounts();
 
-    RBNToken = await deploy(tokenContract, [
-      name,
-      symbol,
-      initialSupply,
-      accounts[0],
-      taxPercentage
-    ], accounts[0]);
+    RBNToken = await deploy(
+      tokenContract,
+      [name, symbol, initialSupply, accounts[0], taxPercentage],
+      accounts[0]
+    );
 
-    TetherToken = await new web3.eth.Contract(tether.abi)
-      .deploy({
-        data: tether.bytecode,
-        arguments: [tetherInitialSupply, 'Tether', 'USDT', 18],
-      })
-      .send({
-        from: accounts[0],
-        gas: '1000000000',
-      });
+    TetherToken = await deploy(
+      tether,
+      [tetherInitialSupply, 'Tether', 'USDT', 18],
+      accounts[0]
+    );
   });
 
   describe('TetherToken', () => {
@@ -66,7 +48,8 @@ describe('RBNToken tests', () => {
       const transferAmount = 1000;
       const expectedTax = (transferAmount * taxPercentage) / 100;
       let balanceBeforeTransfer, balanceAfterTransfer;
-      return useMethodsOn(RBNToken, [{
+      return useMethodsOn(RBNToken, [
+        {
           method: 'transfer',
           args: [accounts[1], withTax(transferAmount)],
           account: accounts[0],
@@ -133,7 +116,8 @@ describe('RBNToken tests', () => {
       const transferAmount = 1000;
       let balanceBeforeTransfer, balanceAfterTransfer;
 
-      return useMethodsOn(RBNToken, [{
+      return useMethodsOn(RBNToken, [
+        {
           method: 'setShouldTax',
           args: [false],
           account: accounts[0],

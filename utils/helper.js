@@ -72,19 +72,6 @@ const useMethodsOn = (contractInstance, methodArgs) => {
   return recursiveFunction(0, Promise.resolve());
 };
 
-const getDeploy =
-  (web3) =>
-  ({ abi, evm, bytecode }, args, account) =>
-    new web3.eth.Contract(abi)
-      .deploy({
-        data: evm ? evm.bytecode.object : bytecode,
-        arguments: args,
-      })
-      .send({
-        from: account,
-        gas: '1000000000',
-      });
-
 const zeroOrOne = () => randomInt(0, 2) - 1;
 
 const newArray = (length, callback) => {
@@ -112,6 +99,5 @@ module.exports = {
   useMethodsOn,
   zeroOrOne,
   newArray,
-  getDeploy,
   getBalanceOfUser,
 };

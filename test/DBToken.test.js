@@ -1,12 +1,4 @@
 const assert = require('assert');
-const ganache = require('ganache-cli');
-const Web3 = require('web3');
-const web3 = new Web3(
-  ganache.provider({
-    gasLimit: 1000000000000,
-  })
-);
-
 const contracts = require('../compile');
 const {
   secondsInTheFuture,
@@ -14,19 +6,20 @@ const {
   zeroOrOne,
   useMethodsOn,
   newArray,
-  getDeploy,
   getBalanceOfUser,
 } = require('../utils/helper');
+const tether = require('../compiled/tether.json');
+const {
+  getAccounts,
+  deploy,
+  getDeployedContract,
+} = require('../utils/useWeb3');
 
 const tokenContract = contracts['DBToken.sol'].DBToken;
 const eventContract = contracts['DBTokenEvent.sol'].DBTokenEvent;
 const salesContract = contracts['DBTokenSaleV2.sol'].DBTokenSale;
 const rewardContract = contracts['DBTokenRewardV2.sol'].DBTokenReward;
 const sideBetContract = contracts['DBTokenSideBet.sol'].DBTokenSideBet;
-
-// Local instance of the USDT contract used for testing
-const tether = require('../compiled/tether.json');
-const { printLogs } = require('../utils/debug');
 
 describe('DBToken tests', () => {
   let accounts,
@@ -61,8 +54,7 @@ describe('DBToken tests', () => {
   const rate = rateComplex[0] / rateComplex[1];
 
   beforeEach(async () => {
-    const deploy = getDeploy(web3);
-    accounts = await web3.eth.getAccounts();
+    accounts = await getAccounts();
     DBTokens = [];
 
     DBTokenEvent = await deploy(
@@ -77,7 +69,7 @@ describe('DBToken tests', () => {
         method: 'getTeamTokenAddress',
         args: [teamParams.teamName],
         onReturn: (tokenAddress) => {
-          DBTokens.push(new web3.eth.Contract(tokenContract.abi, tokenAddress));
+          DBTokens.push(getDeployedContract(tokenContract.abi, tokenAddress));
         },
       }))
     );
@@ -859,11 +851,6 @@ describe('DBToken tests', () => {
                   .address,
               ],
               account: accounts[winningAccountIndex],
-            },
-            {
-              then: () => {
-                printLogs(DBTokenSideBet);
-              },
             },
           ])
         )
