@@ -10,4 +10,5 @@ module.exports = [
   'RobinosGovernanceTokenNFTSubscription.sol',
   'RBNV2Token.sol',
   'SideBetV2.sol',
+  'SideBetV3.sol',
 ];
