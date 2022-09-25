@@ -1,7 +1,5 @@
 const { formatArgs } = require('./debug');
 
-const secondsInTheFuture = (seconds) => Math.floor(Date.now() / 1000) + seconds;
-
 const randomInt = (min, max) => {
   const diff = max - min;
   return Math.ceil(Math.random() * diff) + min;
@@ -16,6 +14,8 @@ const idsFrom = (fromId, length) => {
 };
 
 const timeInSecs = () => Math.round(Date.now() / 1000);
+
+const secondsInTheFuture = (seconds) => timeInSecs() + seconds;
 
 const useMethodsOn = (contractInstance, methodArgs) => {
   const methods = Array.isArray(methodArgs) ? methodArgs : [methodArgs];
