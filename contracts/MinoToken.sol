@@ -1485,7 +1485,7 @@ contract MinoToken is
         require(mintableTokenHashes.length != 0, "MinoToken: no more tokens left");
 
         uint256 tokenId = newTokenId();
-        uint256 randomNumber = randomNumber(users, 10, mintableTokenHashes.length - 1);
+        uint256 randomNumber = randomNumber(users, 10, mintableTokenHashes.length);
         bytes32 tokenHash = mintableTokenHashes[randomNumber];
 
         MintableToken storage mintableToken = mintableTokens[tokenHash];
