@@ -20,9 +20,9 @@ describe('MinoToken tests', () => {
   ];
 
   const mintableTokens = [
-    { name: 'Ronaldo', rarityLevel: rarityLevels[0].name },
-    { name: 'Rooney', rarityLevel: rarityLevels[1].name },
-    { name: 'Jovetic', rarityLevel: rarityLevels[2].name },
+    { name: 'Ronaldo', tokenUri: 'ronaldo', rarityLevel: rarityLevels[0].name },
+    { name: 'Rooney', tokenUri: 'rooney', rarityLevel: rarityLevels[1].name },
+    { name: 'Jovetic', tokenUri: 'jovetic', rarityLevel: rarityLevels[2].name },
   ];
 
   const usersMintsPerSeries = [2, 1, 3, 2, 1];
@@ -158,12 +158,12 @@ describe('MinoToken tests', () => {
         args: [name, availableTokens],
         account: accounts[0],
       })),
-      ...mintableTokens.flatMap(({ name, rarityLevel }) => [
+      ...mintableTokens.flatMap(({ name, tokenUri, rarityLevel }) => [
         {
           // Then add mintable tokens in the initialized series and
           // link them with the already added rarity levels
           method: 'addNewMintableToken',
-          args: [name, rarityLevel, seriesName],
+          args: [name, tokenUri, rarityLevel, seriesName],
           account: accounts[0],
         },
         {
@@ -214,11 +214,11 @@ describe('MinoToken tests', () => {
         args: [name, availableTokens],
         account: accounts[0],
       })),
-      ...mintableTokens.map(({ name, rarityLevel }) => ({
+      ...mintableTokens.map(({ name, tokenUri, rarityLevel }) => ({
         // Adds new tokens in the series and links them to the
         // already provided rarity levels
         method: 'addNewMintableToken',
-        args: [name, rarityLevel, seriesName],
+        args: [name, tokenUri, rarityLevel, seriesName],
         account: accounts[0],
       })),
       {

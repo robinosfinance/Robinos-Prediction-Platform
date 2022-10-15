@@ -1297,6 +1297,7 @@ abstract contract LimitingUserMintsPerSeries is WhitelistingUsersToMint, StringH
 abstract contract UserMintableTokenInSeries is LimitingUserMintsPerSeries, SeriesFactory {
     struct MintableToken {
         string name;
+        string tokenUri;
         uint256 totalAvailableMints;
         uint256 mintedInSeries;
         string series;
@@ -1321,6 +1322,7 @@ abstract contract UserMintableTokenInSeries is LimitingUserMintsPerSeries, Serie
 
     function addNewMintableToken(
         string memory name,
+        string memory tokenUri,
         uint256 totalAvailableMints,
         string memory series
     ) internal seriesInitialized(series) {
@@ -1331,7 +1333,7 @@ abstract contract UserMintableTokenInSeries is LimitingUserMintsPerSeries, Serie
 
         require(!isTokenInitialized(name, series), "Token initialized");
 
-        mintableTokens[tokenHash] = MintableToken(name, totalAvailableMints, 0, series);
+        mintableTokens[tokenHash] = MintableToken(name, tokenUri, totalAvailableMints, 0, series);
         mintableTokensPerSeries[seriesHash].push(tokenHash);
     }
 
@@ -1410,6 +1412,7 @@ abstract contract RecordingMintedTokens {
     struct MintedToken {
         uint256 tokenId;
         string name;
+        string tokenUri;
         string rarityLevel;
         uint256 totalAvailable;
         string series;
@@ -1464,10 +1467,11 @@ contract MinoToken is
      */
     function addNewMintableToken(
         string memory name,
+        string memory tokenUri,
         string memory rarityLevel,
         string memory series
     ) public onlyOwner seriesInitialized(series) {
-        addNewMintableToken(name, getRarityLevelMintsPerSeries(rarityLevel), series);
+        addNewMintableToken(name, tokenUri, getRarityLevelMintsPerSeries(rarityLevel), series);
     }
 
     /**
@@ -1488,6 +1492,7 @@ contract MinoToken is
         MintedToken memory newToken = MintedToken(
             tokenId,
             mintableToken.name,
+            mintableToken.tokenUri,
             getRarityLevelName(mintableToken.totalAvailableMints),
             mintableToken.totalAvailableMints,
             series
