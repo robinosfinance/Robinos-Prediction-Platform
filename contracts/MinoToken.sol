@@ -1018,10 +1018,7 @@ abstract contract GeneratingRandomNumbers {
 
     function getRandomSequence(address[] memory addresses, uint256 count) public view returns (uint256[] memory) {
         uint256 length = addresses.length;
-        require(
-            count <= maxSequenceCount && length >= minAddressesForRandomSequence,
-            "GeneratingRandomNumbers: Cannot get random sequence"
-        );
+        require(count <= maxSequenceCount && length >= minAddressesForRandomSequence, "Cannot get random sequence");
 
         uint256[] memory randomSequence = new uint256[](count);
         uint256 base = addressToUint(addresses[simpleRandom(length)]);
@@ -1032,7 +1029,7 @@ abstract contract GeneratingRandomNumbers {
     }
 
     function _randomNumber(address[] memory addresses, uint256 count) private view returns (uint256) {
-        require(count > minCountForRandomNumber, "GeneratingRandomNumbers: Insufficient count for a random number");
+        require(count > minCountForRandomNumber, "Insufficient count");
         uint256[] memory sequence = getRandomSequence(addresses, count);
         uint256 rand = 1;
         for (uint256 i = 0; i < count / 2; i++) {
@@ -1081,14 +1078,14 @@ abstract contract SeriesFactory is Ownable, StringHash {
 
     modifier seriesInitialized(string memory seriesName) {
         Series storage series = seriesMapping[hashStr(seriesName)];
-        require(series.initialized, "SeriesFactory: series is not initialized");
+        require(series.initialized, "Not initialized");
 
         _;
     }
 
     modifier seriesMintIsOpen(string memory seriesName) {
         Series storage series = seriesMapping[hashStr(seriesName)];
-        require(series.initialized && series.mintingIsOpen, "SeriesFactory: series is not open for minting");
+        require(series.initialized && series.mintingIsOpen, "Minting not open");
         _;
     }
 
@@ -1098,7 +1095,7 @@ abstract contract SeriesFactory is Ownable, StringHash {
     function initializeSeries(string memory seriesName) public onlyOwner {
         bytes32 seriesKey = hashStr(seriesName);
         Series storage series = seriesMapping[seriesKey];
-        require(!series.initialized, "SeriesFactory: series already initialized");
+        require(!series.initialized, "Already initialized");
 
         series.initialized = true;
     }
@@ -1143,7 +1140,7 @@ abstract contract RecordingUserAddresses {
 }
 
 abstract contract WhitelistingUsersToMint is RecordingUserAddresses, Ownable {
-    mapping(address => uint256) internal userMintsPerSeries;
+    mapping(address => uint256) private userMintsPerSeries;
 
     /**
      * @dev Allows owner to set individual user available mints per series.
@@ -1151,7 +1148,7 @@ abstract contract WhitelistingUsersToMint is RecordingUserAddresses, Ownable {
      * as a seed for creating a random number.
      */
     function setUserMintsPerSeries(address user, uint256 mintsPerSeries) public onlyOwner {
-        require(user != address(0), "WhitelistingUsersToMint: whitelisting zero address");
+        require(user != address(0), "Zero address");
 
         recordAddressIfNotRecorded(user);
         userMintsPerSeries[user] = mintsPerSeries;
@@ -1176,10 +1173,7 @@ abstract contract RarityToken is Ownable, MatchingStrings {
     mapping(uint256 => RarityLevel) private rarityLevelMapping;
 
     modifier validMintsPerSeries(uint256 mintsPerSeries) {
-        require(
-            mintsPerSeries > 0 && mintsPerSeries <= MAX_MINTS_PER_LEVEL,
-            "RarityToken: mints per series is not valid"
-        );
+        require(mintsPerSeries > 0 && mintsPerSeries <= MAX_MINTS_PER_LEVEL, "Mints not valid");
 
         _;
     }
@@ -1223,7 +1217,7 @@ abstract contract RarityToken is Ownable, MatchingStrings {
         returns (string memory)
     {
         RarityLevel storage level = rarityLevelMapping[mintsPerSeries];
-        require(level.initialized, "RarityToken: rarity level not initialized");
+        require(level.initialized, "Not found");
 
         return level.name;
     }
@@ -1307,7 +1301,7 @@ abstract contract UserMintableTokenInSeries is LimitingUserMintsPerSeries, Serie
     mapping(bytes32 => bytes32[]) private mintableTokensPerSeries;
 
     modifier tokenInitialized(string memory name, string memory series) {
-        require(isTokenInitialized(name, series), "UserMintableTokenInSeries: token not initialized");
+        require(isTokenInitialized(name, series), "Token not initialized");
 
         _;
     }
@@ -1326,7 +1320,7 @@ abstract contract UserMintableTokenInSeries is LimitingUserMintsPerSeries, Serie
         uint256 totalAvailableMints,
         string memory series
     ) internal seriesInitialized(series) {
-        require(totalAvailableMints > 0, "Total available mints not valid");
+        require(totalAvailableMints > 0, "Mints not valid");
 
         bytes32 tokenHash = dualHash(series, name);
         bytes32 seriesHash = hashStr(series);
@@ -1337,17 +1331,6 @@ abstract contract UserMintableTokenInSeries is LimitingUserMintsPerSeries, Serie
         mintableTokensPerSeries[seriesHash].push(tokenHash);
     }
 
-    function getAllMintableTokensInSeries(string memory series) private view returns (MintableToken[] memory) {
-        bytes32[] storage tokenHashes = mintableTokensPerSeries[hashStr(series)];
-        MintableToken[] memory seriesTokens = new MintableToken[](tokenHashes.length);
-
-        for (uint256 i = 0; i < tokenHashes.length; i++) {
-            seriesTokens[i] = mintableTokens[tokenHashes[i]];
-        }
-
-        return seriesTokens;
-    }
-
     /**
      * @dev Returns an array of token hashes for each mintable token in the given series.
      * The token hash also appears the exact number of times in the array for each
@@ -1355,7 +1338,13 @@ abstract contract UserMintableTokenInSeries is LimitingUserMintsPerSeries, Serie
      */
     function getMintableTokenHashesArray(string memory series) internal view returns (bytes32[] memory) {
         uint256 totalMintableTokens = 0;
-        MintableToken[] memory tokens = getAllMintableTokensInSeries(series);
+        bytes32[] storage tokenHashes = mintableTokensPerSeries[hashStr(series)];
+        MintableToken[] memory tokens = new MintableToken[](tokenHashes.length);
+
+        for (uint256 i = 0; i < tokenHashes.length; i++) {
+            tokens[i] = mintableTokens[tokenHashes[i]];
+        }
+
         for (uint256 i = 0; i < tokens.length; i++) {
             uint256 mintedInSeries = tokens[i].mintedInSeries;
             uint256 totalAvailableMints = tokens[i].totalAvailableMints;
@@ -1399,10 +1388,7 @@ abstract contract UserMintableTokenInSeries is LimitingUserMintsPerSeries, Serie
     function recordTokenMint(string memory name, string memory series) internal tokenInitialized(name, series) {
         MintableToken storage token = mintableTokens[dualHash(series, name)];
 
-        require(
-            token.mintedInSeries < token.totalAvailableMints,
-            "UserMintableTokenInSeries: tokens are alredy  minted"
-        );
+        require(token.mintedInSeries < token.totalAvailableMints, "Tokens already minted");
 
         token.mintedInSeries++;
     }
@@ -1421,8 +1407,8 @@ abstract contract RecordingMintedTokens {
     mapping(uint256 => MintedToken) private mintedTokenData;
 
     function addMintedToken(MintedToken memory token) internal {
-        require(token.tokenId != 0, "RecordingMintedTokens: token id cannot be zero");
-        require(mintedTokenData[token.tokenId].tokenId == 0, "RecordingMintedTokens: token already minted");
+        require(token.tokenId != 0, "Token id is zero");
+        require(mintedTokenData[token.tokenId].tokenId == 0, "Already minted");
 
         mintedTokenData[token.tokenId] = token;
     }
@@ -1482,7 +1468,7 @@ contract MinoToken is
      */
     function mintToken(string memory series) public seriesMintIsOpen(series) userCanMint(_msgSender(), series) {
         bytes32[] memory mintableTokenHashes = getMintableTokenHashesArray(series);
-        require(mintableTokenHashes.length != 0, "MinoToken: no more tokens left");
+        require(mintableTokenHashes.length != 0, "No more tokens left");
 
         uint256 tokenId = newTokenId();
         uint256 randomNumber = randomNumber(users, 10, mintableTokenHashes.length);
