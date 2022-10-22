@@ -1051,7 +1051,7 @@ abstract contract GeneratingRandomNumbers {
     }
 }
 
-abstract contract StringHash {
+library StringHash {
     function hashStr(string memory str) internal pure returns (bytes32) {
         return bytes32(keccak256(bytes(str)));
     }
@@ -1061,13 +1061,13 @@ abstract contract StringHash {
     }
 }
 
-abstract contract MatchingStrings {
+library StringUtils {
     function matchStrings(string memory a, string memory b) internal pure returns (bool) {
         return keccak256(bytes(a)) == keccak256(bytes(b));
     }
 }
 
-abstract contract SeriesFactory is Ownable, StringHash {
+abstract contract SeriesFactory is Ownable {
     struct Series {
         bool initialized;
         bool mintingIsOpen;
@@ -1077,14 +1077,14 @@ abstract contract SeriesFactory is Ownable, StringHash {
     mapping(bytes32 => Series) private seriesMapping;
 
     modifier seriesInitialized(string memory seriesName) {
-        Series storage series = seriesMapping[hashStr(seriesName)];
+        Series storage series = seriesMapping[StringHash.hashStr(seriesName)];
         require(series.initialized, "Not initialized");
 
         _;
     }
 
     modifier seriesMintIsOpen(string memory seriesName) {
-        Series storage series = seriesMapping[hashStr(seriesName)];
+        Series storage series = seriesMapping[StringHash.hashStr(seriesName)];
         require(series.initialized && series.mintingIsOpen, "Minting not open");
         _;
     }
@@ -1093,7 +1093,7 @@ abstract contract SeriesFactory is Ownable, StringHash {
      * @dev Allows owner to initialize a new series. Can only be done once per series.
      */
     function initializeSeries(string memory seriesName) public onlyOwner {
-        bytes32 seriesKey = hashStr(seriesName);
+        bytes32 seriesKey = StringHash.hashStr(seriesName);
         Series storage series = seriesMapping[seriesKey];
         require(!series.initialized, "Already initialized");
 
@@ -1109,7 +1109,7 @@ abstract contract SeriesFactory is Ownable, StringHash {
         onlyOwner
         seriesInitialized(seriesName)
     {
-        Series storage series = seriesMapping[hashStr(seriesName)];
+        Series storage series = seriesMapping[StringHash.hashStr(seriesName)];
 
         series.mintingIsOpen = mintingIsOpen;
     }
@@ -1119,7 +1119,7 @@ abstract contract SeriesFactory is Ownable, StringHash {
      * and if the minting is currently open.
      */
     function getSeriesFlags(string memory seriesName) public view returns (bool initialized, bool mintingIsOpen) {
-        Series storage series = seriesMapping[hashStr(seriesName)];
+        Series storage series = seriesMapping[StringHash.hashStr(seriesName)];
 
         initialized = series.initialized;
         mintingIsOpen = series.mintingIsOpen;
@@ -1162,7 +1162,7 @@ abstract contract WhitelistingUsersToMint is RecordingUserAddresses, Ownable {
     }
 }
 
-abstract contract RarityToken is Ownable, MatchingStrings {
+abstract contract RarityToken is Ownable {
     uint256 constant MAX_MINTS_PER_LEVEL = 50;
 
     struct RarityLevel {
@@ -1198,7 +1198,7 @@ abstract contract RarityToken is Ownable, MatchingStrings {
         for (uint256 i = 1; i <= MAX_MINTS_PER_LEVEL; i++) {
             RarityLevel storage level = rarityLevelMapping[i];
 
-            if (matchStrings(level.name, levelName)) return i;
+            if (StringUtils.matchStrings(level.name, levelName)) return i;
         }
 
         require(false);
@@ -1265,7 +1265,7 @@ abstract contract AutoIncrementingTokenId {
     }
 }
 
-abstract contract LimitingUserMintsPerSeries is WhitelistingUsersToMint, StringHash {
+abstract contract LimitingUserMintsPerSeries is WhitelistingUsersToMint {
     mapping(address => mapping(bytes32 => uint256)) private userMintedPerSeries;
 
     modifier userCanMint(address user, string memory seriesName) {
@@ -1277,14 +1277,14 @@ abstract contract LimitingUserMintsPerSeries is WhitelistingUsersToMint, StringH
     }
 
     function recordUserMint(address user, string memory seriesName) internal {
-        userMintedPerSeries[user][hashStr(seriesName)]++;
+        userMintedPerSeries[user][StringHash.hashStr(seriesName)]++;
     }
 
     /**
      * @dev Checks how many times has the user minted in the given series
      */
     function userMintedInSeries(address user, string memory seriesName) public view returns (uint256) {
-        return userMintedPerSeries[user][hashStr(seriesName)];
+        return userMintedPerSeries[user][StringHash.hashStr(seriesName)];
     }
 }
 
@@ -1310,7 +1310,7 @@ abstract contract UserMintableTokenInSeries is LimitingUserMintsPerSeries, Serie
      * @dev Checks wether the given token referenced by name and series has been initialized
      */
     function isTokenInitialized(string memory name, string memory series) public view returns (bool) {
-        bytes32 tokenHash = dualHash(series, name);
+        bytes32 tokenHash = StringHash.dualHash(series, name);
         return mintableTokens[tokenHash].totalAvailableMints != 0;
     }
 
@@ -1322,8 +1322,8 @@ abstract contract UserMintableTokenInSeries is LimitingUserMintsPerSeries, Serie
     ) internal seriesInitialized(series) {
         require(totalAvailableMints > 0, "Mints not valid");
 
-        bytes32 tokenHash = dualHash(series, name);
-        bytes32 seriesHash = hashStr(series);
+        bytes32 tokenHash = StringHash.dualHash(series, name);
+        bytes32 seriesHash = StringHash.hashStr(series);
 
         require(!isTokenInitialized(name, series), "Token initialized");
 
@@ -1338,7 +1338,7 @@ abstract contract UserMintableTokenInSeries is LimitingUserMintsPerSeries, Serie
      */
     function getMintableTokenHashesArray(string memory series) internal view returns (bytes32[] memory) {
         uint256 totalMintableTokens = 0;
-        bytes32[] storage tokenHashes = mintableTokensPerSeries[hashStr(series)];
+        bytes32[] storage tokenHashes = mintableTokensPerSeries[StringHash.hashStr(series)];
         MintableToken[] memory tokens = new MintableToken[](tokenHashes.length);
 
         for (uint256 i = 0; i < tokenHashes.length; i++) {
@@ -1358,7 +1358,7 @@ abstract contract UserMintableTokenInSeries is LimitingUserMintsPerSeries, Serie
         for (uint256 i = 0; i < tokens.length; i++) {
             MintableToken memory token = tokens[i];
             uint256 availableMints = token.totalAvailableMints - token.mintedInSeries;
-            bytes32 tokenHash = dualHash(token.series, token.name);
+            bytes32 tokenHash = StringHash.dualHash(token.series, token.name);
 
             for (uint256 j = 0; j < availableMints; j++) {
                 mintableTokenHashesArray[arrayIndex] = tokenHash;
@@ -1379,14 +1379,14 @@ abstract contract UserMintableTokenInSeries is LimitingUserMintsPerSeries, Serie
         tokenInitialized(name, series)
         returns (uint256 totalAvailableMints, uint256 mintedInSeries)
     {
-        MintableToken storage token = mintableTokens[dualHash(series, name)];
+        MintableToken storage token = mintableTokens[StringHash.dualHash(series, name)];
 
         totalAvailableMints = token.totalAvailableMints;
         mintedInSeries = token.mintedInSeries;
     }
 
     function recordTokenMint(string memory name, string memory series) internal tokenInitialized(name, series) {
-        MintableToken storage token = mintableTokens[dualHash(series, name)];
+        MintableToken storage token = mintableTokens[StringHash.dualHash(series, name)];
 
         require(token.mintedInSeries < token.totalAvailableMints, "Tokens already minted");
 
