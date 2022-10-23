@@ -1285,6 +1285,7 @@ abstract contract LimitingUserMintsPerSeries is WhitelistingUsersToMint {
 abstract contract UserMintableTokenInSeries is LimitingUserMintsPerSeries, SeriesFactory {
     struct MintableToken {
         string name;
+        string sport;
         string tokenUri;
         uint256 totalAvailableMints;
         uint256 mintedInSeries;
@@ -1310,6 +1311,7 @@ abstract contract UserMintableTokenInSeries is LimitingUserMintsPerSeries, Serie
 
     function addNewMintableToken(
         string memory name,
+        string memory sport,
         string memory tokenUri,
         uint256 totalAvailableMints,
         string memory series
@@ -1321,7 +1323,7 @@ abstract contract UserMintableTokenInSeries is LimitingUserMintsPerSeries, Serie
 
         require(!isTokenInitialized(name, series), "Token initialized");
 
-        mintableTokens[tokenHash] = MintableToken(name, tokenUri, totalAvailableMints, 0, series);
+        mintableTokens[tokenHash] = MintableToken(name, sport, tokenUri, totalAvailableMints, 0, series);
         mintableTokensPerSeries[seriesHash].push(tokenHash);
     }
 
@@ -1392,6 +1394,7 @@ abstract contract RecordingMintedTokens {
     struct MintedToken {
         uint256 tokenId;
         string name;
+        string sport;
         string tokenUri;
         string rarityLevel;
         uint256 totalAvailable;
@@ -1399,12 +1402,15 @@ abstract contract RecordingMintedTokens {
     }
 
     mapping(uint256 => MintedToken) private mintedTokenData;
+    mapping(bytes32 => uint256[]) private nameAndSportToTokenIds;
 
     function addMintedToken(MintedToken memory token) internal {
         require(token.tokenId != 0, "Token id is zero");
         require(mintedTokenData[token.tokenId].tokenId == 0, "Already minted");
 
+        bytes32 tokenHash = StringHash.dualHash(token.name, token.sport);
         mintedTokenData[token.tokenId] = token;
+        nameAndSportToTokenIds[tokenHash].push(token.tokenId);
     }
 
     /**
@@ -1412,6 +1418,22 @@ abstract contract RecordingMintedTokens {
      */
     function getTokenData(uint256 tokenId) public view returns (MintedToken memory) {
         return mintedTokenData[tokenId];
+    }
+
+    function getAllTokensByNameAndSport(string memory name, string memory sport)
+        public
+        view
+        returns (MintedToken[] memory)
+    {
+        bytes32 tokenHash = StringHash.dualHash(name, sport);
+        uint256 tokensCount = nameAndSportToTokenIds[tokenHash].length;
+        MintedToken[] memory tokens = new MintedToken[](tokensCount);
+
+        for (uint256 i = 0; i < tokensCount; i++) {
+            tokens[i] = mintedTokenData[nameAndSportToTokenIds[tokenHash][i]];
+        }
+
+        return tokens;
     }
 }
 
@@ -1444,11 +1466,12 @@ contract MinoToken is ERC721, RarityToken, UserMintableTokenInSeries, RecordingM
      */
     function addNewMintableToken(
         string memory name,
+        string memory sport,
         string memory tokenUri,
         string memory rarityLevel,
         string memory series
     ) public onlyOwner seriesInitialized(series) {
-        addNewMintableToken(name, tokenUri, getRarityLevelMintsPerSeries(rarityLevel), series);
+        addNewMintableToken(name, sport, tokenUri, getRarityLevelMintsPerSeries(rarityLevel), series);
     }
 
     /**
@@ -1473,6 +1496,7 @@ contract MinoToken is ERC721, RarityToken, UserMintableTokenInSeries, RecordingM
         MintedToken memory newToken = MintedToken(
             tokenId,
             mintableToken.name,
+            mintableToken.sport,
             mintableToken.tokenUri,
             getRarityLevelName(mintableToken.totalAvailableMints),
             mintableToken.totalAvailableMints,

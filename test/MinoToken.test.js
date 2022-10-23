@@ -4,9 +4,10 @@ const { useMethodsOn, newArray } = require('../utils/helper');
 const { getAccounts, deploy } = require('../utils/useWeb3');
 
 const tokenContract = contracts['MinoToken.sol'].MinoToken;
+const rngContract = contracts['MinoToken.sol'].RandomNumberGenerator;
 
 describe('MinoToken tests', () => {
-  let accounts, MinoToken;
+  let accounts, MinoToken, RandomNumberGenerator;
 
   const tokenName = 'MinoToken';
   const tokenSymbol = 'MT';
@@ -20,18 +21,34 @@ describe('MinoToken tests', () => {
   ];
 
   const mintableTokens = [
-    { name: 'Ronaldo', tokenUri: 'ronaldo', rarityLevel: rarityLevels[0].name },
-    { name: 'Rooney', tokenUri: 'rooney', rarityLevel: rarityLevels[1].name },
-    { name: 'Jovetic', tokenUri: 'jovetic', rarityLevel: rarityLevels[2].name },
+    {
+      name: 'Ronaldo',
+      tokenUri: 'ronaldo',
+      rarityLevel: rarityLevels[0].name,
+      sport: 'Football',
+    },
+    {
+      name: 'Rooney',
+      tokenUri: 'rooney',
+      rarityLevel: rarityLevels[1].name,
+      sport: 'Football',
+    },
+    {
+      name: 'Jovetic',
+      tokenUri: 'jovetic',
+      rarityLevel: rarityLevels[2].name,
+      sport: 'Football',
+    },
   ];
 
   const usersMintsPerSeries = [2, 1, 3, 2, 1];
 
   beforeEach(async () => {
     accounts = await getAccounts();
+    RandomNumberGenerator = await deploy(rngContract, [], accounts[0]);
     MinoToken = await deploy(
       tokenContract,
-      [tokenName, tokenSymbol, baseUri],
+      [tokenName, tokenSymbol, baseUri, RandomNumberGenerator.options.address],
       accounts[0]
     );
   });
@@ -158,12 +175,12 @@ describe('MinoToken tests', () => {
         args: [name, availableTokens],
         account: accounts[0],
       })),
-      ...mintableTokens.flatMap(({ name, tokenUri, rarityLevel }) => [
+      ...mintableTokens.flatMap(({ name, sport, tokenUri, rarityLevel }) => [
         {
           // Then add mintable tokens in the initialized series and
           // link them with the already added rarity levels
           method: 'addNewMintableToken',
-          args: [name, tokenUri, rarityLevel, seriesName],
+          args: [name, sport, tokenUri, rarityLevel, seriesName],
           account: accounts[0],
         },
         {
@@ -214,11 +231,11 @@ describe('MinoToken tests', () => {
         args: [name, availableTokens],
         account: accounts[0],
       })),
-      ...mintableTokens.map(({ name, tokenUri, rarityLevel }) => ({
+      ...mintableTokens.map(({ name, sport, tokenUri, rarityLevel }) => ({
         // Adds new tokens in the series and links them to the
         // already provided rarity levels
         method: 'addNewMintableToken',
-        args: [name, tokenUri, rarityLevel, seriesName],
+        args: [name, sport, tokenUri, rarityLevel, seriesName],
         account: accounts[0],
       })),
       {
