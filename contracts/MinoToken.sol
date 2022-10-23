@@ -1072,14 +1072,14 @@ abstract contract SeriesFactory is Ownable {
 
     modifier seriesInitialized(string memory seriesName) {
         Series storage series = seriesMapping[StringHash.hashStr(seriesName)];
-        require(series.initialized, "Not initialized");
+        require(series.initialized);
 
         _;
     }
 
     modifier seriesMintIsOpen(string memory seriesName) {
         Series storage series = seriesMapping[StringHash.hashStr(seriesName)];
-        require(series.initialized && series.mintingIsOpen, "Minting not open");
+        require(series.initialized && series.mintingIsOpen);
         _;
     }
 
@@ -1089,7 +1089,7 @@ abstract contract SeriesFactory is Ownable {
     function initializeSeries(string memory seriesName) public onlyOwner {
         bytes32 seriesKey = StringHash.hashStr(seriesName);
         Series storage series = seriesMapping[seriesKey];
-        require(!series.initialized, "Already initialized");
+        require(!series.initialized);
 
         series.initialized = true;
     }
@@ -1142,7 +1142,7 @@ abstract contract WhitelistingUsersToMint is RecordingUserAddresses, Ownable {
      * as a seed for creating a random number.
      */
     function setUserMintsPerSeries(address user, uint256 mintsPerSeries) public onlyOwner {
-        require(user != address(0), "Zero address");
+        require(user != address(0));
 
         recordAddressIfNotRecorded(user);
         userMintsPerSeries[user] = mintsPerSeries;
@@ -1167,7 +1167,7 @@ abstract contract RarityToken is Ownable {
     mapping(uint256 => RarityLevel) private rarityLevelMapping;
 
     modifier validMintsPerSeries(uint256 mintsPerSeries) {
-        require(mintsPerSeries > 0 && mintsPerSeries <= MAX_MINTS_PER_LEVEL, "Mints not valid");
+        require(mintsPerSeries > 0 && mintsPerSeries <= MAX_MINTS_PER_LEVEL);
 
         _;
     }
@@ -1211,7 +1211,7 @@ abstract contract RarityToken is Ownable {
         returns (string memory)
     {
         RarityLevel storage level = rarityLevelMapping[mintsPerSeries];
-        require(level.initialized, "Not found");
+        require(level.initialized);
 
         return level.name;
     }
@@ -1265,7 +1265,7 @@ abstract contract LimitingUserMintsPerSeries is WhitelistingUsersToMint {
     modifier userCanMint(address user, string memory seriesName) {
         uint256 minted = userMintedInSeries(user, seriesName);
         uint256 availableMints = getUserMintsPerSeries(user);
-        require(minted < availableMints, "Can no longer mint");
+        require(minted < availableMints);
 
         _;
     }
@@ -1296,7 +1296,7 @@ abstract contract UserMintableTokenInSeries is LimitingUserMintsPerSeries, Serie
     mapping(bytes32 => bytes32[]) private mintableTokensPerSeries;
 
     modifier tokenInitialized(string memory name, string memory series) {
-        require(isTokenInitialized(name, series), "Token not initialized");
+        require(isTokenInitialized(name, series));
 
         _;
     }
@@ -1316,12 +1316,12 @@ abstract contract UserMintableTokenInSeries is LimitingUserMintsPerSeries, Serie
         uint256 totalAvailableMints,
         string memory series
     ) internal seriesInitialized(series) {
-        require(totalAvailableMints > 0, "Mints not valid");
+        require(totalAvailableMints > 0);
 
         bytes32 tokenHash = StringHash.dualHash(series, name);
         bytes32 seriesHash = StringHash.hashStr(series);
 
-        require(!isTokenInitialized(name, series), "Token initialized");
+        require(!isTokenInitialized(name, series));
 
         mintableTokens[tokenHash] = MintableToken(name, sport, tokenUri, totalAvailableMints, 0, series);
         mintableTokensPerSeries[seriesHash].push(tokenHash);
@@ -1384,7 +1384,7 @@ abstract contract UserMintableTokenInSeries is LimitingUserMintsPerSeries, Serie
     function recordTokenMint(string memory name, string memory series) internal tokenInitialized(name, series) {
         MintableToken storage token = mintableTokens[StringHash.dualHash(series, name)];
 
-        require(token.mintedInSeries < token.totalAvailableMints, "Tokens already minted");
+        require(token.mintedInSeries < token.totalAvailableMints);
 
         token.mintedInSeries++;
     }
@@ -1405,8 +1405,8 @@ abstract contract RecordingMintedTokens {
     mapping(bytes32 => uint256[]) private nameAndSportToTokenIds;
 
     function addMintedToken(MintedToken memory token) internal {
-        require(token.tokenId != 0, "Token id is zero");
-        require(mintedTokenData[token.tokenId].tokenId == 0, "Already minted");
+        require(token.tokenId != 0);
+        require(mintedTokenData[token.tokenId].tokenId == 0);
 
         bytes32 tokenHash = StringHash.dualHash(token.name, token.sport);
         mintedTokenData[token.tokenId] = token;
