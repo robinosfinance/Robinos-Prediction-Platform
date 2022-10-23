@@ -1006,44 +1006,38 @@ contract ERC721 is Context, ERC165, IERC721, IERC721Metadata {
     ) internal virtual {}
 }
 
-abstract contract GeneratingRandomNumbers {
+contract RandomNumberGenerator {
     uint256 constant minAddressesForRandomSequence = 5;
-    uint256 constant maxSequenceCount = 70;
+    uint256 constant sequenceLength = 70;
     uint256 constant minCountForRandomNumber = 5;
 
-    function simpleRandom(uint256 max) private view returns (uint256) {
-        bytes32 hashedString = keccak256(abi.encodePacked(block.timestamp, block.difficulty));
-        return uint256(hashedString) % max;
-    }
-
-    function getRandomSequence(address[] memory addresses, uint256 count) public view returns (uint256[] memory) {
+    function getRandomSequence(uint256 randomSeed, address[] memory addresses) private pure returns (uint256[] memory) {
         uint256 length = addresses.length;
-        require(count <= maxSequenceCount && length >= minAddressesForRandomSequence, "Cannot get random sequence");
+        require(length >= minAddressesForRandomSequence, "Cannot get random sequence");
 
-        uint256[] memory randomSequence = new uint256[](count);
-        uint256 base = addressToUint(addresses[simpleRandom(length)]);
-        for (uint256 i = 1; i <= count; i++) {
+        uint256[] memory randomSequence = new uint256[](sequenceLength);
+        uint256 base = addressToUint(addresses[randomSeed % length]);
+        for (uint256 i = 1; i <= sequenceLength; i++) {
             randomSequence[i - 1] = ((base % (10**i)) - (base % (10**(i - 1)))) / 10**(i - 1);
         }
         return randomSequence;
     }
 
-    function _randomNumber(address[] memory addresses, uint256 count) private view returns (uint256) {
-        require(count > minCountForRandomNumber, "Insufficient count");
-        uint256[] memory sequence = getRandomSequence(addresses, count);
+    function _randomNumber(uint256 randomSeed, address[] memory addresses) private pure returns (uint256) {
+        uint256[] memory sequence = getRandomSequence(randomSeed, addresses);
         uint256 rand = 1;
-        for (uint256 i = 0; i < count / 2; i++) {
-            rand += sequence[i]**sequence[count - (i + 1)];
+        for (uint256 i = 0; i < sequenceLength / 2; i++) {
+            rand += sequence[i]**sequence[sequenceLength - (i + 1)];
         }
         return rand;
     }
 
     function randomNumber(
+        uint256 randomSeed,
         address[] memory addresses,
-        uint256 count,
         uint256 max
-    ) internal view returns (uint256) {
-        return _randomNumber(addresses, count) % max;
+    ) external pure returns (uint256) {
+        return _randomNumber(randomSeed, addresses) % max;
     }
 
     function addressToUint(address _address) private pure returns (uint256) {
@@ -1427,22 +1421,19 @@ abstract contract RecordingMintedTokens {
  ***********************************************************************
  **********************************************************************/
 
-contract MinoToken is
-    ERC721,
-    RarityToken,
-    UserMintableTokenInSeries,
-    GeneratingRandomNumbers,
-    RecordingMintedTokens,
-    AutoIncrementingTokenId
-{
+contract MinoToken is ERC721, RarityToken, UserMintableTokenInSeries, RecordingMintedTokens, AutoIncrementingTokenId {
+    RandomNumberGenerator rngContract;
+
     string private baseURI;
 
     constructor(
         string memory name_,
         string memory symbol_,
-        string memory baseURI_
+        string memory baseURI_,
+        RandomNumberGenerator rngContract_
     ) ERC721(name_, symbol_) Ownable() {
         baseURI = baseURI_;
+        rngContract = rngContract_;
     }
 
     /**
@@ -1471,7 +1462,11 @@ contract MinoToken is
         require(mintableTokenHashes.length != 0, "No more tokens left");
 
         uint256 tokenId = newTokenId();
-        uint256 randomNumber = randomNumber(users, 10, mintableTokenHashes.length);
+        uint256 randomNumber = rngContract.randomNumber(
+            block.difficulty * block.timestamp,
+            users,
+            mintableTokenHashes.length
+        );
         bytes32 tokenHash = mintableTokenHashes[randomNumber];
 
         MintableToken storage mintableToken = mintableTokens[tokenHash];
