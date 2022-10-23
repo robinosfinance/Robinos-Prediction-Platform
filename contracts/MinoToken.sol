@@ -1390,17 +1390,17 @@ abstract contract UserMintableTokenInSeries is LimitingUserMintsPerSeries, Serie
     }
 }
 
-abstract contract RecordingMintedTokens {
-    struct MintedToken {
-        uint256 tokenId;
-        string name;
-        string sport;
-        string tokenUri;
-        string rarityLevel;
-        uint256 totalAvailable;
-        string series;
-    }
+struct MintedToken {
+    uint256 tokenId;
+    string name;
+    string sport;
+    string tokenUri;
+    string rarityLevel;
+    uint256 totalAvailable;
+    string series;
+}
 
+abstract contract RecordingMintedTokens {
     mapping(uint256 => MintedToken) private mintedTokenData;
     mapping(bytes32 => uint256[]) private nameAndSportToTokenIds;
 
