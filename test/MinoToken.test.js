@@ -156,16 +156,16 @@ describe('MinoToken tests', () => {
         MinoToken,
         usersMintsPerSeries.flatMap((mintsPerSeries, index) => [
           {
-            // The owner can set mints per series for each individual user
-            method: 'setUserMintsPerSeries',
-            args: [accounts[index], mintsPerSeries],
+            // The owner can set mints for series for each individual user
+            method: 'setUserMints',
+            args: [accounts[index], seriesName, mintsPerSeries],
             account: accounts[0],
           },
           {
-            // We then check if the correct mints per series has been set for the user
+            // We then check if the correct mints for series has been set for the user
             // on the contract
-            method: 'getUserMintsPerSeries',
-            args: [accounts[index]],
+            method: 'getUserMintsForSeries',
+            args: [accounts[index], seriesName],
             onReturn: (userMintsPerSeries) => {
               assert.strictEqual(parseInt(userMintsPerSeries), mintsPerSeries);
             },
@@ -240,9 +240,9 @@ describe('MinoToken tests', () => {
           account: accounts[0],
         },
         ...usersMintsPerSeries.map((mintsPerSeries, index) => ({
-          // Assigns each user a allowed mints per series
-          method: 'setUserMintsPerSeries',
-          args: [accounts[index], mintsPerSeries],
+          // Assigns each user a allowed mints for series
+          method: 'setUserMints',
+          args: [accounts[index], seriesName, mintsPerSeries],
           account: accounts[0],
         })),
         ...rarityLevels.map(({ name, availableTokens }) => ({
@@ -342,11 +342,6 @@ describe('MinoToken tests', () => {
       const totalReward = rewardPerUser * rewardableTokens;
 
       return useMethodsOn(MinoToken, [
-        ...usersMintsPerSeries.map((mintsPerSeries, index) => ({
-          method: 'setUserMintsPerSeries',
-          args: [accounts[index], mintsPerSeries],
-          account: accounts[0],
-        })),
         ...rarityLevels.map(({ name, availableTokens }) => ({
           method: 'addNewRarityLevel',
           args: [name, availableTokens],
@@ -355,6 +350,11 @@ describe('MinoToken tests', () => {
         ...Object.entries(seriesMintableTokens).flatMap(
           // We initialize and create tokens for multiple series
           ([seriesName, mintableTokens]) => [
+            ...usersMintsPerSeries.map((mintsPerSeries, index) => ({
+              method: 'setUserMints',
+              args: [accounts[index], seriesName, mintsPerSeries],
+              account: accounts[0],
+            })),
             {
               method: 'initializeSeries',
               args: [seriesName],
@@ -413,7 +413,7 @@ describe('MinoToken tests', () => {
         .then(() =>
           useMethodsOn(MinoTokenReward, [
             {
-              // The owner creates a new reward for the 
+              // The owner creates a new reward for the
               // chosen player and sport
               method: 'newReward',
               args: [

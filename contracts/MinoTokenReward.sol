@@ -1212,25 +1212,29 @@ abstract contract RecordingUserAddresses {
 }
 
 abstract contract WhitelistingUsersToMint is RecordingUserAddresses, Ownable {
-    mapping(address => uint256) private userMintsPerSeries;
+    mapping(address => mapping(bytes32 => uint256)) private userMintsPerSeries;
 
     /**
-     * @dev Allows owner to set individual user available mints per series.
+     * @dev Allows owner to set individual user available mints for series.
      * Also records the address of the given user in the list, which is later used
      * as a seed for creating a random number.
      */
-    function setUserMintsPerSeries(address user, uint256 mintsPerSeries) public onlyOwner {
+    function setUserMints(
+        address user,
+        string memory series,
+        uint256 mintsPerSeries
+    ) public onlyOwner {
         require(user != address(0));
 
         recordAddressIfNotRecorded(user);
-        userMintsPerSeries[user] = mintsPerSeries;
+        userMintsPerSeries[user][StringHash.hashStr(series)] = mintsPerSeries;
     }
 
     /**
-     * @dev Returns max available mints per user per series.
+     * @dev Returns max available mints per user for series.
      */
-    function getUserMintsPerSeries(address user) public view returns (uint256) {
-        return userMintsPerSeries[user];
+    function getUserMintsForSeries(address user, string memory series) public view returns (uint256) {
+        return userMintsPerSeries[user][StringHash.hashStr(series)];
     }
 }
 
@@ -1342,7 +1346,7 @@ abstract contract LimitingUserMintsPerSeries is WhitelistingUsersToMint {
 
     modifier userCanMint(address user, string memory seriesName) {
         uint256 minted = userMintedInSeries(user, seriesName);
-        uint256 availableMints = getUserMintsPerSeries(user);
+        uint256 availableMints = getUserMintsForSeries(user, seriesName);
         require(minted < availableMints);
 
         _;
