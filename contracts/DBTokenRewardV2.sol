@@ -906,7 +906,7 @@ contract DBTokenSale is
         string memory _teamName,
         address mintTo,
         uint256 amount
-    ) public returns (bool) {
+    ) public onlyOwner returns (bool) {
         DBToken dbtoken = getToken(_eventCode, _teamName);
         dbtoken._mint(mintTo, amount);
 
