@@ -294,6 +294,35 @@ describe('MinoToken tests', () => {
                 },
                 account: accounts[index],
               },
+              {
+                method: 'getTokenData',
+                args: [tokenId],
+                onReturn: (data) => {
+                  const localTokenData = mintableTokens.find(
+                    (token) => token.name === data.name
+                  );
+
+                  assert.ok(localTokenData);
+
+                  assert.strictEqual(data.name, localTokenData.name);
+                  assert.strictEqual(data.sport, localTokenData.sport);
+                  assert.strictEqual(data.tokenUri, localTokenData.tokenUri);
+                  assert.strictEqual(data.series, seriesName);
+
+                  const localRarityLevel = rarityLevels.find(
+                    (level) => level.name === data.rarityLevel
+                  );
+
+                  assert.ok(localRarityLevel);
+
+                  assert.strictEqual(data.rarityLevel, localRarityLevel.name);
+                  assert.strictEqual(
+                    parseInt(data.totalAvailable),
+                    localRarityLevel.availableTokens
+                  );
+                },
+                account: accounts[0],
+              },
             ];
           }).flat()
         ),
