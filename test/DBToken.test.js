@@ -20,6 +20,7 @@ const eventContract = contracts['DBTokenEvent.sol'].DBTokenEvent;
 const salesContract = contracts['DBTokenSaleV2.sol'].DBTokenSale;
 const rewardContract = contracts['DBTokenReward.sol'].DBTokenReward;
 const rewardV2Contract = contracts['DBTokenRewardV2.sol'].DBTokenReward;
+const rewardSCContract = contracts['DBTokenRewardSC.sol'].DBTokenRewardSC;
 const sideBetContract = contracts['DBTokenSideBet.sol'].DBTokenSideBet;
 
 describe('DBToken tests', () => {
@@ -30,6 +31,7 @@ describe('DBToken tests', () => {
     TetherToken,
     DBTokenReward,
     DBTokenRewardV2,
+    DBTokenRewardSC,
     DBTokenSideBet;
 
   // Teams and event code default info for testing
@@ -99,6 +101,12 @@ describe('DBToken tests', () => {
     DBTokenRewardV2 = await deploy(
       rewardV2Contract,
       [TetherToken.options.address],
+      accounts[0]
+    );
+
+    DBTokenRewardSC = await deploy(
+      rewardSCContract,
+      [TetherToken.options.address, DBTokenSale.options.address],
       accounts[0]
     );
 
@@ -563,12 +571,12 @@ describe('DBToken tests', () => {
         ]);
       });
 
-    it('allows rewards and stores standard tokens received per event', () => {
+      it('allows rewards and stores standard tokens received per event', () => {
         const DBToken = DBTokens[0];
         const teamName = teamTokenParams[0].teamName;
-      const rate = [4, 5];
-      const purchaseAmount = 500;
-      const stAmount = (purchaseAmount * rate[1]) / rate[0];
+        const rate = [4, 5];
+        const purchaseAmount = 500;
+        const stAmount = (purchaseAmount * rate[1]) / rate[0];
 
         return useMethodsOn(TetherToken, [
           {
@@ -650,7 +658,7 @@ describe('DBToken tests', () => {
                 account: accounts[0],
               },
             ])
-      );
+          );
       });
     });
 
@@ -764,85 +772,362 @@ describe('DBToken tests', () => {
           totalUsdtNeeded,
           DBTokenRewardV2.options.address
         )
-        .then(() =>
-          Promise.all(
-            DBTokens.map((DBToken, index) =>
-              useMethodsOn(DBToken, [
-                {
-                  // Each user must approve the bought amount of DBToken
+          .then(() =>
+            Promise.all(
+              DBTokens.map((DBToken, index) =>
+                useMethodsOn(DBToken, [
+                  {
+                    // Each user must approve the bought amount of DBToken
                     // funds towards the DBTokenRewardV2 contract. This step can be done also
-                  // immediately after the user buys the tokens from the DBTokenSale contract
-                  method: 'approve',
+                    // immediately after the user buys the tokens from the DBTokenSale contract
+                    method: 'approve',
                     args: [DBTokenRewardV2.options.address, purchaseAmount],
-                  account: accounts[index + 1],
-                },
-              ])
+                    account: accounts[index + 1],
+                  },
+                ])
+              )
             )
           )
-        )
-        .then(() =>
+          .then(() =>
             useMethodsOn(DBTokenRewardV2, [
-            {
-              // After the sale has finished, the owner can pass the reference
-              // to the DBTokenSale contract and sale event
-              method: 'addSaleReference',
-              args: [DBTokenSale.options.address, eventCode],
-              account: accounts[0],
-            },
-            ...teamTokenParams.map(({ teamName }, index) => ({
-              // The owner must set the rate for each token in the added sale
-              method: 'setRate',
-              args: [eventCode, teamName, ...rewardRates[index]],
-              account: accounts[0],
-            })),
-          ])
-        )
-        .then(async () => {
-          for (let i = 0; i < numOfTeams; i++) {
-            const dbTokenBalance = await getBalanceOfUser(
-              DBTokens[i],
-              accounts[i + 1]
-            );
-            const usdtBalance = await getBalanceOfUser(
-              TetherToken,
-              accounts[i + 1]
-            );
+              {
+                // After the sale has finished, the owner can pass the reference
+                // to the DBTokenSale contract and sale event
+                method: 'addSaleReference',
+                args: [DBTokenSale.options.address, eventCode],
+                account: accounts[0],
+              },
+              ...teamTokenParams.map(({ teamName }, index) => ({
+                // The owner must set the rate for each token in the added sale
+                method: 'setRate',
+                args: [eventCode, teamName, ...rewardRates[index]],
+                account: accounts[0],
+              })),
+            ])
+          )
+          .then(async () => {
+            for (let i = 0; i < numOfTeams; i++) {
+              const dbTokenBalance = await getBalanceOfUser(
+                DBTokens[i],
+                accounts[i + 1]
+              );
+              const usdtBalance = await getBalanceOfUser(
+                TetherToken,
+                accounts[i + 1]
+              );
 
-            // We check that each participating user has the purchased DBToken funds
-            assert.strictEqual(dbTokenBalance, purchaseAmount);
-            assert.strictEqual(usdtBalance, 0);
-          }
-        })
-        .then(() =>
-            useMethodsOn(DBTokenRewardV2, {
-            // The user can call this method after they set the rate for each DBToken in the event
-            method: 'exchangeUserTokens',
-            args: [eventCode],
-            account: accounts[0],
+              // We check that each participating user has the purchased DBToken funds
+              assert.strictEqual(dbTokenBalance, purchaseAmount);
+              assert.strictEqual(usdtBalance, 0);
+            }
           })
-        )
-        .then(async () => {
-          for (let i = 0; i < numOfTeams; i++) {
-            const dbTokenBalance = await getBalanceOfUser(
-              DBTokens[i],
-              accounts[i + 1]
-            );
-            const usdtBalance = await getBalanceOfUser(
-              TetherToken,
-              accounts[i + 1]
-            );
+          .then(() =>
+            useMethodsOn(DBTokenRewardV2, {
+              // The user can call this method after they set the rate for each DBToken in the event
+              method: 'exchangeUserTokens',
+              args: [eventCode],
+              account: accounts[0],
+            })
+          )
+          .then(async () => {
+            for (let i = 0; i < numOfTeams; i++) {
+              const dbTokenBalance = await getBalanceOfUser(
+                DBTokens[i],
+                accounts[i + 1]
+              );
+              const usdtBalance = await getBalanceOfUser(
+                TetherToken,
+                accounts[i + 1]
+              );
 
-            const [num, dem] = rewardRates[i];
-            const expectedStReward = (purchaseAmount * num) / dem;
-            // Now we check that each user doesn't have any DBTokens in their wallet
-            assert.strictEqual(dbTokenBalance, 0);
-            // And that they have the expected amount of reward tokens
-            assert.strictEqual(usdtBalance, expectedStReward);
-          }
-        });
+              const [num, dem] = rewardRates[i];
+              const expectedStReward = (purchaseAmount * num) / dem;
+              // Now we check that each user doesn't have any DBTokens in their wallet
+              assert.strictEqual(dbTokenBalance, 0);
+              // And that they have the expected amount of reward tokens
+              assert.strictEqual(usdtBalance, expectedStReward);
+            }
+          });
       });
     });
 
+    describe('DBTokenRewardSC', () => {
+      const purchaseAmount = 1500;
+      const rate = [2, 3];
+      const totalUsdtReward = 200000;
+      // Sum should be <= 100
+      const tokenRewardPercentages = [60, 30, 10];
+
+      beforeEach(() => {
+        return runSaleAndPrepareRewards(
+          purchaseAmount,
+          rate,
+          totalUsdtReward,
+          DBTokenRewardSC.options.address
+        ).then(() =>
+          useMethodsOn(DBTokenRewardSC, [
+            {
+              // After the sale has finished, the owner can pass the reference
+              // to the sale event
+              method: 'addSaleReference',
+              args: [eventCode],
+              account: accounts[0],
+            },
+            ...teamTokenParams.flatMap(({ teamName }, i) => [
+              {
+                // The owner can set the rate for certain token
+                // to equal a percentage of the total reward pool
+                // sent to the reward contract
+                method: 'setRateAsPercentOfTotal',
+                args: [eventCode, teamName, tokenRewardPercentages[i]],
+                account: accounts[0],
+              },
+              {
+                // Then we get the rate and check if the values are correct
+                method: 'getRate',
+                args: [eventCode, teamName],
+                account: accounts[0],
+                onReturn: (rate) => {
+                  const { numerator, denominator } = rate;
+
+                  // The numerator should equal to the set percent
+                  // of total reward pool
+                  assert.strictEqual(
+                    parseInt(numerator),
+                    (totalUsdtReward * tokenRewardPercentages[i]) / 100
+                  );
+                  // The denominator is equal to the total amount of tokens
+                  // purchased in the event
+                  assert.strictEqual(parseInt(denominator), purchaseAmount);
+                },
+              },
+            ]),
+            {
+              // For rewards to be distributed and verified users to
+              // approve rates, the owner must set rates as finalized.
+              // This flag can be reverted by the owner before the the rewards
+              // are distributed
+              method: 'setRatesFinalized',
+              args: [eventCode, true],
+              account: accounts[0],
+            },
+          ])
+        );
+      });
+
+      it('deploys successfully', () => {
+        assert.ok(DBTokenRewardSC.options.address);
+      });
+
+      it('allows rewards', () =>
+        useMethodsOn(DBTokenRewardSC, {
+          // The owner distributes the rewards to eligible users
+          // once the rates have been set and finalized
+          method: 'sendUserRewards',
+          args: [eventCode],
+          account: accounts[0],
+        }).then(() =>
+          useMethodsOn(
+            TetherToken,
+            newArray(teamTokenParams.length, (i) => ({
+              // We then get the balance of USDT of each participating user
+              method: 'balanceOf',
+              args: [accounts[i + 1]],
+              account: accounts[0],
+              onReturn: (balance) => {
+                // And check if they have the correct amount of tokens
+                assert.strictEqual(
+                  parseInt(balance),
+                  (totalUsdtReward * tokenRewardPercentages[i]) / 100
+                );
+              },
+            }))
+          )
+        ));
+
+      it('allows verified users to approve rates', () => {
+        const numOfVerifiedUsers = 3;
+        const userRateApprovals = [true, true, false];
+
+        return useMethodsOn(DBTokenRewardSC, [
+          ...newArray(numOfVerifiedUsers, (i) => [
+            {
+              // The owner must initially verify each user willing to
+              // provide rate approvals
+              method: 'verifyUser',
+              args: [accounts[i + 1]],
+              account: accounts[0],
+            },
+            {
+              // Then each user can cast a vote for the event rates.
+              // 0: No vote, 1: Approved, 2: Not Approved
+              // The user cannot vote 0, that is an initial status
+              // which signals that this user hasn't voted
+              method: 'approveRates',
+              args: [eventCode, userRateApprovals[i] ? 1 : 2],
+              account: accounts[i + 1],
+            },
+          ]).flat(),
+          {
+            // We then check all the approvals for the event
+            method: 'getAllEventApprovals',
+            args: [eventCode],
+            account: accounts[0],
+            onReturn: (eventApprovals) => {
+              // And we check if each user has the expected approval status
+              userRateApprovals.forEach((approved, i) => {
+                assert.strictEqual(
+                  parseInt(eventApprovals[i].status),
+                  approved ? 1 : 2
+                );
+              });
+            },
+          },
+        ]);
+      });
+
+      it('records user rewards', () =>
+        useMethodsOn(DBTokenRewardSC, [
+          {
+            // The owner distributes the rewards
+            method: 'sendUserRewards',
+            args: [eventCode],
+            account: accounts[0],
+          },
+          ...teamTokenParams.map(({ teamName }, i) => ({
+            // For each user, we get a list of all rewards won
+            method: 'getAllUserRewards',
+            args: [accounts[i + 1]],
+            account: accounts[0],
+            onReturn: (userRewards) => {
+              const {
+                eventCode: _eventCode,
+                teamName: _teamName,
+                eligibleTokens,
+                rewardAmount,
+              } = userRewards[0];
+
+              // In this testing, each user bought one specific token,
+              // so we check that the reward token has the correct data
+              assert.strictEqual(_eventCode, eventCode);
+              assert.strictEqual(_teamName, teamName);
+              // Amount of tokens eligible for reward
+              assert.strictEqual(parseInt(eligibleTokens), purchaseAmount);
+              // And that the reward amount is correct
+              assert.strictEqual(
+                parseInt(rewardAmount),
+                (totalUsdtReward * tokenRewardPercentages[i]) / 100
+              );
+            },
+          })),
+        ]));
+
+      it('reverts if rates are not finalized', () =>
+        useMethodsOn(DBTokenRewardSC, [
+          {
+            method: 'setRatesFinalized',
+            args: [eventCode, false],
+            account: accounts[0],
+          },
+          {
+            method: 'sendUserRewards',
+            args: [eventCode],
+            account: accounts[0],
+            catch: (error) => {
+              // Method should revert with the correct message if rates are not finalized
+              assert.strictEqual(
+                error,
+                'DBTokenReward: rates have not been finalized'
+              );
+            },
+          },
+          {
+            method: 'approveRates',
+            args: [eventCode, 1],
+            account: accounts[0],
+            catch: (error) => {
+              // And even verified users cannot vote until the rates are finalized
+              assert.strictEqual(
+                error,
+                'DBTokenReward: rates have not been finalized'
+              );
+            },
+          },
+          {
+            // We will also try to set the percent of total
+            // to a value out of bounds
+            method: 'setRateAsPercentOfTotal',
+            args: [eventCode, teamTokenParams[0].teamName, 125],
+            account: accounts[0],
+            catch: (error) => {
+              // And receive the proper revert messgae
+              assert.strictEqual(
+                error,
+                'DBTokenReward: percent must be between 0 and 100'
+              );
+            },
+          },
+        ]));
+
+      it('reverts if rates are updated after finalizing', () =>
+        useMethodsOn(DBTokenRewardSC, [
+          {
+            method: 'setRate',
+            args: [eventCode, teamTokenParams[0].teamName, 2, 1],
+            account: accounts[0],
+            catch: (error) => {
+              // Since rates have already been finalized, updating them shouldn't
+              // be allowed
+              assert.strictEqual(
+                error,
+                'DBTokenReward: rates have already been finalized'
+              );
+            },
+          },
+          {
+            method: 'setRateAsPercentOfTotal',
+            args: [eventCode, teamTokenParams[0].teamName, 33],
+            account: accounts[0],
+            catch: (error) => {
+              // The same stands for other methods for setting rates
+              assert.strictEqual(
+                error,
+                'DBTokenReward: rates have already been finalized'
+              );
+            },
+          },
+        ]));
+
+      it('reverts if insufficient reward amount on contract', () =>
+        useMethodsOn(DBTokenRewardSC, [
+          {
+            method: 'setRatesFinalized',
+            args: [eventCode, false],
+            account: accounts[0],
+          },
+          ...teamTokenParams.map(({ teamName }) => ({
+            // We set each token to amount to 50% of the total reward pool
+            // Which totals to 150%. This combination should revert once we
+            // try to send the rewards as we would have insufficient reward
+            method: 'setRateAsPercentOfTotal',
+            args: [eventCode, teamName, 50],
+            account: accounts[0],
+          })),
+          {
+            method: 'setRatesFinalized',
+            args: [eventCode, true],
+            account: accounts[0],
+          },
+          {
+            method: 'sendUserRewards',
+            args: [eventCode],
+            account: accounts[0],
+            catch: () => {
+              // We just expect to get an error when trying to call the method
+              assert.ok(true);
+            },
+          },
+        ]));
     });
   });
 
