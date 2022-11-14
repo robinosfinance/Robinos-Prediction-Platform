@@ -21,6 +21,7 @@ const useMethodsOn = (contractInstance, methodArgs) => {
   const methods = Array.isArray(methodArgs) ? methodArgs : [methodArgs];
 
   if (methods.length === 0) return Promise.resolve();
+  const state = {};
 
   const recursiveFunction = (methodIndex, promise) =>
     promise.then(async (previousReturnValue) => {
@@ -34,7 +35,9 @@ const useMethodsOn = (contractInstance, methodArgs) => {
         wait = null,
         then = null,
         catch: catchCallback,
-      } = methods[methodIndex];
+      } = typeof methods[methodIndex] === 'function'
+        ? methods[methodIndex](state)
+        : methods[methodIndex];
 
       if (wait) {
         const waitPromise = new Promise((resolve) => {
@@ -65,7 +68,18 @@ const useMethodsOn = (contractInstance, methodArgs) => {
           catchCallback(Object.values(err.results)[0].reason);
         });
 
-      onReturn && onReturn(await requestInstance, await previousReturnValue);
+      if (onReturn) {
+        const result = onReturn(
+          await requestInstance,
+          await previousReturnValue
+        );
+
+        if (result !== undefined) {
+          for (const key in result) {
+            state[key] = result[key];
+          }
+        }
+      }
       return recursiveFunction(methodIndex + 1, requestInstance);
     });
 
