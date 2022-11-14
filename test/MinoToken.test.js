@@ -19,7 +19,7 @@ describe('MinoToken tests', () => {
   const rarityLevels = [
     { name: 'GOAT', availableTokens: 1 },
     { name: 'Hall of Famer', availableTokens: 3 },
-    { name: 'Legend ', availableTokens: 7 },
+    { name: 'Legend', availableTokens: 7 },
   ];
 
   const mintableTokens = [
@@ -116,24 +116,21 @@ describe('MinoToken tests', () => {
         },
       ]));
 
-    it('allows adding rarity levels', () =>
-      useMethodsOn(
+    it('allows adding rarity levels', () => {
+      const rarityLevelsToAdd = [
+        ...rarityLevels,
+        { name: 'Number One', availableTokens: 1 },
+        { name: 'Best of the Year', availableTokens: 3 },
+      ];
+
+      return useMethodsOn(
         MinoToken,
-        rarityLevels.flatMap(({ name, availableTokens }) => [
+        rarityLevelsToAdd.flatMap(({ name, availableTokens }) => [
           {
             // Owner can add a new rarity level by providing a
             // level name and num of available tokens
             method: 'addNewRarityLevel',
             args: [seriesName, name, availableTokens],
-            account: accounts[0],
-          },
-          {
-            // We should be able to serach for the rarity name with the num of available tokens
-            method: 'getRarityLevelName',
-            args: [seriesName, availableTokens],
-            onReturn: (rarityLevelName) => {
-              assert.strictEqual(rarityLevelName, name);
-            },
             account: accounts[0],
           },
           {
@@ -149,7 +146,8 @@ describe('MinoToken tests', () => {
             account: accounts[0],
           },
         ])
-      ));
+      );
+    });
 
     it('allows owner to set individual user mints per series', () =>
       useMethodsOn(

@@ -1155,20 +1155,7 @@ abstract contract WhitelistingUsersToMint is RecordingUserAddresses, Ownable {
 }
 
 abstract contract RarityToken is Ownable {
-    uint256 constant MAX_MINTS_PER_LEVEL = 50;
-
-    struct RarityLevel {
-        bool initialized;
-        string name;
-    }
-
-    mapping(bytes32 => mapping(uint256 => RarityLevel)) private rarityLevelMapping;
-
-    modifier validMintsPerSeries(uint256 mintsPerSeries) {
-        require(mintsPerSeries > 0 && mintsPerSeries <= MAX_MINTS_PER_LEVEL);
-
-        _;
-    }
+    mapping(bytes32 => mapping(bytes32 => uint256)) private rarityLevelMapping;
 
     /**
      * @dev Allows owner to create a new rarity level. Must include rarity level name
@@ -1178,8 +1165,10 @@ abstract contract RarityToken is Ownable {
         string memory seriesName,
         string memory levelName,
         uint256 mintsPerSeries
-    ) public onlyOwner validMintsPerSeries(mintsPerSeries) {
-        rarityLevelMapping[StringHash.hashStr(seriesName)][mintsPerSeries] = RarityLevel(true, levelName);
+    ) public onlyOwner {
+        require(mintsPerSeries != 0);
+
+        rarityLevelMapping[StringHash.hashStr(seriesName)][StringHash.hashStr(levelName)] = mintsPerSeries;
     }
 
     /**
@@ -1191,67 +1180,10 @@ abstract contract RarityToken is Ownable {
         view
         returns (uint256)
     {
-        for (uint256 i = 1; i <= MAX_MINTS_PER_LEVEL; i++) {
-            RarityLevel storage level = rarityLevelMapping[StringHash.hashStr(seriesName)][i];
+        uint256 mintsPerSeries = rarityLevelMapping[StringHash.hashStr(seriesName)][StringHash.hashStr(levelName)];
+        require(mintsPerSeries != 0);
 
-            if (StringUtils.matchStrings(level.name, levelName)) return i;
-        }
-
-        require(false);
-        return 1;
-    }
-
-    /**
-     * @dev Returns the name of the level with the given mints per series.
-     * Method will revert if the level has not been initialized with the
-     * given mints per series.
-     */
-    function getRarityLevelName(string memory seriesName, uint256 mintsPerSeries)
-        public
-        view
-        validMintsPerSeries(mintsPerSeries)
-        returns (string memory)
-    {
-        RarityLevel storage level = rarityLevelMapping[StringHash.hashStr(seriesName)][mintsPerSeries];
-        require(level.initialized);
-
-        return level.name;
-    }
-
-    /**
-     * @dev Returns available mints per series for each initialized rarity level.
-     */
-    function getRarityLevels(string memory seriesName) public view returns (uint256[] memory) {
-        uint256 totalLevels = 0;
-        bytes32 seriesHash = StringHash.hashStr(seriesName);
-
-        for (uint256 i = 0; i < MAX_MINTS_PER_LEVEL; i++) {
-            RarityLevel storage level = rarityLevelMapping[seriesHash][i];
-            if (level.initialized) totalLevels++;
-        }
-
-        uint256[] memory rarityLevels = new uint256[](totalLevels);
-        uint256 arrayIndex = 0;
-        for (uint256 i = 0; i < MAX_MINTS_PER_LEVEL; i++) {
-            RarityLevel storage level = rarityLevelMapping[seriesHash][i];
-            if (!level.initialized) continue;
-
-            rarityLevels[arrayIndex] = i;
-            arrayIndex++;
-        }
-
-        return rarityLevels;
-    }
-
-    /**
-     * @dev Allows owner to remove any rarity level
-     */
-    function removeRarityLevel(string memory seriesName, uint256 mintsPerSeries)
-        public
-        onlyOwner
-        validMintsPerSeries(mintsPerSeries)
-    {
-        rarityLevelMapping[StringHash.hashStr(seriesName)][mintsPerSeries] = RarityLevel(false, "");
+        return mintsPerSeries;
     }
 }
 
@@ -1290,12 +1222,12 @@ abstract contract LimitingUserMintsPerSeries is WhitelistingUsersToMint {
     }
 }
 
-abstract contract UserMintableTokenInSeries is LimitingUserMintsPerSeries, SeriesFactory {
+abstract contract UserMintableTokenInSeries is LimitingUserMintsPerSeries, SeriesFactory, RarityToken {
     struct MintableToken {
         string name;
         string sport;
         string tokenUri;
-        uint256 totalAvailableMints;
+        string rarityLevel;
         uint256 mintedInSeries;
         string series;
     }
@@ -1314,24 +1246,29 @@ abstract contract UserMintableTokenInSeries is LimitingUserMintsPerSeries, Serie
      */
     function isTokenInitialized(string memory name, string memory series) public view returns (bool) {
         bytes32 tokenHash = StringHash.dualHash(series, name);
-        return mintableTokens[tokenHash].totalAvailableMints != 0;
+        MintableToken storage token = mintableTokens[tokenHash];
+        return tokenHash == StringHash.dualHash(token.series, token.name);
     }
 
+    /**
+     * @dev Allows owner to create a new mintable token for a series.
+     * Must provide a unique name within the given series and must provide
+     * a valid rarity level name. The series must be already initialized before
+     * adding mintable tokens.
+     */
     function addNewMintableToken(
         string memory name,
         string memory sport,
         string memory tokenUri,
-        uint256 totalAvailableMints,
+        string memory rarityLevel,
         string memory series
-    ) internal seriesInitialized(series) {
-        require(totalAvailableMints > 0);
-
+    ) public onlyOwner seriesInitialized(series) {
         bytes32 tokenHash = StringHash.dualHash(series, name);
         bytes32 seriesHash = StringHash.hashStr(series);
 
         require(!isTokenInitialized(name, series));
 
-        mintableTokens[tokenHash] = MintableToken(name, sport, tokenUri, totalAvailableMints, 0, series);
+        mintableTokens[tokenHash] = MintableToken(name, sport, tokenUri, rarityLevel, 0, series);
         mintableTokensPerSeries[seriesHash].push(tokenHash);
     }
 
@@ -1351,7 +1288,7 @@ abstract contract UserMintableTokenInSeries is LimitingUserMintsPerSeries, Serie
 
         for (uint256 i = 0; i < tokens.length; i++) {
             uint256 mintedInSeries = tokens[i].mintedInSeries;
-            uint256 totalAvailableMints = tokens[i].totalAvailableMints;
+            uint256 totalAvailableMints = getRarityLevelMintsPerSeries(series, tokens[i].rarityLevel);
 
             totalMintableTokens += totalAvailableMints - mintedInSeries;
         }
@@ -1361,7 +1298,7 @@ abstract contract UserMintableTokenInSeries is LimitingUserMintsPerSeries, Serie
 
         for (uint256 i = 0; i < tokens.length; i++) {
             MintableToken memory token = tokens[i];
-            uint256 availableMints = token.totalAvailableMints - token.mintedInSeries;
+            uint256 availableMints = getRarityLevelMintsPerSeries(series, tokens[i].rarityLevel) - token.mintedInSeries;
             bytes32 tokenHash = StringHash.dualHash(token.series, token.name);
 
             for (uint256 j = 0; j < availableMints; j++) {
@@ -1385,14 +1322,14 @@ abstract contract UserMintableTokenInSeries is LimitingUserMintsPerSeries, Serie
     {
         MintableToken storage token = mintableTokens[StringHash.dualHash(series, name)];
 
-        totalAvailableMints = token.totalAvailableMints;
+        totalAvailableMints = getRarityLevelMintsPerSeries(series, token.rarityLevel);
         mintedInSeries = token.mintedInSeries;
     }
 
     function recordTokenMint(string memory name, string memory series) internal tokenInitialized(name, series) {
         MintableToken storage token = mintableTokens[StringHash.dualHash(series, name)];
 
-        require(token.mintedInSeries < token.totalAvailableMints);
+        require(token.mintedInSeries < getRarityLevelMintsPerSeries(series, token.rarityLevel));
 
         token.mintedInSeries++;
     }
@@ -1509,7 +1446,7 @@ abstract contract RecordingMintedTokens {
  ***********************************************************************
  **********************************************************************/
 
-contract MinoToken is ERC721, RarityToken, UserMintableTokenInSeries, RecordingMintedTokens, AutoIncrementingTokenId {
+contract MinoToken is ERC721, UserMintableTokenInSeries, RecordingMintedTokens, AutoIncrementingTokenId {
     RandomNumberGenerator rngContract;
 
     string private baseURI;
@@ -1522,22 +1459,6 @@ contract MinoToken is ERC721, RarityToken, UserMintableTokenInSeries, RecordingM
     ) ERC721(name_, symbol_) Ownable() {
         baseURI = baseURI_;
         rngContract = rngContract_;
-    }
-
-    /**
-     * @dev Allows owner to create a new mintable token for a series.
-     * Must provide a unique name within the given series and must provide
-     * a valid rarity level name. The series must be already initialized before
-     * adding mintable tokens.
-     */
-    function addNewMintableToken(
-        string memory name,
-        string memory sport,
-        string memory tokenUri,
-        string memory rarityLevel,
-        string memory series
-    ) public onlyOwner seriesInitialized(series) {
-        addNewMintableToken(name, sport, tokenUri, getRarityLevelMintsPerSeries(series, rarityLevel), series);
     }
 
     /**
@@ -1564,8 +1485,8 @@ contract MinoToken is ERC721, RarityToken, UserMintableTokenInSeries, RecordingM
             mintableToken.name,
             mintableToken.sport,
             mintableToken.tokenUri,
-            getRarityLevelName(series, mintableToken.totalAvailableMints),
-            mintableToken.totalAvailableMints,
+            mintableToken.rarityLevel,
+            getRarityLevelMintsPerSeries(series, mintableToken.rarityLevel),
             series
         );
 
