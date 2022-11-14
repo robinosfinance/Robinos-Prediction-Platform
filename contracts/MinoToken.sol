@@ -1168,7 +1168,7 @@ abstract contract RarityToken is Ownable {
         string name;
     }
 
-    mapping(uint256 => RarityLevel) private rarityLevelMapping;
+    mapping(bytes32 => mapping(uint256 => RarityLevel)) private rarityLevelMapping;
 
     modifier validMintsPerSeries(uint256 mintsPerSeries) {
         require(mintsPerSeries > 0 && mintsPerSeries <= MAX_MINTS_PER_LEVEL);
@@ -1180,21 +1180,25 @@ abstract contract RarityToken is Ownable {
      * @dev Allows owner to create a new rarity level. Must include rarity level name
      * and tokens available per series in the given level.
      */
-    function addNewRarityLevel(string memory levelName, uint256 mintsPerSeries)
-        public
-        onlyOwner
-        validMintsPerSeries(mintsPerSeries)
-    {
-        rarityLevelMapping[mintsPerSeries] = RarityLevel(true, levelName);
+    function addNewRarityLevel(
+        string memory seriesName,
+        string memory levelName,
+        uint256 mintsPerSeries
+    ) public onlyOwner validMintsPerSeries(mintsPerSeries) {
+        rarityLevelMapping[StringHash.hashStr(seriesName)][mintsPerSeries] = RarityLevel(true, levelName);
     }
 
     /**
      * @dev Returns the num of available mints for rarity level.
      * Method will revert if the level is not found.
      */
-    function getRarityLevelMintsPerSeries(string memory levelName) public view returns (uint256) {
+    function getRarityLevelMintsPerSeries(string memory seriesName, string memory levelName)
+        public
+        view
+        returns (uint256)
+    {
         for (uint256 i = 1; i <= MAX_MINTS_PER_LEVEL; i++) {
-            RarityLevel storage level = rarityLevelMapping[i];
+            RarityLevel storage level = rarityLevelMapping[StringHash.hashStr(seriesName)][i];
 
             if (StringUtils.matchStrings(level.name, levelName)) return i;
         }
@@ -1208,13 +1212,13 @@ abstract contract RarityToken is Ownable {
      * Method will revert if the level has not been initialized with the
      * given mints per series.
      */
-    function getRarityLevelName(uint256 mintsPerSeries)
+    function getRarityLevelName(string memory seriesName, uint256 mintsPerSeries)
         public
         view
         validMintsPerSeries(mintsPerSeries)
         returns (string memory)
     {
-        RarityLevel storage level = rarityLevelMapping[mintsPerSeries];
+        RarityLevel storage level = rarityLevelMapping[StringHash.hashStr(seriesName)][mintsPerSeries];
         require(level.initialized);
 
         return level.name;
@@ -1223,17 +1227,19 @@ abstract contract RarityToken is Ownable {
     /**
      * @dev Returns available mints per series for each initialized rarity level.
      */
-    function getRarityLevels() public view returns (uint256[] memory) {
+    function getRarityLevels(string memory seriesName) public view returns (uint256[] memory) {
         uint256 totalLevels = 0;
+        bytes32 seriesHash = StringHash.hashStr(seriesName);
+
         for (uint256 i = 0; i < MAX_MINTS_PER_LEVEL; i++) {
-            RarityLevel storage level = rarityLevelMapping[i];
+            RarityLevel storage level = rarityLevelMapping[seriesHash][i];
             if (level.initialized) totalLevels++;
         }
 
         uint256[] memory rarityLevels = new uint256[](totalLevels);
         uint256 arrayIndex = 0;
         for (uint256 i = 0; i < MAX_MINTS_PER_LEVEL; i++) {
-            RarityLevel storage level = rarityLevelMapping[i];
+            RarityLevel storage level = rarityLevelMapping[seriesHash][i];
             if (!level.initialized) continue;
 
             rarityLevels[arrayIndex] = i;
@@ -1246,8 +1252,12 @@ abstract contract RarityToken is Ownable {
     /**
      * @dev Allows owner to remove any rarity level
      */
-    function removeRarityLevel(uint256 mintsPerSeries) public onlyOwner validMintsPerSeries(mintsPerSeries) {
-        rarityLevelMapping[mintsPerSeries] = RarityLevel(false, "");
+    function removeRarityLevel(string memory seriesName, uint256 mintsPerSeries)
+        public
+        onlyOwner
+        validMintsPerSeries(mintsPerSeries)
+    {
+        rarityLevelMapping[StringHash.hashStr(seriesName)][mintsPerSeries] = RarityLevel(false, "");
     }
 }
 
@@ -1475,7 +1485,7 @@ contract MinoToken is ERC721, RarityToken, UserMintableTokenInSeries, RecordingM
         string memory rarityLevel,
         string memory series
     ) public onlyOwner seriesInitialized(series) {
-        addNewMintableToken(name, sport, tokenUri, getRarityLevelMintsPerSeries(rarityLevel), series);
+        addNewMintableToken(name, sport, tokenUri, getRarityLevelMintsPerSeries(series, rarityLevel), series);
     }
 
     /**
@@ -1502,7 +1512,7 @@ contract MinoToken is ERC721, RarityToken, UserMintableTokenInSeries, RecordingM
             mintableToken.name,
             mintableToken.sport,
             mintableToken.tokenUri,
-            getRarityLevelName(mintableToken.totalAvailableMints),
+            getRarityLevelName(series, mintableToken.totalAvailableMints),
             mintableToken.totalAvailableMints,
             series
         );

@@ -124,13 +124,13 @@ describe('MinoToken tests', () => {
             // Owner can add a new rarity level by providing a
             // level name and num of available tokens
             method: 'addNewRarityLevel',
-            args: [name, availableTokens],
+            args: [seriesName, name, availableTokens],
             account: accounts[0],
           },
           {
             // We should be able to serach for the rarity name with the num of available tokens
             method: 'getRarityLevelName',
-            args: [availableTokens],
+            args: [seriesName, availableTokens],
             onReturn: (rarityLevelName) => {
               assert.strictEqual(rarityLevelName, name);
             },
@@ -139,7 +139,7 @@ describe('MinoToken tests', () => {
           {
             // And we can search for the num of available tokens with the level name
             method: 'getRarityLevelMintsPerSeries',
-            args: [name],
+            args: [seriesName, name],
             onReturn: (rarityLevelAvailableMints) => {
               assert.strictEqual(
                 parseInt(rarityLevelAvailableMints),
@@ -185,7 +185,7 @@ describe('MinoToken tests', () => {
         ...rarityLevels.map(({ name, availableTokens }) => ({
           // Add at least one rarity level
           method: 'addNewRarityLevel',
-          args: [name, availableTokens],
+          args: [seriesName, name, availableTokens],
           account: accounts[0],
         })),
         ...mintableTokens.flatMap(
@@ -248,7 +248,7 @@ describe('MinoToken tests', () => {
         ...rarityLevels.map(({ name, availableTokens }) => ({
           // Adds new rarity levels
           method: 'addNewRarityLevel',
-          args: [name, availableTokens],
+          args: [seriesName, name, availableTokens],
           account: accounts[0],
         })),
         ...mintableTokens.map(
@@ -371,14 +371,14 @@ describe('MinoToken tests', () => {
       const totalReward = rewardPerUser * rewardableTokens;
 
       return useMethodsOn(MinoToken, [
-        ...rarityLevels.map(({ name, availableTokens }) => ({
-          method: 'addNewRarityLevel',
-          args: [name, availableTokens],
-          account: accounts[0],
-        })),
         ...Object.entries(seriesMintableTokens).flatMap(
           // We initialize and create tokens for multiple series
           ([seriesName, mintableTokens]) => [
+            ...rarityLevels.map(({ name, availableTokens }) => ({
+              method: 'addNewRarityLevel',
+              args: [seriesName, name, availableTokens],
+              account: accounts[0],
+            })),
             ...usersMintsPerSeries.map((mintsPerSeries, index) => ({
               method: 'setUserMints',
               args: [accounts[index], seriesName, mintsPerSeries],
