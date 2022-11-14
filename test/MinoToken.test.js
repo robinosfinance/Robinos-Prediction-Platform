@@ -339,6 +339,111 @@ describe('MinoToken tests', () => {
         })),
       ]);
     });
+
+    it('records all user token data', () => {
+      const userTokenIdAttr = (index) => `firstTokenId-user-${index}`;
+      return useMethodsOn(MinoToken, [
+        {
+          // The owner initializes a new series
+          method: 'initializeSeries',
+          args: [seriesName],
+          account: accounts[0],
+        },
+        ...usersMintsPerSeries.map((mintsPerSeries, index) => ({
+          // Assigns each user a allowed mints for series
+          method: 'setUserMints',
+          args: [accounts[index], seriesName, mintsPerSeries],
+          account: accounts[0],
+        })),
+        ...rarityLevels.map(({ name, availableTokens }) => ({
+          // Adds new rarity levels
+          method: 'addNewRarityLevel',
+          args: [seriesName, name, availableTokens],
+          account: accounts[0],
+        })),
+        ...mintableTokens.map(
+          ({ name, sport, tokenUri, rarityLevelIndex }) => ({
+            // Adds new tokens in the series and links them to the
+            // already provided rarity levels
+            method: 'addNewMintableToken',
+            args: [
+              name,
+              sport,
+              tokenUri,
+              rarityLevels[rarityLevelIndex].name,
+              seriesName,
+            ],
+            account: accounts[0],
+          })
+        ),
+        {
+          // Opens up minting for the series
+          method: 'setSeriesMintingIsOpen',
+          args: [seriesName, true],
+          account: accounts[0],
+        },
+        ...usersMintsPerSeries.flatMap((mintsPerSeries, index) => {
+          return [
+            ...newArray(mintsPerSeries, () => ({
+              // Each user can mint up to the allowed times per series
+              method: 'mintToken',
+              args: [seriesName],
+              account: accounts[index],
+            })),
+            {
+              // We check the data for all user tokens
+              method: 'getAllUserTokens',
+              args: [accounts[index]],
+              onReturn: (tokens) => {
+                const { tokenId } = tokens[0];
+
+                // And we save the first user tokenId
+                return { [userTokenIdAttr(index)]: tokenId };
+              },
+              account: accounts[index],
+            },
+            (state) => ({
+              // The user that just minted the token transfers it
+              // to another user who does not mint in the series
+              method: 'transferFrom',
+              args: [
+                accounts[index],
+                accounts[usersMintsPerSeries.length],
+                state[userTokenIdAttr(index)],
+              ],
+              account: accounts[index],
+            }),
+            (state) => ({
+              method: 'getAllUserTokens',
+              args: [accounts[index]],
+              onReturn: (tokens) => {
+                const ownsFirstMintedToken = tokens.some(
+                  ({ tokenId }) => tokenId === state[userTokenIdAttr(index)]
+                );
+
+                // We expect that the user who minted the original token
+                // doesn't hold the token in their wallet any longer
+                assert.ok(!ownsFirstMintedToken);
+              },
+              account: accounts[index],
+            }),
+            (state) => ({
+              method: 'getAllUserTokens',
+              args: [accounts[usersMintsPerSeries.length]],
+              onReturn: (tokens) => {
+                const ownsFirstMintedToken = tokens.some(
+                  ({ tokenId }) => tokenId === state[userTokenIdAttr(index)]
+                );
+
+                // And the user to whom it was sent should have it in their wallet
+                assert.ok(ownsFirstMintedToken);
+              },
+              account: accounts[index],
+            }),
+          ];
+        }),
+      ]);
+    });
   });
 
   describe('MinoTokenReward', () => {

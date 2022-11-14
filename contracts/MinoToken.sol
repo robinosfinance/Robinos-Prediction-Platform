@@ -281,7 +281,7 @@ library Address {
         require(address(this).balance >= amount, "Address: insufficient balance");
 
         (bool success, ) = recipient.call{value: amount}("");
-        require(success, "Address: unable to send value, recipient may have reverted");
+        require(success, "unable to send");
     }
 
     /**
@@ -303,7 +303,7 @@ library Address {
      * _Available since v3.1._
      */
     function functionCall(address target, bytes memory data) internal returns (bytes memory) {
-        return functionCall(target, data, "Address: low-level call failed");
+        return functionCall(target, data, "failed");
     }
 
     /**
@@ -336,7 +336,7 @@ library Address {
         bytes memory data,
         uint256 value
     ) internal returns (bytes memory) {
-        return functionCallWithValue(target, data, value, "Address: low-level call with value failed");
+        return functionCallWithValue(target, data, value, "failed");
     }
 
     /**
@@ -351,8 +351,8 @@ library Address {
         uint256 value,
         string memory errorMessage
     ) internal returns (bytes memory) {
-        require(address(this).balance >= value, "Address: insufficient balance for call");
-        require(isContract(target), "Address: call to non-contract");
+        require(address(this).balance >= value, "insufficient balance");
+        require(isContract(target), "non-contract");
 
         (bool success, bytes memory returndata) = target.call{value: value}(data);
         return verifyCallResult(success, returndata, errorMessage);
@@ -365,7 +365,7 @@ library Address {
      * _Available since v3.3._
      */
     function functionStaticCall(address target, bytes memory data) internal view returns (bytes memory) {
-        return functionStaticCall(target, data, "Address: low-level static call failed");
+        return functionStaticCall(target, data, "failed");
     }
 
     /**
@@ -379,7 +379,7 @@ library Address {
         bytes memory data,
         string memory errorMessage
     ) internal view returns (bytes memory) {
-        require(isContract(target), "Address: static call to non-contract");
+        require(isContract(target), "non-contract");
 
         (bool success, bytes memory returndata) = target.staticcall(data);
         return verifyCallResult(success, returndata, errorMessage);
@@ -392,7 +392,7 @@ library Address {
      * _Available since v3.4._
      */
     function functionDelegateCall(address target, bytes memory data) internal returns (bytes memory) {
-        return functionDelegateCall(target, data, "Address: low-level delegate call failed");
+        return functionDelegateCall(target, data, "failed");
     }
 
     /**
@@ -406,7 +406,7 @@ library Address {
         bytes memory data,
         string memory errorMessage
     ) internal returns (bytes memory) {
-        require(isContract(target), "Address: delegate call to non-contract");
+        require(isContract(target), "non-contract");
 
         (bool success, bytes memory returndata) = target.delegatecall(data);
         return verifyCallResult(success, returndata, errorMessage);
@@ -643,7 +643,7 @@ contract ERC721 is Context, ERC165, IERC721, IERC721Metadata {
      * @dev See {IERC721-balanceOf}.
      */
     function balanceOf(address owner) public view virtual override returns (uint256) {
-        require(owner != address(0), "ERC721: balance query for the zero address");
+        require(owner != address(0), "zero address");
         return _balances[owner];
     }
 
@@ -652,7 +652,7 @@ contract ERC721 is Context, ERC165, IERC721, IERC721Metadata {
      */
     function ownerOf(uint256 tokenId) public view virtual override returns (address) {
         address owner = _owners[tokenId];
-        require(owner != address(0), "ERC721: owner query for nonexistent token");
+        require(owner != address(0), "nonexistent token");
         return owner;
     }
 
@@ -674,7 +674,7 @@ contract ERC721 is Context, ERC165, IERC721, IERC721Metadata {
      * @dev See {IERC721Metadata-tokenURI}.
      */
     function tokenURI(uint256 tokenId) public view virtual override returns (string memory) {
-        require(_exists(tokenId), "ERC721Metadata: URI query for nonexistent token");
+        require(_exists(tokenId), "nonexistent token");
 
         string memory baseURI = _baseURI();
         return bytes(baseURI).length > 0 ? string(abi.encodePacked(baseURI, tokenId.toString())) : "";
@@ -694,12 +694,9 @@ contract ERC721 is Context, ERC165, IERC721, IERC721Metadata {
      */
     function approve(address to, uint256 tokenId) public virtual override {
         address owner = ERC721.ownerOf(tokenId);
-        require(to != owner, "ERC721: approval to current owner");
+        require(to != owner, "owner");
 
-        require(
-            _msgSender() == owner || isApprovedForAll(owner, _msgSender()),
-            "ERC721: approve caller is not owner nor approved for all"
-        );
+        require(_msgSender() == owner || isApprovedForAll(owner, _msgSender()), "not approved");
 
         _approve(to, tokenId);
     }
@@ -708,7 +705,7 @@ contract ERC721 is Context, ERC165, IERC721, IERC721Metadata {
      * @dev See {IERC721-getApproved}.
      */
     function getApproved(uint256 tokenId) public view virtual override returns (address) {
-        require(_exists(tokenId), "ERC721: approved query for nonexistent token");
+        require(_exists(tokenId), "nonexistent token");
 
         return _tokenApprovals[tokenId];
     }
@@ -736,7 +733,7 @@ contract ERC721 is Context, ERC165, IERC721, IERC721Metadata {
         uint256 tokenId
     ) public virtual override {
         //solhint-disable-next-line max-line-length
-        require(_isApprovedOrOwner(_msgSender(), tokenId), "ERC721: transfer caller is not owner nor approved");
+        require(_isApprovedOrOwner(_msgSender(), tokenId), "not approved");
 
         _transfer(from, to, tokenId);
     }
@@ -761,7 +758,7 @@ contract ERC721 is Context, ERC165, IERC721, IERC721Metadata {
         uint256 tokenId,
         bytes memory _data
     ) public virtual override {
-        require(_isApprovedOrOwner(_msgSender(), tokenId), "ERC721: transfer caller is not owner nor approved");
+        require(_isApprovedOrOwner(_msgSender(), tokenId), "not approved");
         _safeTransfer(from, to, tokenId, _data);
     }
 
@@ -790,7 +787,7 @@ contract ERC721 is Context, ERC165, IERC721, IERC721Metadata {
         bytes memory _data
     ) internal virtual {
         _transfer(from, to, tokenId);
-        require(_checkOnERC721Received(from, to, tokenId, _data), "ERC721: transfer to non ERC721Receiver implementer");
+        require(_checkOnERC721Received(from, to, tokenId, _data), "non ERC721Receiver");
     }
 
     /**
@@ -813,7 +810,7 @@ contract ERC721 is Context, ERC165, IERC721, IERC721Metadata {
      * - `tokenId` must exist.
      */
     function _isApprovedOrOwner(address spender, uint256 tokenId) internal view virtual returns (bool) {
-        require(_exists(tokenId), "ERC721: operator query for nonexistent token");
+        require(_exists(tokenId), "nonexistent token");
         address owner = ERC721.ownerOf(tokenId);
         return (spender == owner || getApproved(tokenId) == spender || isApprovedForAll(owner, spender));
     }
@@ -842,10 +839,7 @@ contract ERC721 is Context, ERC165, IERC721, IERC721Metadata {
         bytes memory _data
     ) internal virtual {
         _mint(to, tokenId);
-        require(
-            _checkOnERC721Received(address(0), to, tokenId, _data),
-            "ERC721: transfer to non ERC721Receiver implementer"
-        );
+        require(_checkOnERC721Received(address(0), to, tokenId, _data), "non ERC721Receiver");
     }
 
     /**
@@ -861,8 +855,8 @@ contract ERC721 is Context, ERC165, IERC721, IERC721Metadata {
      * Emits a {Transfer} event.
      */
     function _mint(address to, uint256 tokenId) internal virtual {
-        require(to != address(0), "ERC721: mint to the zero address");
-        require(!_exists(tokenId), "ERC721: token already minted");
+        require(to != address(0), "zero address");
+        require(!_exists(tokenId), "already minted");
 
         _beforeTokenTransfer(address(0), to, tokenId);
 
@@ -912,8 +906,8 @@ contract ERC721 is Context, ERC165, IERC721, IERC721Metadata {
         address to,
         uint256 tokenId
     ) internal virtual {
-        require(ERC721.ownerOf(tokenId) == from, "ERC721: transfer of token that is not own");
-        require(to != address(0), "ERC721: transfer to the zero address");
+        require(ERC721.ownerOf(tokenId) == from, "not own");
+        require(to != address(0), "zero address");
 
         _beforeTokenTransfer(from, to, tokenId);
 
@@ -1415,7 +1409,13 @@ struct MintedToken {
 }
 
 abstract contract RecordingMintedTokens {
+    struct UserTokens {
+        uint256 amountOfTokens;
+        uint256[] tokenIds;
+    }
+
     mapping(uint256 => MintedToken) private mintedTokenData;
+    mapping(address => UserTokens) private userOwnedTokens;
     mapping(bytes32 => uint256[]) private nameAndSportToTokenIds;
 
     function addMintedToken(MintedToken memory token) internal {
@@ -1448,6 +1448,58 @@ abstract contract RecordingMintedTokens {
         }
 
         return tokens;
+    }
+
+    /**
+     * @dev Returns an array with all data for tokens belonging to the user
+     */
+    function getAllUserTokens(address user) public view returns (MintedToken[] memory) {
+        uint256 tokensCount = userOwnedTokens[user].amountOfTokens;
+        MintedToken[] memory tokens = new MintedToken[](tokensCount);
+        uint256[] memory tokenIds = userOwnedTokens[user].tokenIds;
+        uint256 tokenIndex = 0;
+
+        for (uint256 i = 0; i < tokenIds.length; i++) {
+            if (tokenIds[i] == 0) continue;
+
+            tokens[tokenIndex] = mintedTokenData[tokenIds[i]];
+            tokenIndex++;
+        }
+
+        return tokens;
+    }
+
+    function removeTokenId(UserTokens storage userTokens, uint256 tokenId) private {
+        bool deleted = false;
+
+        for (uint256 i = 0; i < userTokens.tokenIds.length; i++) {
+            if (userTokens.tokenIds[i] != tokenId) continue;
+
+            userTokens.tokenIds[i] = 0;
+            deleted = true;
+        }
+
+        if (deleted) {
+            userTokens.amountOfTokens--;
+        }
+    }
+
+    function addTokenId(UserTokens storage userTokens, uint256 tokenId) private {
+        userTokens.tokenIds.push(tokenId);
+        userTokens.amountOfTokens++;
+    }
+
+    /**
+     * @dev Triggered on initial token mint and when token is transferred to
+     * another user.
+     */
+    function transferTokenOwnership(
+        address from,
+        address to,
+        uint256 tokenId
+    ) internal {
+        removeTokenId(userOwnedTokens[from], tokenId);
+        addTokenId(userOwnedTokens[to], tokenId);
     }
 }
 
@@ -1496,7 +1548,7 @@ contract MinoToken is ERC721, RarityToken, UserMintableTokenInSeries, RecordingM
      */
     function mintToken(string memory series) public seriesMintIsOpen(series) userCanMint(_msgSender(), series) {
         bytes32[] memory mintableTokenHashes = getMintableTokenHashesArray(series);
-        require(mintableTokenHashes.length != 0, "No more tokens left");
+        require(mintableTokenHashes.length != 0);
 
         uint256 tokenId = newTokenId();
         uint256 randomNumber = rngContract.randomNumber(
@@ -1525,5 +1577,13 @@ contract MinoToken is ERC721, RarityToken, UserMintableTokenInSeries, RecordingM
 
     function _baseURI() internal view override returns (string memory) {
         return baseURI;
+    }
+
+    function _beforeTokenTransfer(
+        address from,
+        address to,
+        uint256 tokenId
+    ) internal override {
+        transferTokenOwnership(from, to, tokenId);
     }
 }
