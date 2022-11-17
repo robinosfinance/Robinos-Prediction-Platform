@@ -1333,6 +1333,23 @@ abstract contract UserMintableTokenInSeries is LimitingUserMintsPerSeries, Serie
 
         token.mintedInSeries++;
     }
+
+    function getSeriesMintData(string memory series)
+        public
+        view
+        returns (uint256 totalAvailableMints, uint256 mintedInSeries)
+    {
+        bytes32[] storage tokenHashes = mintableTokensPerSeries[StringHash.hashStr(series)];
+
+        totalAvailableMints = 0;
+        mintedInSeries = 0;
+
+        for (uint256 i = 0; i < tokenHashes.length; i++) {
+            MintableToken memory token = mintableTokens[tokenHashes[i]];
+            totalAvailableMints += getRarityLevelMintsPerSeries(series, token.rarityLevel);
+            mintedInSeries += token.mintedInSeries;
+        }
+    }
 }
 
 struct MintedToken {

@@ -230,6 +230,11 @@ describe('MinoToken tests', () => {
         return currentId;
       };
 
+      const totalAvailableMints = mintableTokens.reduce((total, token) => {
+        const rarityLevel = rarityLevels[token.rarityLevelIndex];
+        return total + rarityLevel.availableTokens;
+      }, 0);
+
       return useMethodsOn(MinoToken, [
         {
           // The owner initializes a new series
@@ -337,6 +342,21 @@ describe('MinoToken tests', () => {
                   );
                 },
               }),
+              {
+                method: 'getSeriesMintData',
+                args: [seriesName],
+                account: accounts[index],
+                onReturn: (mintData) => {
+                  assert.strictEqual(
+                    parseInt(mintData.totalAvailableMints),
+                    totalAvailableMints
+                  );
+                  assert.strictEqual(
+                    parseInt(mintData.mintedInSeries),
+                    tokenId
+                  );
+                },
+              },
             ];
           }).flat()
         ),
