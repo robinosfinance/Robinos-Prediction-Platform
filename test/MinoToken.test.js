@@ -318,9 +318,25 @@ describe('MinoToken tests', () => {
                     parseInt(data.totalAvailable),
                     localRarityLevel.availableTokens
                   );
+
+                  // We save the tokenId -> tokenUri map
+                  return { [`token-${tokenId}`]: data.tokenUri };
                 },
                 account: accounts[0],
               },
+              (state) => ({
+                // We query the tokenURI for the same tokenId
+                method: 'tokenURI',
+                args: [tokenId],
+                account: accounts[index],
+                onReturn: (tokenURI) => {
+                  // And check if the returned uri is correct
+                  assert.strict(
+                    tokenURI,
+                    `${baseUri}${state[`token-${tokenId}`]}`
+                  );
+                },
+              }),
             ];
           }).flat()
         ),

@@ -1500,6 +1500,12 @@ contract MinoToken is ERC721, UserMintableTokenInSeries, RecordingMintedTokens, 
         return baseURI;
     }
 
+    function tokenURI(uint256 tokenId) public view override returns (string memory) {
+        string memory tokenUri = getTokenData(tokenId).tokenUri;
+
+        return string(abi.encodePacked(_baseURI(), tokenUri));
+    }
+
     function _beforeTokenTransfer(
         address from,
         address to,
