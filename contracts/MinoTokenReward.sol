@@ -1685,6 +1685,36 @@ contract MinoTokenReward is Ownable {
     }
 
     /**
+     * @dev Returns the total amount of specified token reward generated 
+     * from all the rewards by a single token specified by unique pair of
+     * player and sports name
+     * @param playerName of the token to calculate reward for
+     * @param sportsName of the token to calculate reward for
+     * @param rewardToken contract instance of the IERC20 token
+     * used to distribute rewards and get total amount of rewards for
+     */
+    function getTotalPlayerReward(
+        string memory playerName,
+        string memory sportsName,
+        IERC20 rewardToken
+    ) public view returns (uint256) {
+        uint256 totalReward = 0;
+
+        for (uint256 i = 0; i < allRewardHashes.length; i++) {
+            Reward storage reward = rewards[allRewardHashes[i]];
+            if (
+                StringUtils.matchStrings(reward.playerName, playerName) &&
+                StringUtils.matchStrings(reward.sportsName, sportsName) &&
+                address(reward.rewardToken) == address(rewardToken)
+            ) {
+                totalReward += reward.rewardAmount;
+            }
+        }
+
+        return totalReward;
+    }
+
+    /**
      * @dev Return all user addresses who have won the reward with rewardName and playerName.
      * Function will revert if reward was never created
      */
