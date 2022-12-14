@@ -490,7 +490,6 @@ abstract contract SaleFactory is Ownable {
 
     /**
      * @dev Function to set the start and end time of the next sale.
-     * Can only be called if there is currently no active sale and needs to be called by the owner of the contract.
      * @param start Unix time stamp of the start of sale. Needs to be a timestamp in the future. If the start is 0, the sale will start immediately.
      * @param end Unix time stamp of the end of sale. Needs to be a timestamp after the start
      */
@@ -499,12 +498,9 @@ abstract contract SaleFactory is Ownable {
         uint256 start,
         uint256 end
     ) public onlyOwner returns (bool) {
-        bool initialized;
         bytes32 saleHash = hashStr(eventCode);
         Sale storage eventSale = _eventSale[saleHash];
-        if (eventSale.saleStart == 0 && eventSale.saleEnd == 0) {
-            initialized = false;
-        }
+        bool initialized = eventSale.saleStart != 0;
 
         if (start != 0) {
             require(start > time(), "SaleFactory: given past sale start time");
