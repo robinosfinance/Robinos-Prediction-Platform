@@ -22,6 +22,7 @@ const rewardContract = contracts['DBTokenReward.sol'].DBTokenReward;
 const rewardV2Contract = contracts['DBTokenRewardV2.sol'].DBTokenReward;
 const rewardSCContract = contracts['DBTokenRewardSC.sol'].DBTokenRewardSC;
 const sideBetContract = contracts['DBTokenSideBet.sol'].DBTokenSideBet;
+const tokenSellContract = contracts['DBTokenSell.sol'].DBTokenSell;
 
 describe('DBToken tests', () => {
   let accounts,
@@ -32,7 +33,8 @@ describe('DBToken tests', () => {
     DBTokenReward,
     DBTokenRewardV2,
     DBTokenRewardSC,
-    DBTokenSideBet;
+    DBTokenSideBet,
+    DBTokenSell;
 
   // Teams and event code default info for testing
   const teamTokenParams = [
@@ -69,7 +71,7 @@ describe('DBToken tests', () => {
 
     useMethodsOn(
       DBTokenEvent,
-      teamTokenParams.map((teamParams) => ({
+      teamTokenParams.map((teamParams, index) => ({
         method: 'getTeamTokenAddress',
         args: [teamParams.teamName],
         onReturn: (tokenAddress) => {
@@ -117,6 +119,12 @@ describe('DBToken tests', () => {
         DBTokens[1].options.address,
         TetherToken.options.address,
       ],
+      accounts[0]
+    );
+
+    DBTokenSell = await deploy(
+      tokenSellContract,
+      [TetherToken.options.address],
       accounts[0]
     );
   });
@@ -1304,6 +1312,400 @@ describe('DBToken tests', () => {
               },
             },
           ])
+        );
+    });
+  });
+
+  describe('DBTokenSell', () => {
+    const dbtokenIndex = 0;
+    const tokensToOffer = 100;
+    const minSTRequired = 120;
+    const bidAmounts = [200, 300, 400];
+    const expectedOfferId = `${eventCode}-${teamTokenParams[dbtokenIndex].teamName}-0`;
+
+    const prepareSaleAndOffer = () =>
+      useMethodsOn(DBTokenEvent, {
+        // We mint the DBTokens we want to put up for offer
+        method: 'mintTeamToken',
+        args: [
+          teamTokenParams[dbtokenIndex].teamName,
+          accounts[0],
+          tokensToOffer,
+        ],
+        account: accounts[0],
+      })
+        .then(() =>
+          useMethodsOn(DBTokens[dbtokenIndex], {
+            // The offering user approves the wanted amount of tokens towards
+            // the DBTokenSell contract
+            method: 'approve',
+            args: [DBTokenSell.options.address, tokensToOffer],
+            account: accounts[0],
+          })
+        )
+        .then(() =>
+          useMethodsOn(DBTokenSell, [
+            {
+              // We start the sale, allowing the users to put offers with
+              // tokens belonging to this event
+              method: 'setSaleStartEnd',
+              args: [eventCode, 0, secondsInTheFuture(10)],
+              account: accounts[0],
+            },
+            {
+              // The offering user adds an offer to the correct event
+              method: 'addOffer',
+              args: [
+                eventCode,
+                DBTokens[dbtokenIndex].options.address,
+                tokensToOffer,
+                minSTRequired,
+              ],
+              account: accounts[0],
+            },
+          ])
+        );
+
+    const prepareSaleOfferAndBids = () =>
+      prepareSaleAndOffer()
+        .then(() =>
+          useMethodsOn(
+            TetherToken,
+            bidAmounts.flatMap((bidAmount, index) => [
+              {
+                // We transfer the tokens required for bidding
+                // to each participating user
+                method: 'transfer',
+                args: [accounts[index + 1], bidAmount],
+                account: accounts[0],
+              },
+              {
+                // Each user must approve the amount of tokens
+                // they wish to bid towards the DBTokenSell contract
+                method: 'approve',
+                args: [DBTokenSell.options.address, bidAmount],
+                account: accounts[index + 1],
+              },
+            ])
+          )
+        )
+        .then(() =>
+          useMethodsOn(
+            DBTokenSell,
+            bidAmounts.map((bidAmount, index) => ({
+              // Each user then proceeds to bid on the DBTokenSell contract
+              method: 'bidOnOffer',
+              args: [eventCode, expectedOfferId, bidAmount],
+              account: accounts[index + 1],
+            }))
+          )
+        );
+
+    it('deploys successfully', () => {
+      assert.ok(DBTokenSell.options.address);
+    });
+
+    it('allows users holding DBTokens to offer them for sale', () => {
+      const DBToken = DBTokens[dbtokenIndex];
+
+      return prepareSaleAndOffer().then(() =>
+        useMethodsOn(DBTokenSell, {
+          // After the sale and offer have been initialized, we get
+          // an array of all offers in the given event and check if
+          // offer data is correct
+          method: 'getAllEventOffers',
+          args: [eventCode],
+          account: accounts[0],
+          onReturn: ([eventOffer]) => {
+            assert.strictEqual(eventOffer.offerId, expectedOfferId);
+
+            assert.strictEqual(parseInt(eventOffer.status), 1);
+            assert.strictEqual(eventOffer.offeringUser, accounts[0]);
+            assert.strictEqual(
+              eventOffer.tokenInstance,
+              DBToken.options.address
+            );
+            assert.strictEqual(
+              parseInt(eventOffer.tokensOffered),
+              tokensToOffer
+            );
+            assert.strictEqual(
+              parseInt(eventOffer.minStandardTokensRequested),
+              minSTRequired
+            );
+          },
+        })
+      );
+    });
+
+    it('reverts if user tries to match the highest bid', () => {
+      const invalidFinalBid = bidAmounts[bidAmounts.length - 1];
+
+      return prepareSaleOfferAndBids()
+        .then(() => {
+          return useMethodsOn(TetherToken, [
+            {
+              method: 'transfer',
+              args: [accounts[bidAmounts.length + 1], invalidFinalBid],
+              account: accounts[0],
+            },
+            {
+              method: 'approve',
+              args: [DBTokenSell.options.address, invalidFinalBid],
+              account: accounts[bidAmounts.length + 1],
+            },
+          ]);
+        })
+        .then(() =>
+          useMethodsOn(DBTokenSell, {
+            // Any bid placed on an offer must be higher than
+            // the current highest bid
+            method: 'bidOnOffer',
+            args: [eventCode, expectedOfferId, invalidFinalBid],
+            account: accounts[bidAmounts.length + 1],
+            catch: (err) => {
+              assert.strictEqual(
+                err,
+                'DBTokenSell: must bid more than the current highest bid'
+              );
+            },
+          })
+        );
+    });
+
+    it('reverts if user tries withdraw all from offer before closing sale or offer', () =>
+      prepareSaleOfferAndBids().then(() =>
+        useMethodsOn(DBTokenSell, {
+          // Funds can only be withdrawn from the offer
+          // once the sale ends or the offering user
+          // closes the offer
+          method: 'withdrawAllFromOffer',
+          args: [eventCode, expectedOfferId],
+          account: accounts[2],
+          catch: (err) => {
+            assert.strictEqual(
+              err,
+              'DBTokenSell: can withdraw only if sale or offer is closed'
+            );
+          },
+        })
+      ));
+
+    it('allows users to place bids on offers', () => {
+      return prepareSaleOfferAndBids().then(() =>
+        useMethodsOn(DBTokenSell, {
+          method: 'getAllEventOffers',
+          args: [eventCode],
+          account: accounts[0],
+          onReturn: ([eventOffer]) => {
+            // We just go through all the bids on the given offer
+            // and check if the data is correct
+            eventOffer.bids.forEach(
+              ({ biddingUser, standardTokensOffered }, index) => {
+                assert.strictEqual(biddingUser, accounts[index + 1]);
+                assert.strictEqual(
+                  parseInt(standardTokensOffered),
+                  bidAmounts[index]
+                );
+              }
+            );
+          },
+        })
+      );
+    });
+
+    it('trades the tokens for standard tokens with the user with the highest bid', () => {
+      let initalBalance = 0;
+      const setInitialBalance = (balance) => {
+        initalBalance = parseInt(balance);
+      };
+
+      return prepareSaleOfferAndBids()
+        .then(() =>
+          useMethodsOn(TetherToken, {
+            method: 'balanceOf',
+            args: [accounts[0]],
+            account: accounts[0],
+            // We save the initial USDT balance of the offerring user
+            onReturn: (balance) => setInitialBalance(balance),
+          })
+        )
+        .then(() =>
+          useMethodsOn(DBTokenSell, [
+            {
+              method: 'finalizeOffer',
+              args: [eventCode, expectedOfferId],
+              account: accounts[0],
+            },
+            {
+              method: 'withdrawAllFromOffer',
+              args: [eventCode, expectedOfferId],
+              account: accounts[0],
+            },
+          ])
+        )
+        .then(() =>
+          useMethodsOn(TetherToken, {
+            method: 'balanceOf',
+            args: [accounts[0]],
+            account: accounts[0],
+            onReturn: (balance) => {
+              const highestBid = bidAmounts[bidAmounts.length - 1];
+              // We expect that the highest bid has been transferred to
+              // the offerring user's wallet
+              assert.strictEqual(parseInt(balance), initalBalance + highestBid);
+            },
+          })
+        );
+    });
+
+    it('allows the owner of offer to cancel offer before any bids are placed and return the tokens', () => {
+      return prepareSaleAndOffer()
+        .then(() =>
+          useMethodsOn(DBTokenSell, [
+            {
+              method: 'finalizeOffer',
+              args: [eventCode, expectedOfferId],
+              account: accounts[0],
+            },
+            {
+              method: 'withdrawAllFromOffer',
+              args: [eventCode, expectedOfferId],
+              account: accounts[0],
+            },
+          ])
+        )
+        .then(() =>
+          useMethodsOn(DBTokens[dbtokenIndex], {
+            method: 'balanceOf',
+            args: [accounts[0]],
+            account: accounts[0],
+            onReturn: (balance) => {
+              // If no bids have been placed on the user's offer
+              // then just the offered tokens are transferred back
+              // to the user's wallet
+              assert.strictEqual(parseInt(balance), tokensToOffer);
+            },
+          })
+        );
+    });
+
+    it('returns all the tokens from bids that are not the highest bid', () => {
+      return prepareSaleOfferAndBids()
+        .then(() =>
+          useMethodsOn(DBTokenSell, [
+            {
+              method: 'finalizeOffer',
+              args: [eventCode, expectedOfferId],
+              account: accounts[0],
+            },
+            {
+              method: 'withdrawAllFromOffer',
+              args: [eventCode, expectedOfferId],
+              account: accounts[0],
+            },
+          ])
+        )
+        .then(() =>
+          useMethodsOn(
+            TetherToken,
+            bidAmounts.map((bidAmount, index) => ({
+              method: 'balanceOf',
+              args: [accounts[index + 1]],
+              account: accounts[0],
+              onReturn: (balance) => {
+                const isHighestBid = index === bidAmounts.length - 1;
+                // If the user placed the highest bid, their standard tokens
+                // are transferred to the user which initially offered DBTokens
+                // for sale. Otherwise, their standard tokens should be transferred
+                // back to their wallet
+                const expectedBalance = isHighestBid ? 0 : bidAmount;
+
+                assert.strictEqual(parseInt(balance), expectedBalance);
+              },
+            }))
+          )
+        );
+    });
+
+    it('allows users to bid multiple times and transfers only the required amount for escrow', () => {
+      const highestBidAmount = bidAmounts[bidAmounts.length - 1];
+
+      return prepareSaleOfferAndBids()
+        .then(() =>
+          useMethodsOn(
+            TetherToken,
+            bidAmounts.flatMap((_, index) => [
+              {
+                // Since these users are bidding for the second time, we
+                // only need to transfer the difference between their
+                // highest and current bid
+                method: 'transfer',
+                args: [accounts[index + 1], highestBidAmount],
+                account: accounts[0],
+              },
+              {
+                method: 'approve',
+                args: [DBTokenSell.options.address, highestBidAmount],
+                account: accounts[index + 1],
+              },
+            ])
+          )
+        )
+        .then(() =>
+          useMethodsOn(DBTokenSell, [
+            ...bidAmounts.map((bidAmount, index) => ({
+              // The users place a new higher bid
+              method: 'bidOnOffer',
+              args: [eventCode, expectedOfferId, bidAmount + highestBidAmount],
+              account: accounts[index + 1],
+            })),
+            {
+              method: 'getAllEventOffers',
+              args: [eventCode],
+              account: accounts[0],
+              onReturn: ([eventOffer]) => {
+                // Since all users bid twice, we expect twice as many bids
+                // on the offer
+                assert.strictEqual(
+                  eventOffer.bids.length,
+                  bidAmounts.length * 2
+                );
+              },
+            },
+          ])
+        )
+        .then(() =>
+          useMethodsOn(DBTokenSell, [
+            {
+              method: 'finalizeOffer',
+              args: [eventCode, expectedOfferId],
+              account: accounts[0],
+            },
+            {
+              method: 'withdrawAllFromOffer',
+              args: [eventCode, expectedOfferId],
+              account: accounts[0],
+            },
+          ])
+        )
+        .then(() =>
+          useMethodsOn(
+            TetherToken,
+            bidAmounts.map((bidAmount, index) => ({
+              method: 'balanceOf',
+              args: [accounts[index + 1]],
+              account: accounts[0],
+              onReturn: (balance) => {
+                const isHighestBid = index === bidAmounts.length - 1;
+                const expectedBalance = isHighestBid
+                  ? 0
+                  : bidAmount + highestBidAmount;
+
+                assert.strictEqual(parseInt(balance), expectedBalance);
+              },
+            }))
+          )
         );
     });
   });
