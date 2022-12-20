@@ -630,7 +630,7 @@ contract DBTokenSell is SaleFactory {
     }
 
     /**
-     * @dev Method allowing any user holding DBTokens to put them up for bidding
+     * @dev Method allowing any user holding DBTokens to put them up for sale
      * during the appropriate sale period. The user must first approve the tokens
      * towards this contract. The tokens are immediately transferred to this address
      * as escrow.
@@ -641,8 +641,7 @@ contract DBTokenSell is SaleFactory {
      * @param tokensOffered amount of DBTokens being offered. The user offering
      *  must first hold enough tokens in wallet and approve the same amount towards
      *  this contract.
-     * @param standardTokensRequested minimum amount of standard tokens requested for trade.
-     *  All bids must offer at least this many tokens for trade.
+     * @param standardTokensRequested amount of standard tokens requested for trade
      */
     function addOffer(
         string memory eventCode,
@@ -677,15 +676,14 @@ contract DBTokenSell is SaleFactory {
     }
 
     /**
-     * @dev Allows any user to place a bid on the given offer. Bidding is only
-     * allowed while the offer and sale are both open. The user must bid more
-     * than the current highest bid and the minimum standard tokens requested
-     * in the offer. If the user has already placed a bid on this offer, then
-     * only the difference between this and the user's highest bid are transferred
-     * into the contracts address for escrow.
+     * @dev Allows any user to purchase tokens from the referenced offer. The user must first
+     * have the required amount of standard tokens in their wallet and approve the funds towards
+     * this contract's address. If the purchase is successful, the standard tokens will be transferred
+     * to the offering user's wallet and the offered tokens will be transferred to the buying user's
+     * wallet
      *
      * @param eventCode to which the offer belongs
-     * @param offerId of the offer for which the user is bidding
+     * @param offerId of the offer from which the user is purchasing
      */
     function buyOfferedTokens(string memory eventCode, string memory offerId) public duringSale(eventCode) {
         DBTokenOffer storage offer = getOffer(eventCode, offerId);
@@ -757,8 +755,7 @@ contract DBTokenSell is SaleFactory {
     }
 
     /**
-     * @dev Returns an array of all offers for the given event. Shows all offer data including all
-     * current bids placed for the offer.
+     * @dev Returns an array of all offers for the given event. Shows all offer data
      */
     function getAllEventOffers(string memory eventCode) public view returns (DBTokenOffer[] memory) {
         bytes32 eventHash = StringUtils.hashStr(eventCode);
