@@ -654,6 +654,7 @@ contract DBTokenSell is SaleFactory {
             StringUtils.matchStrings(eventCode, token.eventCode()),
             "DBTokenSell: token does not belong to this sale"
         );
+        require(tokensOffered > 0, "DBTokenSell: must offer at least 1 token");
         require(token.balanceOf(_msgSender()) >= tokensOffered, "DBTokenSell: insufficient token amount");
         require(token.allowance(_msgSender(), address(this)) >= tokensOffered, "DBTokenSell: insufficient allowance");
 
