@@ -607,13 +607,25 @@ contract DBTokenSell is SaleFactory {
         Cancelled
     }
 
+    /**
+     * @dev Rate defines how many standard tokens are required per offered tokens
+     * 2 / 1 -> 2 standard tokens for 1 DBToken
+     * 3 / 2 -> 3 standard tokens for 2 DBTokens
+     * 1 / 2 -> 1 standard tokens for 2 DBTokens
+     */
+    struct Rate {
+        uint256 numerator;
+        uint256 denominator;
+    }
+
     struct DBTokenOffer {
         string offerId;
         OfferStatus status;
         address offeringUser;
         DBToken tokenInstance;
-        uint256 tokensOffered;
-        uint256 standardTokensRequested;
+        uint256 totalTokensOffered;
+        uint256 tokensLeft;
+        Rate rate;
     }
 
     mapping(bytes32 => mapping(bytes32 => DBTokenOffer)) private eventTokenOffers;
@@ -629,6 +641,16 @@ contract DBTokenSell is SaleFactory {
         return eventTokenOffers[StringUtils.hashStr(eventCode)][StringUtils.hashStr(offerId)];
     }
 
+    function dbToSt(uint256 dbTokenAmount, Rate memory rate) private pure returns (uint256) {
+        uint256 stAmount = (dbTokenAmount * rate.numerator) / rate.denominator;
+
+        if (rate.numerator != 0 && dbTokenAmount != 0 && stAmount == 0) {
+            return 1;
+        }
+
+        return stAmount;
+    }
+
     /**
      * @dev Method allowing any user holding DBTokens to put them up for sale
      * during the appropriate sale period. The user must first approve the tokens
@@ -641,19 +663,22 @@ contract DBTokenSell is SaleFactory {
      * @param tokensOffered amount of DBTokens being offered. The user offering
      *  must first hold enough tokens in wallet and approve the same amount towards
      *  this contract.
-     * @param standardTokensRequested amount of standard tokens requested for trade
+     * @param rateNumerator {uint256}
+     * @param rateDenominator {uint256}
      */
     function addOffer(
         string memory eventCode,
         DBToken token,
         uint256 tokensOffered,
-        uint256 standardTokensRequested
+        uint256 rateNumerator,
+        uint256 rateDenominator
     ) public duringSale(eventCode) {
         require(
             StringUtils.matchStrings(eventCode, token.eventCode()),
             "DBTokenSell: token does not belong to this sale"
         );
         require(tokensOffered > 0, "DBTokenSell: must offer at least 1 token");
+        require(rateDenominator > 0, "DBTokenSell: rate denominator must be greater than 0");
         require(token.balanceOf(_msgSender()) >= tokensOffered, "DBTokenSell: insufficient token amount");
         require(token.allowance(_msgSender(), address(this)) >= tokensOffered, "DBTokenSell: insufficient allowance");
 
@@ -667,7 +692,8 @@ contract DBTokenSell is SaleFactory {
             _msgSender(),
             token,
             tokensOffered,
-            standardTokensRequested
+            tokensOffered,
+            Rate(rateNumerator, rateDenominator)
         );
 
         allEventOffers[eventHash].push(offerHash);
@@ -685,24 +711,29 @@ contract DBTokenSell is SaleFactory {
      * @param eventCode to which the offer belongs
      * @param offerId of the offer from which the user is purchasing
      */
-    function buyOfferedTokens(string memory eventCode, string memory offerId) public duringSale(eventCode) {
+    function buyOfferedTokens(
+        string memory eventCode,
+        string memory offerId,
+        uint256 amountToBuy
+    ) public duringSale(eventCode) {
         DBTokenOffer storage offer = getOffer(eventCode, offerId);
+        uint256 stAmountRequired = dbToSt(amountToBuy, offer.rate);
 
         require(offer.status == OfferStatus.Open, "DBTokenSell: offer is not open for purchase");
+        require(amountToBuy > 0, "DBTokenSell: must purchase at least 1 token");
+        require(amountToBuy <= offer.tokensLeft, "DBTokenSell: cannot purchase more than offered");
+        require(stdToken.balanceOf(_msgSender()) >= stAmountRequired, "DBTokenSell: insufficient token amount");
         require(
-            stdToken.balanceOf(_msgSender()) >= offer.standardTokensRequested,
-            "DBTokenSell: insufficient token amount"
-        );
-        require(
-            stdToken.allowance(_msgSender(), address(this)) >= offer.standardTokensRequested,
+            stdToken.allowance(_msgSender(), address(this)) >= stAmountRequired,
             "DBTokenSell: insufficient allowance"
         );
 
-        stdToken.transferFrom(_msgSender(), address(this), offer.standardTokensRequested);
-        offer.tokenInstance.transfer(_msgSender(), offer.tokensOffered);
-        stdToken.transfer(offer.offeringUser, offer.standardTokensRequested);
+        stdToken.transferFrom(_msgSender(), address(this), stAmountRequired);
+        offer.tokenInstance.transfer(_msgSender(), amountToBuy);
+        stdToken.transfer(offer.offeringUser, stAmountRequired);
+        offer.tokensLeft -= amountToBuy;
 
-        offer.status = OfferStatus.Sold;
+        if (offer.tokensLeft == 0) offer.status = OfferStatus.Sold;
     }
 
     function cancelOffer(string memory eventCode, string memory offerId) public {
@@ -711,7 +742,7 @@ contract DBTokenSell is SaleFactory {
         require(offer.status == OfferStatus.Open, "DBTokenSell: offer is not open for purchase");
         require(_msgSender() == offer.offeringUser, "DBTokenSell: offer can only be cancelled by the offering user");
 
-        offer.tokenInstance.transfer(offer.offeringUser, offer.tokensOffered);
+        offer.tokenInstance.transfer(offer.offeringUser, offer.tokensLeft);
 
         offer.status = OfferStatus.Cancelled;
     }

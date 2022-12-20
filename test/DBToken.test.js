@@ -1327,7 +1327,9 @@ describe('DBToken tests', () => {
   describe('DBTokenSell', () => {
     const dbtokenIndex = 0;
     const tokensToOffer = 200;
-    const stRequested = 500;
+    const rate = [5, 2];
+    const dbToSt = (dbAmount) => Math.round((dbAmount * rate[0]) / rate[1]);
+    const stRequired = dbToSt(tokensToOffer);
     const expectedOfferId = `${eventCode}-${teamTokenParams[dbtokenIndex].teamName}-0`;
 
     const prepareSaleAndOffer = () =>
@@ -1366,7 +1368,8 @@ describe('DBToken tests', () => {
                 eventCode,
                 DBTokens[dbtokenIndex].options.address,
                 tokensToOffer,
-                stRequested,
+                rate[0],
+                rate[1],
               ],
               account: accounts[0],
             },
@@ -1378,12 +1381,12 @@ describe('DBToken tests', () => {
         useMethodsOn(TetherToken, [
           {
             method: 'transfer',
-            args: [accounts[1], stRequested],
+            args: [accounts[1], stRequired],
             account: accounts[0],
           },
           {
             method: 'approve',
-            args: [DBTokenSell.options.address, stRequested],
+            args: [DBTokenSell.options.address, stRequired],
             account: accounts[1],
           },
         ])
@@ -1412,12 +1415,17 @@ describe('DBToken tests', () => {
                 DBTokens[dbtokenIndex].options.address
               );
               assert.strictEqual(
-                parseInt(eventOffer.tokensOffered),
+                parseInt(eventOffer.totalTokensOffered),
                 tokensToOffer
               );
               assert.strictEqual(
-                parseInt(eventOffer.standardTokensRequested),
-                stRequested
+                parseInt(eventOffer.tokensLeft),
+                tokensToOffer
+              );
+              assert.strictEqual(parseInt(eventOffer.rate.numerator), rate[0]);
+              assert.strictEqual(
+                parseInt(eventOffer.rate.denominator),
+                rate[1]
               );
             },
           },
@@ -1429,7 +1437,7 @@ describe('DBToken tests', () => {
         useMethodsOn(DBTokenSell, [
           {
             method: 'buyOfferedTokens',
-            args: [eventCode, expectedOfferId],
+            args: [eventCode, expectedOfferId, tokensToOffer],
             account: accounts[1],
           },
           {
@@ -1455,7 +1463,7 @@ describe('DBToken tests', () => {
           },
           {
             method: 'buyOfferedTokens',
-            args: [eventCode, expectedOfferId],
+            args: [eventCode, expectedOfferId, tokensToOffer],
             account: accounts[1],
             catch: (err) => {
               assert.strictEqual(
@@ -1475,12 +1483,12 @@ describe('DBToken tests', () => {
               // We send less than the requirem amount of st
               // to the buying user
               method: 'transfer',
-              args: [accounts[1], stRequested - 20],
+              args: [accounts[1], stRequired - 20],
               account: accounts[0],
             },
             {
               method: 'approve',
-              args: [DBTokenSell.options.address, stRequested - 20],
+              args: [DBTokenSell.options.address, stRequired - 20],
               account: accounts[1],
             },
           ])
@@ -1488,7 +1496,7 @@ describe('DBToken tests', () => {
         .then(() =>
           useMethodsOn(DBTokenSell, {
             method: 'buyOfferedTokens',
-            args: [eventCode, expectedOfferId],
+            args: [eventCode, expectedOfferId, tokensToOffer],
             account: accounts[1],
             catch: (err) => {
               assert.strictEqual(err, 'DBTokenSell: insufficient token amount');
@@ -1514,7 +1522,7 @@ describe('DBToken tests', () => {
         .then(() =>
           useMethodsOn(DBTokenSell, {
             method: 'buyOfferedTokens',
-            args: [eventCode, expectedOfferId],
+            args: [eventCode, expectedOfferId, tokensToOffer],
             account: accounts[1],
           })
         )
@@ -1534,7 +1542,7 @@ describe('DBToken tests', () => {
             args: [accounts[0]],
             account: accounts[0],
             onReturn: (balance) => {
-              assert.strictEqual(parseInt(balance), stBalance + stRequested);
+              assert.strictEqual(parseInt(balance), stBalance + stRequired);
             },
           })
         );
@@ -1570,6 +1578,72 @@ describe('DBToken tests', () => {
             },
           })
         ));
+
+    it('allows partial purchase', () => {
+      const totalPurchases = 8;
+      const partialPurchaseAmount = Math.round(tokensToOffer / totalPurchases);
+
+      return prepareSaleAndOffer()
+        .then(() =>
+          useMethodsOn(TetherToken, [
+            {
+              // We transfer more than it is required for all the purchases,
+              // since we want to try to purchase once again after and
+              // receive an error message that the offer is closed
+              method: 'transfer',
+              args: [accounts[1], stRequired * 2],
+              account: accounts[0],
+            },
+            {
+              method: 'approve',
+              args: [DBTokenSell.options.address, stRequired * 2],
+              account: accounts[1],
+            },
+          ])
+        )
+        .then(() =>
+          useMethodsOn(DBTokenSell, [
+            ...newArray(totalPurchases, (i) => [
+              {
+                // We purchase a partial amount of tokens
+                method: 'buyOfferedTokens',
+                args: [eventCode, expectedOfferId, partialPurchaseAmount],
+                account: accounts[1],
+              },
+              {
+                method: 'getAllEventOffers',
+                args: [eventCode],
+                account: accounts[0],
+                onReturn: ([eventOffer]) => {
+                  // Each time we expect that the amount of tokens
+                  // left is decreased
+                  assert.strictEqual(
+                    parseInt(eventOffer.tokensLeft),
+                    tokensToOffer - (i + 1) * partialPurchaseAmount
+                  );
+                  // After the final purchase the offer status should be
+                  // set to 2 (OfferStatus.Sold)
+                  assert.strictEqual(
+                    parseInt(eventOffer.status),
+                    i === totalPurchases - 1 ? 2 : 1
+                  );
+                },
+              },
+            ]).flat(),
+            {
+              method: 'buyOfferedTokens',
+              args: [eventCode, expectedOfferId, partialPurchaseAmount],
+              account: accounts[1],
+              catch: (err) => {
+                assert.strictEqual(
+                  err,
+                  'DBTokenSell: offer is not open for purchase'
+                );
+              },
+            },
+          ])
+        );
+    });
   });
 
   describe('DBTokenSellV2', () => {
