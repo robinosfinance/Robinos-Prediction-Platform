@@ -599,12 +599,16 @@ abstract contract SaleFactory is Ownable {
  ***********************************************************************
  **********************************************************************/
 
-contract DBTokenSell is SaleFactory {
+contract DBTokenSellV2 is SaleFactory {
     enum OfferStatus {
         NotInitialized,
         Open,
-        Sold,
-        Cancelled
+        Closed
+    }
+
+    struct Bid {
+        address biddingUser;
+        uint256 standardTokensOffered;
     }
 
     struct DBTokenOffer {
@@ -613,11 +617,13 @@ contract DBTokenSell is SaleFactory {
         address offeringUser;
         DBToken tokenInstance;
         uint256 tokensOffered;
-        uint256 standardTokensRequested;
+        uint256 minStandardTokensRequested;
+        Bid[] bids;
     }
 
     mapping(bytes32 => mapping(bytes32 => DBTokenOffer)) private eventTokenOffers;
     mapping(bytes32 => bytes32[]) private allEventOffers;
+    mapping(bytes32 => address[]) private allBiddingUsers;
 
     StandardToken private stdToken;
 
@@ -641,38 +647,124 @@ contract DBTokenSell is SaleFactory {
      * @param tokensOffered amount of DBTokens being offered. The user offering
      *  must first hold enough tokens in wallet and approve the same amount towards
      *  this contract.
-     * @param standardTokensRequested minimum amount of standard tokens requested for trade.
+     * @param minStandardTokens minimum amount of standard tokens requested for trade.
      *  All bids must offer at least this many tokens for trade.
      */
     function addOffer(
         string memory eventCode,
         DBToken token,
         uint256 tokensOffered,
-        uint256 standardTokensRequested
+        uint256 minStandardTokens
     ) public duringSale(eventCode) {
         require(
             StringUtils.matchStrings(eventCode, token.eventCode()),
-            "DBTokenSell: token does not belong to this sale"
+            "DBTokenSellV2: token does not belong to this sale"
         );
-        require(token.balanceOf(_msgSender()) >= tokensOffered, "DBTokenSell: insufficient token amount");
-        require(token.allowance(_msgSender(), address(this)) >= tokensOffered, "DBTokenSell: insufficient allowance");
+        require(token.balanceOf(_msgSender()) >= tokensOffered, "DBTokenSellV2: insufficient token amount");
+        require(token.allowance(_msgSender(), address(this)) >= tokensOffered, "DBTokenSellV2: insufficient allowance");
 
-        string memory offerId = getNextAvailableOfferId(eventCode, token.teamName());
         bytes32 eventHash = StringUtils.hashStr(eventCode);
+        string memory offerId = getNextAvailableOfferId(eventCode, token.teamName());
         bytes32 offerHash = StringUtils.hashStr(offerId);
 
-        eventTokenOffers[eventHash][offerHash] = DBTokenOffer(
-            offerId,
-            OfferStatus.Open,
-            _msgSender(),
-            token,
-            tokensOffered,
-            standardTokensRequested
-        );
+        DBTokenOffer storage offer = eventTokenOffers[eventHash][offerHash];
+
+        offer.offerId = offerId;
+        offer.status = OfferStatus.Open;
+        offer.offeringUser = _msgSender();
+        offer.tokenInstance = token;
+        offer.tokensOffered = tokensOffered;
+        offer.minStandardTokensRequested = minStandardTokens;
 
         allEventOffers[eventHash].push(offerHash);
 
         token.transferFrom(_msgSender(), address(this), tokensOffered);
+    }
+
+    /**
+     * @dev Allows the user who added the offer to finalize it. This method sets the
+     * status to closed, meaning no further bids can be placed and all the funds added as
+     * escrow towards this offer can be now withdrawn.
+     * @param eventCode to which the offer belongs
+     * @param offerId of the offer to finalize. Can be read with getAllEventOffers
+     */
+    function finalizeOffer(string memory eventCode, string memory offerId) public {
+        DBTokenOffer storage offer = getOffer(eventCode, offerId);
+
+        require(offer.offeringUser == _msgSender(), "DBTokenSellV2: only offering user can finalize the offer");
+        require(offer.status == OfferStatus.Open, "DBTokenSellV2: offer is not open for bids");
+
+        offer.status = OfferStatus.Closed;
+    }
+
+    /**
+     * @dev Allows ANY user to withdraw all the funds held as escrow towards the referenced
+     * offer.
+     *
+     * If there are no bids on the given offer, the offered tokens are transferred back to
+     * the original user's wallet.
+     *
+     * If there are bids on the given offer, the offered tokens are transferred to the user
+     * with the highest bid. Standard tokens offered as the part of the highest bid are
+     * transferred toward the user who initially offered the tokens for sale. All other
+     * standard tokens that are sent as a bid are transferred back to their original owners.
+     * Users which have placed multiple bids will only receive back the amount for the highest bid
+     */
+    function withdrawAllFromOffer(string memory eventCode, string memory offerId) public {
+        DBTokenOffer storage offer = getOffer(eventCode, offerId);
+        (bool saleIsActive, , ) = isSaleOn(eventCode);
+
+        require(
+            !saleIsActive || offer.status == OfferStatus.Closed,
+            "DBTokenSellV2: can withdraw only if sale or offer is closed"
+        );
+
+        DBToken token = offer.tokenInstance;
+        offer.status = OfferStatus.Closed;
+
+        if (offer.bids.length == 0) {
+            token.transfer(offer.offeringUser, offer.tokensOffered);
+            return;
+        }
+
+        Bid[] storage bids = offer.bids;
+        token.transfer(bids[bids.length - 1].biddingUser, offer.tokensOffered);
+        address[] storage biddingUsers = getAllBiddingUsers(offerId);
+        uint256 highestBid = getHighestBid(offer);
+
+        for (uint256 i = 0; i < biddingUsers.length; i++) {
+            uint256 userHighestBid = getUserHighestBid(offer, biddingUsers[i]);
+            bool isHighestBid = userHighestBid == highestBid;
+            address user = isHighestBid ? offer.offeringUser : biddingUsers[i];
+
+            stdToken.transfer(user, userHighestBid);
+        }
+    }
+
+    function getHighestBid(DBTokenOffer storage offer) private view returns (uint256) {
+        if (offer.bids.length == 0) return 0;
+        return offer.bids[offer.bids.length - 1].standardTokensOffered;
+    }
+
+    function getUserHighestBid(DBTokenOffer storage offer, address user) private view returns (uint256) {
+        if (offer.bids.length == 0) return 0;
+        uint256 highestBid = 0;
+
+        for (uint256 i = 0; i < offer.bids.length; i++) {
+            if (offer.bids[i].biddingUser == user) {
+                highestBid = offer.bids[i].standardTokensOffered;
+            }
+        }
+
+        return highestBid;
+    }
+
+    function getAllBiddingUsers(string memory offerId) private view returns (address[] storage) {
+        return allBiddingUsers[StringUtils.hashStr(offerId)];
+    }
+
+    function recordBiddingUser(string memory offerId, address user) private {
+        allBiddingUsers[StringUtils.hashStr(offerId)].push(user);
     }
 
     /**
@@ -685,36 +777,30 @@ contract DBTokenSell is SaleFactory {
      *
      * @param eventCode to which the offer belongs
      * @param offerId of the offer for which the user is bidding
+     * @param bidAmount of standard tokens
      */
-    function buyOfferedTokens(string memory eventCode, string memory offerId) public duringSale(eventCode) {
+    function bidOnOffer(
+        string memory eventCode,
+        string memory offerId,
+        uint256 bidAmount
+    ) public duringSale(eventCode) {
         DBTokenOffer storage offer = getOffer(eventCode, offerId);
+        uint256 currentUserHighestBid = getUserHighestBid(offer, _msgSender());
+        uint256 highestBidDiff = bidAmount - currentUserHighestBid;
 
-        require(offer.status == OfferStatus.Open, "DBTokenSell: offer is not open for purchase");
+        require(offer.status == OfferStatus.Open, "DBTokenSellV2: offer is not open to bids");
+        require(bidAmount >= offer.minStandardTokensRequested, "DBTokenSellV2: cannot offer less than minimum requested");
+        require(bidAmount > getHighestBid(offer), "DBTokenSellV2: must bid more than the current highest bid");
+        require(stdToken.balanceOf(_msgSender()) >= highestBidDiff, "DBTokenSellV2: insufficient token amount");
         require(
-            stdToken.balanceOf(_msgSender()) >= offer.standardTokensRequested,
-            "DBTokenSell: insufficient token amount"
-        );
-        require(
-            stdToken.allowance(_msgSender(), address(this)) >= offer.standardTokensRequested,
-            "DBTokenSell: insufficient allowance"
+            stdToken.allowance(_msgSender(), address(this)) >= highestBidDiff,
+            "DBTokenSellV2: insufficient allowance"
         );
 
-        stdToken.transferFrom(_msgSender(), address(this), offer.standardTokensRequested);
-        offer.tokenInstance.transfer(_msgSender(), offer.tokensOffered);
-        stdToken.transfer(offer.offeringUser, offer.standardTokensRequested);
+        if (currentUserHighestBid == 0) recordBiddingUser(offerId, _msgSender());
 
-        offer.status = OfferStatus.Sold;
-    }
-
-    function cancelOffer(string memory eventCode, string memory offerId) public {
-        DBTokenOffer storage offer = getOffer(eventCode, offerId);
-
-        require(offer.status == OfferStatus.Open, "DBTokenSell: offer is not open for purchase");
-        require(_msgSender() == offer.offeringUser, "DBTokenSell: offer can only be cancelled by the offering user");
-
-        offer.tokenInstance.transfer(offer.offeringUser, offer.tokensOffered);
-
-        offer.status = OfferStatus.Cancelled;
+        stdToken.transferFrom(_msgSender(), address(this), highestBidDiff);
+        offer.bids.push(Bid(_msgSender(), bidAmount));
     }
 
     function createOfferId(

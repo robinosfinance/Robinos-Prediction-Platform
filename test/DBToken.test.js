@@ -23,6 +23,7 @@ const rewardV2Contract = contracts['DBTokenRewardV2.sol'].DBTokenReward;
 const rewardSCContract = contracts['DBTokenRewardSC.sol'].DBTokenRewardSC;
 const sideBetContract = contracts['DBTokenSideBet.sol'].DBTokenSideBet;
 const tokenSellContract = contracts['DBTokenSell.sol'].DBTokenSell;
+const tokenSellV2Contract = contracts['DBTokenSellV2.sol'].DBTokenSellV2;
 
 describe('DBToken tests', () => {
   let accounts,
@@ -34,7 +35,8 @@ describe('DBToken tests', () => {
     DBTokenRewardV2,
     DBTokenRewardSC,
     DBTokenSideBet,
-    DBTokenSell;
+    DBTokenSell,
+    DBTokenSellV2;
 
   // Teams and event code default info for testing
   const teamTokenParams = [
@@ -124,6 +126,12 @@ describe('DBToken tests', () => {
 
     DBTokenSell = await deploy(
       tokenSellContract,
+      [TetherToken.options.address],
+      accounts[0]
+    );
+
+    DBTokenSellV2 = await deploy(
+      tokenSellV2Contract,
       [TetherToken.options.address],
       accounts[0]
     );
@@ -1318,9 +1326,8 @@ describe('DBToken tests', () => {
 
   describe('DBTokenSell', () => {
     const dbtokenIndex = 0;
-    const tokensToOffer = 100;
-    const minSTRequired = 120;
-    const bidAmounts = [200, 300, 400];
+    const tokensToOffer = 200;
+    const stRequested = 500;
     const expectedOfferId = `${eventCode}-${teamTokenParams[dbtokenIndex].teamName}-0`;
 
     const prepareSaleAndOffer = () =>
@@ -1359,6 +1366,255 @@ describe('DBToken tests', () => {
                 eventCode,
                 DBTokens[dbtokenIndex].options.address,
                 tokensToOffer,
+                stRequested,
+              ],
+              account: accounts[0],
+            },
+          ])
+        );
+
+    const prepareSaleOfferAndBuyerFunds = () =>
+      prepareSaleAndOffer().then(() =>
+        useMethodsOn(TetherToken, [
+          {
+            method: 'transfer',
+            args: [accounts[1], stRequested],
+            account: accounts[0],
+          },
+          {
+            method: 'approve',
+            args: [DBTokenSell.options.address, stRequested],
+            account: accounts[1],
+          },
+        ])
+      );
+
+    it('deploys successfully', () => {
+      assert.ok(DBTokenSell.options.address);
+    });
+
+    it('allows users holding DBTokens to offer them for sale', () =>
+      prepareSaleAndOffer().then(() =>
+        useMethodsOn(DBTokenSell, [
+          {
+            method: 'getAllEventOffers',
+            args: [eventCode],
+            account: accounts[0],
+            onReturn: ([eventOffer]) => {
+              // We check if the returned data for the offer is correct
+              assert.strictEqual(eventOffer.offerId, expectedOfferId);
+
+              // Status should be 1 (OfferStatus.Open)
+              assert.strictEqual(parseInt(eventOffer.status), 1);
+              assert.strictEqual(eventOffer.offeringUser, accounts[0]);
+              assert.strictEqual(
+                eventOffer.tokenInstance,
+                DBTokens[dbtokenIndex].options.address
+              );
+              assert.strictEqual(
+                parseInt(eventOffer.tokensOffered),
+                tokensToOffer
+              );
+              assert.strictEqual(
+                parseInt(eventOffer.standardTokensRequested),
+                stRequested
+              );
+            },
+          },
+        ])
+      ));
+
+    it('allows users to purchase tokens with the required standard token amount', () =>
+      prepareSaleOfferAndBuyerFunds().then(() =>
+        useMethodsOn(DBTokenSell, [
+          {
+            method: 'buyOfferedTokens',
+            args: [eventCode, expectedOfferId],
+            account: accounts[1],
+          },
+          {
+            method: 'getAllEventOffers',
+            args: [eventCode],
+            account: accounts[0],
+            onReturn: ([eventOffer]) => {
+              // After someone buys the offered tokens, the offer
+              // should have status 2 (OfferStatus.Sold)
+              assert.strictEqual(parseInt(eventOffer.status), 2);
+            },
+          },
+        ])
+      ));
+
+    it('reverts if user tries to buy outside of sale', () =>
+      prepareSaleOfferAndBuyerFunds().then(() =>
+        useMethodsOn(DBTokenSell, [
+          {
+            method: 'endSaleNow',
+            args: [eventCode],
+            account: accounts[0],
+          },
+          {
+            method: 'buyOfferedTokens',
+            args: [eventCode, expectedOfferId],
+            account: accounts[1],
+            catch: (err) => {
+              assert.strictEqual(
+                err,
+                'SaleFactory: function can only be called during sale'
+              );
+            },
+          },
+        ])
+      ));
+
+    it('reverts if user doesn have enough funds', () =>
+      prepareSaleAndOffer()
+        .then(() =>
+          useMethodsOn(TetherToken, [
+            {
+              // We send less than the requirem amount of st
+              // to the buying user
+              method: 'transfer',
+              args: [accounts[1], stRequested - 20],
+              account: accounts[0],
+            },
+            {
+              method: 'approve',
+              args: [DBTokenSell.options.address, stRequested - 20],
+              account: accounts[1],
+            },
+          ])
+        )
+        .then(() =>
+          useMethodsOn(DBTokenSell, {
+            method: 'buyOfferedTokens',
+            args: [eventCode, expectedOfferId],
+            account: accounts[1],
+            catch: (err) => {
+              assert.strictEqual(err, 'DBTokenSell: insufficient token amount');
+            },
+          })
+        ));
+
+    it('transfers correct amount of funds on successful sale', () => {
+      let stBalance;
+      const setStBalance = (newBalance) => {
+        stBalance = newBalance;
+      };
+
+      return prepareSaleOfferAndBuyerFunds()
+        .then(() =>
+          useMethodsOn(TetherToken, {
+            method: 'balanceOf',
+            args: [accounts[0]],
+            account: accounts[0],
+            onReturn: (balance) => setStBalance(parseInt(balance)),
+          })
+        )
+        .then(() =>
+          useMethodsOn(DBTokenSell, {
+            method: 'buyOfferedTokens',
+            args: [eventCode, expectedOfferId],
+            account: accounts[1],
+          })
+        )
+        .then(() =>
+          useMethodsOn(DBTokens[dbtokenIndex], {
+            method: 'balanceOf',
+            args: [accounts[1]],
+            account: accounts[0],
+            onReturn: (balance) => {
+              assert.strictEqual(parseInt(balance), tokensToOffer);
+            },
+          })
+        )
+        .then(() =>
+          useMethodsOn(TetherToken, {
+            method: 'balanceOf',
+            args: [accounts[0]],
+            account: accounts[0],
+            onReturn: (balance) => {
+              assert.strictEqual(parseInt(balance), stBalance + stRequested);
+            },
+          })
+        );
+    });
+
+    it('allows offering user to cancel offer and withdraw tokens to wallet', () =>
+      prepareSaleAndOffer()
+        .then(() =>
+          useMethodsOn(DBTokenSell, [
+            {
+              method: 'cancelOffer',
+              args: [eventCode, expectedOfferId],
+              account: accounts[0],
+            },
+            {
+              method: 'getAllEventOffers',
+              args: [eventCode],
+              account: accounts[0],
+              onReturn: ([eventOffer]) => {
+                // After cancelling offer, the status should be 3 (OfferStatus.Cancelled)
+                assert.strictEqual(parseInt(eventOffer.status), 3);
+              },
+            },
+          ])
+        )
+        .then(() =>
+          useMethodsOn(DBTokens[dbtokenIndex], {
+            method: 'balanceOf',
+            args: [accounts[0]],
+            account: accounts[0],
+            onReturn: (balance) => {
+              assert.strictEqual(parseInt(balance), tokensToOffer);
+            },
+          })
+        ));
+  });
+
+  describe('DBTokenSellV2', () => {
+    const dbtokenIndex = 0;
+    const tokensToOffer = 100;
+    const minSTRequired = 120;
+    const bidAmounts = [200, 300, 400];
+    const expectedOfferId = `${eventCode}-${teamTokenParams[dbtokenIndex].teamName}-0`;
+
+    const prepareSaleAndOffer = () =>
+      useMethodsOn(DBTokenEvent, {
+        // We mint the DBTokens we want to put up for offer
+        method: 'mintTeamToken',
+        args: [
+          teamTokenParams[dbtokenIndex].teamName,
+          accounts[0],
+          tokensToOffer,
+        ],
+        account: accounts[0],
+      })
+        .then(() =>
+          useMethodsOn(DBTokens[dbtokenIndex], {
+            // The offering user approves the wanted amount of tokens towards
+            // the DBTokenSellV2 contract
+            method: 'approve',
+            args: [DBTokenSellV2.options.address, tokensToOffer],
+            account: accounts[0],
+          })
+        )
+        .then(() =>
+          useMethodsOn(DBTokenSellV2, [
+            {
+              // We start the sale, allowing the users to put offers with
+              // tokens belonging to this event
+              method: 'setSaleStartEnd',
+              args: [eventCode, 0, secondsInTheFuture(10)],
+              account: accounts[0],
+            },
+            {
+              // The offering user adds an offer to the correct event
+              method: 'addOffer',
+              args: [
+                eventCode,
+                DBTokens[dbtokenIndex].options.address,
+                tokensToOffer,
                 minSTRequired,
               ],
               account: accounts[0],
@@ -1381,9 +1637,9 @@ describe('DBToken tests', () => {
               },
               {
                 // Each user must approve the amount of tokens
-                // they wish to bid towards the DBTokenSell contract
+                // they wish to bid towards the DBTokenSellV2 contract
                 method: 'approve',
-                args: [DBTokenSell.options.address, bidAmount],
+                args: [DBTokenSellV2.options.address, bidAmount],
                 account: accounts[index + 1],
               },
             ])
@@ -1391,9 +1647,9 @@ describe('DBToken tests', () => {
         )
         .then(() =>
           useMethodsOn(
-            DBTokenSell,
+            DBTokenSellV2,
             bidAmounts.map((bidAmount, index) => ({
-              // Each user then proceeds to bid on the DBTokenSell contract
+              // Each user then proceeds to bid on the DBTokenSellV2 contract
               method: 'bidOnOffer',
               args: [eventCode, expectedOfferId, bidAmount],
               account: accounts[index + 1],
@@ -1402,14 +1658,14 @@ describe('DBToken tests', () => {
         );
 
     it('deploys successfully', () => {
-      assert.ok(DBTokenSell.options.address);
+      assert.ok(DBTokenSellV2.options.address);
     });
 
     it('allows users holding DBTokens to offer them for sale', () => {
       const DBToken = DBTokens[dbtokenIndex];
 
       return prepareSaleAndOffer().then(() =>
-        useMethodsOn(DBTokenSell, {
+        useMethodsOn(DBTokenSellV2, {
           // After the sale and offer have been initialized, we get
           // an array of all offers in the given event and check if
           // offer data is correct
@@ -1451,13 +1707,13 @@ describe('DBToken tests', () => {
             },
             {
               method: 'approve',
-              args: [DBTokenSell.options.address, invalidFinalBid],
+              args: [DBTokenSellV2.options.address, invalidFinalBid],
               account: accounts[bidAmounts.length + 1],
             },
           ]);
         })
         .then(() =>
-          useMethodsOn(DBTokenSell, {
+          useMethodsOn(DBTokenSellV2, {
             // Any bid placed on an offer must be higher than
             // the current highest bid
             method: 'bidOnOffer',
@@ -1466,7 +1722,7 @@ describe('DBToken tests', () => {
             catch: (err) => {
               assert.strictEqual(
                 err,
-                'DBTokenSell: must bid more than the current highest bid'
+                'DBTokenSellV2: must bid more than the current highest bid'
               );
             },
           })
@@ -1475,7 +1731,7 @@ describe('DBToken tests', () => {
 
     it('reverts if user tries withdraw all from offer before closing sale or offer', () =>
       prepareSaleOfferAndBids().then(() =>
-        useMethodsOn(DBTokenSell, {
+        useMethodsOn(DBTokenSellV2, {
           // Funds can only be withdrawn from the offer
           // once the sale ends or the offering user
           // closes the offer
@@ -1485,7 +1741,7 @@ describe('DBToken tests', () => {
           catch: (err) => {
             assert.strictEqual(
               err,
-              'DBTokenSell: can withdraw only if sale or offer is closed'
+              'DBTokenSellV2: can withdraw only if sale or offer is closed'
             );
           },
         })
@@ -1493,7 +1749,7 @@ describe('DBToken tests', () => {
 
     it('allows users to place bids on offers', () => {
       return prepareSaleOfferAndBids().then(() =>
-        useMethodsOn(DBTokenSell, {
+        useMethodsOn(DBTokenSellV2, {
           method: 'getAllEventOffers',
           args: [eventCode],
           account: accounts[0],
@@ -1531,7 +1787,7 @@ describe('DBToken tests', () => {
           })
         )
         .then(() =>
-          useMethodsOn(DBTokenSell, [
+          useMethodsOn(DBTokenSellV2, [
             {
               method: 'finalizeOffer',
               args: [eventCode, expectedOfferId],
@@ -1562,7 +1818,7 @@ describe('DBToken tests', () => {
     it('allows the owner of offer to cancel offer before any bids are placed and return the tokens', () => {
       return prepareSaleAndOffer()
         .then(() =>
-          useMethodsOn(DBTokenSell, [
+          useMethodsOn(DBTokenSellV2, [
             {
               method: 'finalizeOffer',
               args: [eventCode, expectedOfferId],
@@ -1593,7 +1849,7 @@ describe('DBToken tests', () => {
     it('returns all the tokens from bids that are not the highest bid', () => {
       return prepareSaleOfferAndBids()
         .then(() =>
-          useMethodsOn(DBTokenSell, [
+          useMethodsOn(DBTokenSellV2, [
             {
               method: 'finalizeOffer',
               args: [eventCode, expectedOfferId],
@@ -1646,14 +1902,14 @@ describe('DBToken tests', () => {
               },
               {
                 method: 'approve',
-                args: [DBTokenSell.options.address, highestBidAmount],
+                args: [DBTokenSellV2.options.address, highestBidAmount],
                 account: accounts[index + 1],
               },
             ])
           )
         )
         .then(() =>
-          useMethodsOn(DBTokenSell, [
+          useMethodsOn(DBTokenSellV2, [
             ...bidAmounts.map((bidAmount, index) => ({
               // The users place a new higher bid
               method: 'bidOnOffer',
@@ -1676,7 +1932,7 @@ describe('DBToken tests', () => {
           ])
         )
         .then(() =>
-          useMethodsOn(DBTokenSell, [
+          useMethodsOn(DBTokenSellV2, [
             {
               method: 'finalizeOffer',
               args: [eventCode, expectedOfferId],
