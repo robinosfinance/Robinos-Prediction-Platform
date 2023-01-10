@@ -806,7 +806,7 @@ contract DBTokenSideBet is SaleFactory {
 
     /**
      * Allows owner to refund all the rewards deposited for the event and allow users to unstake
-     * @param eventCode of the sale you finilize
+     * @param eventCode of the sale you finalize
      */
     function refundReward(string memory eventCode)
         public
@@ -821,7 +821,7 @@ contract DBTokenSideBet is SaleFactory {
 
     /**
      * Allows owner to select a winning team only once after the sale ends
-     * @param eventCode of the sale you finilize
+     * @param eventCode of the sale you finalize
      * @param winningTeam address of the DBToken proclaimed as a winner
      */
     function selectWinningTeam(string memory eventCode, DBToken winningTeam)
