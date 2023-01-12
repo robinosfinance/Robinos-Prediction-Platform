@@ -22,6 +22,7 @@ const rewardContract = contracts['DBTokenReward.sol'].DBTokenReward;
 const rewardV2Contract = contracts['DBTokenRewardV2.sol'].DBTokenReward;
 const rewardSCContract = contracts['DBTokenRewardSC.sol'].DBTokenRewardSC;
 const sideBetContract = contracts['DBTokenSideBet.sol'].DBTokenSideBet;
+const sideBetV2Contract = contracts['DBTokenSideBetV2.sol'].DBTokenSideBetV2;
 const tokenSellContract = contracts['DBTokenSell.sol'].DBTokenSell;
 const tokenSellV2Contract = contracts['DBTokenSellV2.sol'].DBTokenSellV2;
 
@@ -35,6 +36,7 @@ describe('DBToken tests', () => {
     DBTokenRewardV2,
     DBTokenRewardSC,
     DBTokenSideBet,
+    DBTokenSideBetV2,
     DBTokenSell,
     DBTokenSellV2;
 
@@ -123,6 +125,8 @@ describe('DBToken tests', () => {
       ],
       accounts[0]
     );
+
+    DBTokenSideBetV2 = await deploy(sideBetV2Contract, [], accounts[0]);
 
     DBTokenSell = await deploy(
       tokenSellContract,
@@ -1321,6 +1325,254 @@ describe('DBToken tests', () => {
             },
           ])
         );
+    });
+  });
+
+  describe('DBTokenSideBetV2', () => {
+    const saleDuration = 15;
+    const minStake = 500;
+    const maxStake = 150000;
+    const winningTeamIndex = zeroOrOne();
+    const numOfUsers = 10;
+    const eventName = 'Man vs. Liv';
+    const totalReward = randomInt(10000, 100000);
+    const teamNames = [
+      teamTokenParams[0].teamName,
+      teamTokenParams[1].teamName,
+    ];
+    const getStakingParams = () =>
+      newArray(numOfUsers, (i) => ({
+        account: accounts[i],
+        teamIndex: zeroOrOne(),
+        amount: randomInt(minStake, maxStake),
+      }));
+
+    const prepareSideBet = (stakingParams = getStakingParams()) =>
+      useMethodsOn(
+        DBTokenEvent,
+        stakingParams.map(({ teamIndex, account, amount }) => ({
+          // We mint all the team tokens we plan to use for staking
+          method: 'mintTeamToken',
+          args: [teamNames[teamIndex], account, amount],
+          account: accounts[0],
+        }))
+      )
+        .then(() =>
+          useMethodsOn(TetherToken, [
+            {
+              // The owner approves stardard token for the reward deposit
+              method: 'approve',
+              args: [DBTokenSideBetV2.options.address, totalReward],
+              account: accounts[0],
+            },
+          ])
+        )
+        .then(() =>
+          useMethodsOn(DBTokenSideBetV2, [
+            {
+              // The owner initializes a side bet, sale and deposits the reward
+              method: 'initializeSideBetAndDepositReward',
+              args: [
+                eventName,
+                DBTokens[0].options.address,
+                DBTokens[1].options.address,
+                TetherToken.options.address,
+                totalReward,
+                0,
+                secondsInTheFuture(saleDuration),
+              ],
+              account: accounts[0],
+            },
+          ])
+        )
+        .then(() =>
+          Promise.all(
+            stakingParams.map(({ teamIndex, account, amount }) =>
+              useMethodsOn(DBTokens[teamIndex], [
+                {
+                  // Each user approves the amount of DBTokens for their prefered team towards the side bet contract
+                  method: 'approve',
+                  args: [DBTokenSideBetV2.options.address, amount],
+                  account,
+                },
+              ])
+            )
+          )
+        );
+
+    it('deploys successfully', () => {
+      assert.ok(DBTokenSideBetV2.options.address);
+    });
+
+    it('allows owner to deposit reward & select winners and users to stake & unstake', async () => {
+      const stakingParams = getStakingParams();
+      let initialUserUsdtBalance;
+
+      return prepareSideBet(stakingParams)
+        .then(async () => {
+          initialUserUsdtBalance = parseInt(
+            await useMethodsOn(TetherToken, {
+              method: 'balanceOf',
+              args: [accounts[0]],
+              account: accounts[0],
+              onReturn: () => {},
+            })
+          );
+        })
+        .then(() =>
+          useMethodsOn(DBTokenSideBetV2, [
+            ...stakingParams.map(({ teamIndex, account, amount }) => ({
+              // Each user then stakes their DBTokens for their chosen team
+              method: 'stake',
+              args: [eventName, teamIndex, amount],
+              account,
+            })),
+            {
+              method: 'endSaleNow',
+              args: [eventName],
+              account: accounts[0],
+            },
+            {
+              // The owner selects the winning team index
+              method: 'selectWinningTeam',
+              args: [eventName, winningTeamIndex],
+              account: accounts[0],
+            },
+            {
+              // We check the side bet data
+              method: 'getSideBetData',
+              args: [eventName],
+              account: accounts[0],
+              onReturn: ({ winnerSet, winningIndex }) => {
+                // We expect the winner is set correctly
+                assert.strictEqual(winnerSet, true);
+                assert.strictEqual(parseInt(winningIndex), winningTeamIndex);
+              },
+            },
+            {
+              // The owner distributes the rewards
+              method: 'distributeReward',
+              args: [eventName],
+              account: accounts[0],
+            },
+            {
+              method: 'getSideBetData',
+              args: [eventName],
+              account: accounts[0],
+              onReturn: ({ rewardDistributed }) => {
+                // The side bet should be flagged that reward has been distributed
+                assert.strictEqual(rewardDistributed, true);
+              },
+            },
+            ...stakingParams.map(({ teamIndex, account }) => ({
+              // Once the winner has been selected by the owner, users can unstake
+              method: 'unstake',
+              args: [eventName, teamIndex],
+              account,
+            })),
+            {
+              method: 'getSideBetData',
+              args: [eventName],
+              account: accounts[0],
+              onReturn: ({ usersUnstaked }) => {
+                usersUnstaked.flat().forEach((userUnstaked) => {
+                  // We check that each user has been flagged they have unstaked
+                  assert.strictEqual(userUnstaked, true);
+                });
+              },
+            },
+          ])
+        )
+        .then(() =>
+          useMethodsOn(TetherToken, [
+            ...stakingParams.map(({ teamIndex }, i) => ({
+              // We check the participating users' standard token balance for the reward
+              method: 'balanceOf',
+              args: [accounts[i]],
+              account: accounts[0],
+              onReturn: (balance) => {
+                let reward = parseInt(balance);
+                if (i === 0) reward -= initialUserUsdtBalance;
+                // We just check that the users who've staked the winning team tokens
+                // have usdt in their wallets
+                if (teamIndex === winningTeamIndex) {
+                  assert.notStrictEqual(reward, 0);
+                }
+              },
+            })),
+            {
+              method: 'balanceOf',
+              args: [DBTokenSideBetV2.options.address],
+              account: accounts[0],
+              onReturn: (balance) => {
+                // And we check that all usdt has been drained from the side bet contract
+                assert.strictEqual(parseInt(balance), 0);
+              },
+            },
+          ])
+        );
+    });
+
+    it('should revert if user tries to stake outside of sale', () => {
+      const stakingParams = getStakingParams();
+
+      return prepareSideBet(stakingParams).then(() =>
+        useMethodsOn(DBTokenSideBetV2, [
+          {
+            method: 'endSaleNow',
+            args: [eventName],
+            account: accounts[0],
+          },
+          {
+            method: 'stake',
+            args: [eventName, 0, stakingParams[0].amount],
+            account: accounts[0],
+            catch: (err) => {
+              assert.strictEqual(
+                err,
+                'SaleFactory: function can only be called during sale'
+              );
+            },
+          },
+        ])
+      );
+    });
+
+    it('allows owner to cancel side bet', () => {
+      const stakingParams = getStakingParams();
+      const { amount, teamIndex } = stakingParams[0];
+      const betCancelledError = 'DBTokenSideBetV2: side bet has been cancelled';
+
+      return prepareSideBet(stakingParams).then(() =>
+        useMethodsOn(DBTokenSideBetV2, [
+          {
+            method: 'cancelBetAndRefundTokens',
+            args: [eventName],
+            account: accounts[0],
+          },
+          {
+            method: 'stake',
+            args: [eventName, teamIndex, amount],
+            account: accounts[0],
+            catch: (err) => {
+              assert.strictEqual(err, betCancelledError);
+            },
+          },
+          {
+            method: 'endSaleNow',
+            args: [eventName],
+            account: accounts[0],
+          },
+          {
+            method: 'selectWinningTeam',
+            args: [eventName, 0],
+            account: accounts[0],
+            catch: (err) => {
+              assert.strictEqual(err, betCancelledError);
+            },
+          },
+        ])
+      );
     });
   });
 

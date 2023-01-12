@@ -6,6 +6,7 @@ module.exports = [
   'DBTokenRewardV2.sol',
   'DBTokenRewardSC.sol',
   'DBTokenSideBet.sol',
+  'DBTokenSideBetV2.sol',
   'DBTokenSell.sol',
   'DBTokenSellV2.sol',
   'RobinosGovernanceToken.sol',
