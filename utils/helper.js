@@ -5,13 +5,13 @@ const randomInt = (min, max) => {
   return Math.ceil(Math.random() * diff) + min;
 };
 
-const idsFrom = (fromId, length) => {
-  const idsArray = [];
-  for (let i = 0; i < length; i++) {
-    idsArray.push(fromId + i);
-  }
-  return idsArray;
+const newArray = (length, callback) => {
+  const array = [];
+  for (let i = 0; i < length; i++) array.push(callback(i));
+  return array;
 };
+
+const idsFrom = (fromId, length) => newArray(length, (i) => fromId + i);
 
 const timeInSecs = () => Math.round(Date.now() / 1000);
 
@@ -87,12 +87,6 @@ const useMethodsOn = (contractInstance, methodArgs) => {
 };
 
 const zeroOrOne = () => randomInt(0, 2) - 1;
-
-const newArray = (length, callback) => {
-  const array = [];
-  for (let i = 0; i < length; i++) array.push(callback(i));
-  return array;
-};
 
 const getBalanceOfUser = async (TokenContract, account) => {
   const balance = await useMethodsOn(TokenContract, {
