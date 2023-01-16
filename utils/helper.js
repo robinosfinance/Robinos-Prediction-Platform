@@ -99,6 +99,8 @@ const getBalanceOfUser = async (TokenContract, account) => {
   return parseInt(balance);
 };
 
+const valuesWithin = (a, b, delta) => Math.abs(a - b) <= delta;
+
 module.exports = {
   secondsInTheFuture,
   randomInt,
@@ -108,4 +110,5 @@ module.exports = {
   zeroOrOne,
   newArray,
   getBalanceOfUser,
+  valuesWithin,
 };
