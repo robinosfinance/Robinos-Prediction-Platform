@@ -744,7 +744,22 @@ contract DBTokenSell is SaleFactory {
 
         offer.tokenInstance.transfer(offer.offeringUser, offer.tokensLeft);
 
+        offer.tokensLeft = 0;
         offer.status = OfferStatus.Cancelled;
+    }
+
+    function returnAllOfferedTokens(string memory eventCode) public onlyOwner outsideOfSale(eventCode) {
+        bytes32 eventHash = StringUtils.hashStr(eventCode);
+        bytes32[] memory offerHashes = allEventOffers[eventHash];
+
+        for (uint256 i = 0; i < offerHashes.length; i++) {
+            DBTokenOffer storage tokenOffer = eventTokenOffers[eventHash][offerHashes[i]];
+            if (tokenOffer.status != OfferStatus.Open) continue;
+
+            tokenOffer.tokenInstance.transfer(tokenOffer.offeringUser, tokenOffer.tokensLeft);
+            tokenOffer.tokensLeft = 0;
+            tokenOffer.status = OfferStatus.Cancelled;
+        }
     }
 
     function createOfferId(

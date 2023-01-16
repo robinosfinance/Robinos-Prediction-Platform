@@ -1727,7 +1727,68 @@ describe('DBToken tests', () => {
         ])
       ));
 
-    it('reverts if user doesn have enough funds', () =>
+    it('allows owner to refund all offers when sale ends', () =>
+      prepareSaleOfferAndBuyerFunds().then(() =>
+        useMethodsOn(DBTokenSell, [
+          {
+            method: 'getAllEventOffers',
+            args: [eventCode],
+            account: accounts[0],
+            onReturn: ([{ tokensLeft }]) => {
+              assert.strictEqual(parseInt(tokensLeft), tokensToOffer);
+            },
+          },
+          {
+            method: 'buyOfferedTokens',
+            args: [eventCode, expectedOfferId, tokensToOffer / 2],
+            account: accounts[1],
+          },
+          {
+            method: 'getAllEventOffers',
+            args: [eventCode],
+            account: accounts[0],
+            onReturn: ([{ tokensLeft }]) => {
+              // After buying half the tokens, half should still be available
+              // in the offer
+              assert.strictEqual(parseInt(tokensLeft), tokensToOffer / 2);
+            },
+          },
+          {
+            method: 'endSaleNow',
+            args: [eventCode],
+            account: accounts[0],
+          },
+          {
+            method: 'returnAllOfferedTokens',
+            args: [eventCode],
+            account: accounts[0],
+          },
+          {
+            method: 'getAllEventOffers',
+            args: [eventCode],
+            account: accounts[0],
+            onReturn: ([{ tokensLeft }]) => {
+              // After the owner returns all offered tokens
+              // each offer should have 0 available tokens left
+              assert.strictEqual(parseInt(tokensLeft), 0);
+            },
+          },
+          {
+            then: async () => {
+              const balance = await getBalanceOfUser(
+                DBTokens[dbtokenIndex],
+                accounts[0]
+              );
+              // We expect that the offering user has the remaining
+              // DBTokens returned to their wallet after the event offers
+              // have been refunded
+              assert.strictEqual(balance, tokensToOffer / 2);
+            },
+          },
+        ])
+      ));
+
+    it("reverts if user doesn't have enough funds", () =>
       prepareSaleAndOffer()
         .then(() =>
           useMethodsOn(TetherToken, [
