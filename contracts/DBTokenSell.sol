@@ -593,13 +593,91 @@ abstract contract SaleFactory is Ownable {
     }
 }
 
+abstract contract AddingFeesToSales is Ownable {
+    uint256 private constant MAX_ST_FEE = 80_00;
+    uint256 private constant MAX_DBT_FEE = 80_00;
+    uint256 private constant DIVIDER = 10_000;
+
+    // Fee on standard token transfers defined in
+    // one hundredth of a percent (1 = 0.01%)
+    uint256 private standardTokenFeeHPerc = 0;
+    // Fee on DBToken transfers defined in
+    // one hundredth of a percent (1 = 0.01%)
+    uint256 private dbTokenFeeHPerc = 0;
+
+    function setStandardTokenFee(uint256 hPercFee) public onlyOwner {
+        require(hPercFee <= MAX_ST_FEE, "AddingFeesToSales: fee above maximum");
+        standardTokenFeeHPerc = hPercFee;
+    }
+
+    function setDBTokenFee(uint256 hPercFee) public onlyOwner {
+        require(hPercFee <= MAX_DBT_FEE, "AddingFeesToSales: fee above maximum");
+        dbTokenFeeHPerc = hPercFee;
+    }
+
+    function getStandardTokenFee() public view returns (uint256) {
+        return standardTokenFeeHPerc;
+    }
+
+    function getDBTokenFee() public view returns (uint256) {
+        return dbTokenFeeHPerc;
+    }
+
+    function calculateStandardTokenFee(uint256 amount) internal view returns (uint256) {
+        return (amount * standardTokenFeeHPerc) / DIVIDER;
+    }
+
+    function calculateDBTokenFee(uint256 amount) internal view returns (uint256) {
+        return (amount * dbTokenFeeHPerc) / DIVIDER;
+    }
+}
+
+abstract contract RecordingFeesOnSales is Ownable {
+    struct FeesOnSale {
+        StandardToken standardToken;
+        uint256 stAmount;
+        DBToken dbToken;
+        uint256 dbtAmount;
+    }
+
+    FeesOnSale[] private withdrawableFees;
+
+    function recordFees(
+        StandardToken standardToken,
+        uint256 stAmount,
+        DBToken dbToken,
+        uint256 dbtAmount
+    ) internal {
+        withdrawableFees.push(FeesOnSale(standardToken, stAmount, dbToken, dbtAmount));
+    }
+
+    /**
+     * @dev Returns all withdrawable fees. Once the owner withdraws the fees, this array
+     * will become empty
+     */
+    function getWithdrawableFees() public view returns (FeesOnSale[] memory) {
+        return withdrawableFees;
+    }
+
+    function withdrawAllFees() public onlyOwner {
+        for (uint256 i = 0; i < withdrawableFees.length; i++) {
+            FeesOnSale storage feeData = withdrawableFees[i];
+
+            feeData.standardToken.transfer(owner(), feeData.stAmount);
+            feeData.dbToken.transfer(owner(), feeData.dbtAmount);
+        }
+
+        delete withdrawableFees;
+    }
+}
+
 /***********************************************************************
  ***********************************************************************
  ******************         DB TOKEN SELL        ***********************
  ***********************************************************************
  **********************************************************************/
 
-contract DBTokenSell is SaleFactory {
+contract DBTokenSell is SaleFactory, AddingFeesToSales, RecordingFeesOnSales {
     enum OfferStatus {
         NotInitialized,
         Open,
@@ -728,10 +806,19 @@ contract DBTokenSell is SaleFactory {
             "DBTokenSell: insufficient allowance"
         );
 
+        uint256 standardTokenFee = calculateStandardTokenFee(stAmountRequired);
+        uint256 dbTokenFee = calculateDBTokenFee(amountToBuy);
+        uint256 offeringUserStandardTokens = stAmountRequired - standardTokenFee;
+        uint256 buyingUserDbTokens = amountToBuy - dbTokenFee;
+
         stdToken.transferFrom(_msgSender(), address(this), stAmountRequired);
-        offer.tokenInstance.transfer(_msgSender(), amountToBuy);
-        stdToken.transfer(offer.offeringUser, stAmountRequired);
+        stdToken.transfer(offer.offeringUser, offeringUserStandardTokens);
+
+        offer.tokenInstance.transfer(_msgSender(), buyingUserDbTokens);
+
         offer.tokensLeft -= amountToBuy;
+
+        recordFees(stdToken, standardTokenFee, offer.tokenInstance, dbTokenFee);
 
         if (offer.tokensLeft == 0) offer.status = OfferStatus.Sold;
     }
@@ -740,7 +827,10 @@ contract DBTokenSell is SaleFactory {
         DBTokenOffer storage offer = getOffer(eventCode, offerId);
 
         require(offer.status == OfferStatus.Open, "DBTokenSell: offer is not open for purchase");
-        require(_msgSender() == offer.offeringUser, "DBTokenSell: offer can only be cancelled by the offering user");
+        require(
+            _msgSender() == offer.offeringUser || _msgSender() == owner(),
+            "DBTokenSell: offer can only be cancelled by the offering user or owner"
+        );
 
         offer.tokenInstance.transfer(offer.offeringUser, offer.tokensLeft);
 

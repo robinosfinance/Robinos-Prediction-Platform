@@ -1578,7 +1578,7 @@ describe('DBToken tests', () => {
 
   describe('DBTokenSell', () => {
     const dbtokenIndex = 0;
-    const tokensToOffer = 200;
+    const tokensToOffer = 200_000;
     const rate = [5, 2];
     const dbToSt = (dbAmount) => Math.round((dbAmount * rate[0]) / rate[1]);
     const stRequired = dbToSt(tokensToOffer);
@@ -1952,6 +1952,167 @@ describe('DBToken tests', () => {
                   err,
                   'DBTokenSell: offer is not open for purchase'
                 );
+              },
+            },
+          ])
+        );
+    });
+
+    it('allows owner to add fees in both directions on sales', () => {
+      const numOfDBTokens = DBTokens.length;
+      const offerIds = teamTokenParams.map(
+        ({ teamName }) => `${eventCode}-${teamName}-0`
+      );
+      const standardTokenFeeHPerc = 15;
+      const dbTokenFeeHPerc = 15;
+      const calculateHPerc = (amount, hundredthPerc) =>
+        Math.round((amount * hundredthPerc) / 10000);
+
+      const state = { initialSTBalance: 0 };
+
+      return useMethodsOn(
+        DBTokenEvent,
+        teamTokenParams.map(({ teamName }) => ({
+          // We mint the DBTokens we want to put up for offer
+          method: 'mintTeamToken',
+          args: [teamName, accounts[2], tokensToOffer],
+          account: accounts[0],
+        }))
+      )
+        .then(() =>
+          Promise.all(
+            DBTokens.map((DBToken) =>
+              useMethodsOn(DBToken, {
+                // The offering user approves the wanted amount of tokens towards
+                // the DBTokenSell contract
+                method: 'approve',
+                args: [DBTokenSell.options.address, tokensToOffer],
+                account: accounts[2],
+              })
+            )
+          )
+        )
+        .then(() =>
+          useMethodsOn(DBTokenSell, [
+            {
+              method: 'setStandardTokenFee',
+              args: [standardTokenFeeHPerc],
+              account: accounts[0],
+            },
+            {
+              method: 'setDBTokenFee',
+              args: [dbTokenFeeHPerc],
+              account: accounts[0],
+            },
+            {
+              // We start the sale, allowing the users to put offers with
+              // tokens belonging to this event
+              method: 'setSaleStartEnd',
+              args: [eventCode, 0, secondsInTheFuture(10)],
+              account: accounts[0],
+            },
+            ...DBTokens.map((DBToken) => ({
+              // The offering user adds an offer to the correct event
+              method: 'addOffer',
+              args: [
+                eventCode,
+                DBToken.options.address,
+                tokensToOffer,
+                rate[0],
+                rate[1],
+              ],
+              account: accounts[2],
+            })),
+          ])
+        )
+        .then(() =>
+          useMethodsOn(TetherToken, [
+            {
+              method: 'transfer',
+              args: [accounts[1], stRequired * numOfDBTokens],
+              account: accounts[0],
+            },
+            {
+              method: 'approve',
+              args: [DBTokenSell.options.address, stRequired * numOfDBTokens],
+              account: accounts[1],
+            },
+            {
+              method: 'balanceOf',
+              args: [accounts[0]],
+              account: accounts[0],
+              onReturn: (balance) => {
+                // We record the initial standard token balance
+                // before the fees are withdrawn
+                state.initialSTBalance = parseInt(balance);
+              },
+            },
+          ])
+        )
+        .then(() =>
+          useMethodsOn(DBTokenSell, [
+            ...offerIds.map((offerId) => ({
+              // The user buys each of the designated tokens
+              method: 'buyOfferedTokens',
+              args: [eventCode, offerId, tokensToOffer],
+              account: accounts[1],
+            })),
+            {
+              // We get a list of withdrawable fees on the contract
+              method: 'getWithdrawableFees',
+              args: [],
+              account: accounts[0],
+              onReturn: (fees) => {
+                // And we check that all data is correct
+                assert.strictEqual(fees.length, DBTokens.length);
+                fees.forEach(
+                  ({ standardToken, stAmount, dbToken, dbtAmount }, i) => {
+                    assert.strictEqual(
+                      standardToken,
+                      TetherToken.options.address
+                    );
+                    assert.strictEqual(
+                      parseInt(stAmount),
+                      calculateHPerc(stRequired, standardTokenFeeHPerc)
+                    );
+                    assert.strictEqual(dbToken, DBTokens[i].options.address);
+                    assert.strictEqual(
+                      parseInt(dbtAmount),
+                      calculateHPerc(tokensToOffer, dbTokenFeeHPerc)
+                    );
+                  }
+                );
+              },
+            },
+            {
+              // The owner withdraws all possible fees
+              method: 'withdrawAllFees',
+              args: [],
+              account: accounts[0],
+            },
+            {
+              then: async () => {
+                const stBalance = await getBalanceOfUser(
+                  TetherToken,
+                  accounts[0]
+                );
+                const dbtBalances = await Promise.all(
+                  DBTokens.map((DBToken) =>
+                    getBalanceOfUser(DBToken, accounts[0])
+                  )
+                );
+
+                const stFee = calculateHPerc(stRequired, standardTokenFeeHPerc);
+                const dbtFee = calculateHPerc(tokensToOffer, dbTokenFeeHPerc);
+                // And we check that the correct amount of standard tokens and DBTokens
+                // are on owner's wallet
+                assert.strictEqual(
+                  stBalance - state.initialSTBalance,
+                  stFee * numOfDBTokens
+                );
+                dbtBalances.forEach((dbtBalance) => {
+                  assert.strictEqual(dbtBalance, dbtFee);
+                });
               },
             },
           ])
