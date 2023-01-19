@@ -279,7 +279,7 @@ contract DBToken is IERC20, IERC20Metadata, Ownable {
     }
 
     function decimals() external pure override returns (uint8) {
-        return 18;
+        return 6;
     }
 
     function totalSupply() external view override returns (uint256) {
