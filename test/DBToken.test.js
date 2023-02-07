@@ -1148,6 +1148,20 @@ describe('DBToken tests', () => {
             },
           },
         ]));
+
+      it('returns all winning team names in an event', () =>
+        useMethodsOn(DBTokenRewardSC, {
+          method: 'getWinningTeamNames',
+          args: [eventCode],
+          account: accounts[0],
+          onReturn: (winningTeams) => {
+            // Method should return an array of all token team names
+            assert.deepStrictEqual(
+              winningTeams,
+              teamTokenParams.map((params) => params.teamName)
+            );
+          },
+        }));
     });
   });
 

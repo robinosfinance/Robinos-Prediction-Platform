@@ -979,7 +979,7 @@ abstract contract SettingTokenRates is Ownable, TokenHash, UsingEventHash {
         uint256 numerator;
         uint256 denominator;
     }
-    mapping(bytes32 => Ratio) private _rates;
+    mapping(bytes32 => Ratio) private rates;
 
     modifier ratesFinalized(string memory eventCode) {
         require(ratesFinilized[hashStr(eventCode)], "DBTokenReward: rates have not been finalized");
@@ -1002,16 +1002,18 @@ abstract contract SettingTokenRates is Ownable, TokenHash, UsingEventHash {
         require(denominator > 0, "DBTokenReward: denominator must be larger than 0");
         bytes32 tokenHash = getTokenHash(eventCode, teamName);
 
-        _rates[tokenHash] = Ratio(numerator, denominator);
+        rates[tokenHash] = Ratio(numerator, denominator);
         return true;
     }
 
     // Each token has a specific rate. If rate is 0, token has not been initialized
     function getRate(string memory eventCode, string memory teamName) public view returns (Ratio memory) {
-        bytes32 tokenHash = getTokenHash(eventCode, teamName);
-        require(_rates[tokenHash].denominator != 0, "DBTokenReward: rate not initialized");
+        return rates[getTokenHash(eventCode, teamName)];
+    }
 
-        return _rates[tokenHash];
+    function isRateSetFor(DBToken token) internal view returns (bool) {
+        Ratio memory rate = getRate(token.eventCode(), token.teamName());
+        return rate.numerator != 0 && rate.denominator != 0;
     }
 
     // Function calculates how many standard tokens you will receive for getToken(eventCode, teamName) based on the rate of the token
@@ -1020,8 +1022,10 @@ abstract contract SettingTokenRates is Ownable, TokenHash, UsingEventHash {
         string memory eventCode,
         string memory teamName
     ) public view returns (uint256) {
-        require(amount != 0, "DBTokenReward: amount cannot be 0");
         Ratio memory rate = getRate(eventCode, teamName);
+        require(rate.denominator != 0, "DBTokenReward: rate not initialized");
+        require(amount != 0, "DBTokenReward: amount cannot be 0");
+
         return uint256((amount * rate.numerator) / rate.denominator);
     }
 
@@ -1248,6 +1252,30 @@ contract DBTokenRewardSC is
                 tokenHashToUsersPurchased[tokenHash].push(userAddress);
             }
         }
+    }
+
+    function getWinningTeamNames(string memory eventCode) public view returns (string[] memory) {
+        address[] storage tokenAddresses = eventTokenRewards[hashStr(eventCode)].tokenAddresses;
+        uint256 totalRatesSet = 0;
+
+        for (uint256 i = 0; i < tokenAddresses.length; i++) {
+            bool rateInitialized = isRateSetFor(DBToken(tokenAddresses[i]));
+            if (rateInitialized) totalRatesSet++;
+        }
+
+        string[] memory winningTeamNames = new string[](totalRatesSet);
+        uint256 arrayIndex = 0;
+
+        for (uint256 i = 0; i < tokenAddresses.length; i++) {
+            DBToken token = DBToken(tokenAddresses[i]);
+            bool rateInitialized = isRateSetFor(token);
+            if (rateInitialized) {
+                winningTeamNames[arrayIndex] = token.teamName();
+                arrayIndex++;
+            }
+        }
+
+        return winningTeamNames;
     }
 
     /**
