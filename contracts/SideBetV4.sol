@@ -395,6 +395,12 @@ contract SideBetV4 is SaleFactory {
         }
     }
 
+    function getUserTokensDeposited(string memory eventCode, address user) public view returns (uint256[2] memory) {
+        SideBet storage sideBet = getSideBet(eventCode);
+
+        return sideBet.userTokens[user];
+    }
+
     function userHasDeposited(
         SideBet storage sideBet,
         TeamIndex index,
