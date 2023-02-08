@@ -390,5 +390,37 @@ describe('SideBetV4 tests', () => {
         ])
       );
     });
+
+    it('allows to calculate team ROIs', () => {
+      const userDepositParams = getUserDepositParams();
+
+      return prepareSideBetAndUserTokens(userDepositParams).then(() =>
+        useMethodsOn(SideBetV4, [
+          ...userDepositParams.map(({ account, teamIndex, amount }) => ({
+            // Each user deposits a set amount of standard tokens
+            // towards their chosen team
+            method: 'deposit',
+            args: [eventCode, teamIndex, amount],
+            account,
+          })),
+          {
+            method: 'getSideBetData',
+            args: [eventCode],
+            account: accounts[0],
+            onReturn: ({ totalTokensDeposited: [firstTeam, secondTeam] }) => {
+              const firstTeamDeposited = parseInt(firstTeam);
+              const secondTeamDeposited = parseInt(secondTeam);
+              const totalDeposited = firstTeamDeposited + secondTeamDeposited;
+
+              const firstTeamROI = totalDeposited / firstTeamDeposited;
+              const secondTeamROI = totalDeposited / secondTeamDeposited;
+
+              assert.ok(firstTeamROI);
+              assert.ok(secondTeamROI);
+            },
+          },
+        ])
+      );
+    });
   });
 });

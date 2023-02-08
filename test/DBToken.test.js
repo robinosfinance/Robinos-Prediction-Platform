@@ -1588,6 +1588,37 @@ describe('DBToken tests', () => {
         ])
       );
     });
+
+    it('allows to calculate team ROIs', () => {
+      const stakingParams = getStakingParams();
+
+      return prepareSideBet(stakingParams).then(() =>
+        useMethodsOn(DBTokenSideBetV2, [
+          ...stakingParams.map(({ teamIndex, account, amount }) => ({
+            // Each user then stakes their DBTokens for their chosen team
+            method: 'stake',
+            args: [eventName, teamIndex, amount],
+            account,
+          })),
+          {
+            method: 'getSideBetData',
+            args: [eventName],
+            account: accounts[0],
+            onReturn: ({ totalTokensStaked: [firstTeam, secondTeam] }) => {
+              const firstTeamStaked = parseInt(firstTeam);
+              const secondTeamStaked = parseInt(secondTeam);
+              const totalStaked = firstTeamStaked + secondTeamStaked;
+
+              const firstTeamROI = totalStaked / firstTeamStaked;
+              const secondTeamROI = totalStaked / secondTeamStaked;
+
+              assert.ok(firstTeamROI);
+              assert.ok(secondTeamROI);
+            },
+          },
+        ])
+      );
+    });
   });
 
   describe('DBTokenSell', () => {
