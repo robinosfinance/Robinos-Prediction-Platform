@@ -657,6 +657,12 @@ contract DBTokenSideBetV2 is SaleFactory {
         }
     }
 
+    function getUserTokensStaked(string memory eventCode, address user) public view returns (uint256[2] memory) {
+        SideBet storage sideBet = getSideBet(eventCode);
+
+        return sideBet.userStakedTokens[user];
+    }
+
     function userHasStaked(
         SideBet storage sideBet,
         TeamTokenIndex index,
