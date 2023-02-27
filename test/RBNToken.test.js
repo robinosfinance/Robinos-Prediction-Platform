@@ -1,7 +1,7 @@
 const assert = require('assert');
 const contracts = require('../compile');
 const tether = require('../compiled/tether.json');
-const { useMethodsOn } = require('../utils/helper');
+const { useMethodsOn, getTaxFunction } = require('../utils/helper');
 const { getAccounts, deploy } = require('../utils/useWeb3');
 
 const tokenContract = contracts['RBNV2Token.sol'].RBNV2Token;
@@ -13,7 +13,7 @@ describe('RBNToken tests', () => {
   const symbol = 'RBNv2';
   const initialSupply = 100000000;
   const taxPercentage = 20;
-  const withTax = (amount) => (amount / (100 - taxPercentage)) * 100;
+  const withTax = getTaxFunction(taxPercentage);
 
   const tetherInitialSupply = 100000000;
 

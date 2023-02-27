@@ -101,6 +101,16 @@ const getBalanceOfUser = async (TokenContract, account) => {
 
 const valuesWithin = (a, b, delta) => Math.abs(a - b) <= delta;
 
+const getTaxFunction = (taxPercentage) => (amount) =>
+  Math.round((amount / (100 - taxPercentage)) * 100);
+
+const valuesWithinPercentage = (value1, value2, percentage) => {
+  const diff = Math.abs(value1 - value2);
+  const maxDiff = Math.max(value1, value2) * (percentage / 100);
+
+  return diff <= maxDiff;
+};
+
 module.exports = {
   secondsInTheFuture,
   randomInt,
@@ -111,4 +121,6 @@ module.exports = {
   newArray,
   getBalanceOfUser,
   valuesWithin,
+  getTaxFunction,
+  valuesWithinPercentage,
 };
