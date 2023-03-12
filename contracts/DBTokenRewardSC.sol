@@ -1297,6 +1297,7 @@ contract DBTokenRewardSC is
 
         for (uint256 i = 0; i < addressesArray.length; i++) {
             DBToken tokenToExchange = DBToken(addressesArray[i]);
+            if (!isRateSetFor(tokenToExchange)) continue;
             string memory teamName = tokenToExchange.teamName();
             bytes32 tokenHash = getTokenHash(eventCode, teamName);
             address[] memory usersWhoPurchasedToken = tokenHashToUsersPurchased[tokenHash];

@@ -876,7 +876,7 @@ describe('DBToken tests', () => {
       const rate = [2, 3];
       const totalUsdtReward = 200000;
       // Sum should be <= 100
-      const tokenRewardPercentages = [60, 30, 10];
+      const tokenRewardPercentages = [60, 40, 0];
 
       beforeEach(() => {
         return runSaleAndPrepareRewards(
@@ -893,35 +893,37 @@ describe('DBToken tests', () => {
               args: [eventCode],
               account: accounts[0],
             },
-            ...teamTokenParams.flatMap(({ teamName }, i) => [
-              {
-                // The owner can set the rate for certain token
-                // to equal a percentage of the total reward pool
-                // sent to the reward contract
-                method: 'setRateAsPercentOfTotal',
-                args: [eventCode, teamName, tokenRewardPercentages[i]],
-                account: accounts[0],
-              },
-              {
-                // Then we get the rate and check if the values are correct
-                method: 'getRate',
-                args: [eventCode, teamName],
-                account: accounts[0],
-                onReturn: (rate) => {
-                  const { numerator, denominator } = rate;
-
-                  // The numerator should equal to the set percent
-                  // of total reward pool
-                  assert.strictEqual(
-                    parseInt(numerator),
-                    (totalUsdtReward * tokenRewardPercentages[i]) / 100
-                  );
-                  // The denominator is equal to the total amount of tokens
-                  // purchased in the event
-                  assert.strictEqual(parseInt(denominator), purchaseAmount);
+            ...teamTokenParams
+              .filter((_, i) => tokenRewardPercentages[i])
+              .flatMap(({ teamName }, i) => [
+                {
+                  // The owner can set the rate for certain token
+                  // to equal a percentage of the total reward pool
+                  // sent to the reward contract
+                  method: 'setRateAsPercentOfTotal',
+                  args: [eventCode, teamName, tokenRewardPercentages[i]],
+                  account: accounts[0],
                 },
-              },
-            ]),
+                {
+                  // Then we get the rate and check if the values are correct
+                  method: 'getRate',
+                  args: [eventCode, teamName],
+                  account: accounts[0],
+                  onReturn: (rate) => {
+                    const { numerator, denominator } = rate;
+
+                    // The numerator should equal to the set percent
+                    // of total reward pool
+                    assert.strictEqual(
+                      parseInt(numerator),
+                      (totalUsdtReward * tokenRewardPercentages[i]) / 100
+                    );
+                    // The denominator is equal to the total amount of tokens
+                    // purchased in the event
+                    assert.strictEqual(parseInt(denominator), purchaseAmount);
+                  },
+                },
+              ]),
             {
               // For rewards to be distributed and verified users to
               // approve rates, the owner must set rates as finalized.
@@ -1014,32 +1016,34 @@ describe('DBToken tests', () => {
             args: [eventCode],
             account: accounts[0],
           },
-          ...teamTokenParams.map(({ teamName }, i) => ({
-            // For each user, we get a list of all rewards won
-            method: 'getAllUserRewards',
-            args: [accounts[i + 1]],
-            account: accounts[0],
-            onReturn: (userRewards) => {
-              const {
-                eventCode: _eventCode,
-                teamName: _teamName,
-                eligibleTokens,
-                rewardAmount,
-              } = userRewards[0];
+          ...teamTokenParams
+            .filter((_, i) => tokenRewardPercentages[i])
+            .map(({ teamName }, i) => ({
+              // For each user, we get a list of all rewards won
+              method: 'getAllUserRewards',
+              args: [accounts[i + 1]],
+              account: accounts[0],
+              onReturn: (userRewards) => {
+                const {
+                  eventCode: _eventCode,
+                  teamName: _teamName,
+                  eligibleTokens,
+                  rewardAmount,
+                } = userRewards[0];
 
-              // In this testing, each user bought one specific token,
-              // so we check that the reward token has the correct data
-              assert.strictEqual(_eventCode, eventCode);
-              assert.strictEqual(_teamName, teamName);
-              // Amount of tokens eligible for reward
-              assert.strictEqual(parseInt(eligibleTokens), purchaseAmount);
-              // And that the reward amount is correct
-              assert.strictEqual(
-                parseInt(rewardAmount),
-                (totalUsdtReward * tokenRewardPercentages[i]) / 100
-              );
-            },
-          })),
+                // In this testing, each user bought one specific token,
+                // so we check that the reward token has the correct data
+                assert.strictEqual(_eventCode, eventCode);
+                assert.strictEqual(_teamName, teamName);
+                // Amount of tokens eligible for reward
+                assert.strictEqual(parseInt(eligibleTokens), purchaseAmount);
+                // And that the reward amount is correct
+                assert.strictEqual(
+                  parseInt(rewardAmount),
+                  (totalUsdtReward * tokenRewardPercentages[i]) / 100
+                );
+              },
+            })),
         ]));
 
       it('reverts if rates are not finalized', () =>
@@ -1158,7 +1162,9 @@ describe('DBToken tests', () => {
             // Method should return an array of all token team names
             assert.deepStrictEqual(
               winningTeams,
-              teamTokenParams.map((params) => params.teamName)
+              teamTokenParams
+                .filter((_, i) => tokenRewardPercentages[i])
+                .map((params) => params.teamName)
             );
           },
         }));
