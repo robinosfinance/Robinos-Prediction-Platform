@@ -360,9 +360,51 @@ contract DBToken is IERC20, IERC20Metadata, Ownable {
     }
 }
 
-struct ArrayElRef {
-    bool status;
-    uint256 arrayIndex;
+library StringUtils {
+    function hashStr(string memory str) internal pure returns (bytes32) {
+        return bytes32(keccak256(bytes(str)));
+    }
+
+    /**
+     * @dev Converts a `uint256` to its ASCII `string` decimal representation.
+     */
+    function toString(uint256 value) internal pure returns (string memory) {
+        // Inspired by OraclizeAPI's implementation - MIT licence
+        // https://github.com/oraclize/ethereum-api/blob/b42146b063c7d6ee1358846c198246239e9360e8/oraclizeAPI_0.4.25.sol
+
+        if (value == 0) {
+            return "0";
+        }
+        uint256 temp = value;
+        uint256 digits;
+        while (temp != 0) {
+            digits++;
+            temp /= 10;
+        }
+        bytes memory buffer = new bytes(digits);
+        while (value != 0) {
+            digits -= 1;
+            buffer[digits] = bytes1(uint8(48 + uint256(value % 10)));
+            value /= 10;
+        }
+        return string(buffer);
+    }
+
+    function matchStrings(string memory a, string memory b) internal pure returns (bool) {
+        return keccak256(bytes(a)) == keccak256(bytes(b));
+    }
+
+    function concatStrings(string memory a, string memory b) private pure returns (string memory) {
+        return string(abi.encodePacked(a, b));
+    }
+
+    function concatArrayOfStrings(string[] memory strings) internal pure returns (string memory) {
+        string memory finalString = "";
+        for (uint256 i = 0; i < strings.length; i++) {
+            finalString = concatStrings(finalString, strings[i]);
+        }
+        return finalString;
+    }
 }
 
 abstract contract SaleFactory is Ownable {
@@ -394,7 +436,7 @@ abstract contract SaleFactory is Ownable {
     // Modifier allowing a call only if event by eventCode is currently inactive
     modifier outsideOfSale(string memory eventCode) {
         // We are fetching the event directly through a hash, since getEventSale reverts if sale is not initialized
-        Sale storage eventSale = _eventSale[hashStr(eventCode)];
+        Sale storage eventSale = _eventSale[StringUtils.hashStr(eventCode)];
         require(!saleIsActive(eventSale), "SaleFactory: function can only be called outside of sale");
 
         _;
@@ -449,10 +491,6 @@ abstract contract SaleFactory is Ownable {
         return block.timestamp;
     }
 
-    function hashStr(string memory str) private pure returns (bytes32) {
-        return bytes32(keccak256(bytes(str)));
-    }
-
     /**
      * @dev Function inserts a sale reference in the _allSales array and orders it by saleEnd time
      * in ascending order. This means the first sale in the array will expire first.
@@ -483,7 +521,7 @@ abstract contract SaleFactory is Ownable {
      * @param eventCode string code of event
      */
     function getEventSale(string memory eventCode) private view returns (Sale storage) {
-        Sale storage eventSale = _eventSale[hashStr(eventCode)];
+        Sale storage eventSale = _eventSale[StringUtils.hashStr(eventCode)];
         require(eventSale.saleStart > 0 || eventSale.saleEnd > 0, "SaleFactory: sale not initialized");
         return eventSale;
     }
@@ -498,7 +536,7 @@ abstract contract SaleFactory is Ownable {
         uint256 start,
         uint256 end
     ) public onlyOwner returns (bool) {
-        bytes32 saleHash = hashStr(eventCode);
+        bytes32 saleHash = StringUtils.hashStr(eventCode);
         Sale storage eventSale = _eventSale[saleHash];
         bool initialized = eventSale.saleStart != 0;
 
@@ -555,317 +593,267 @@ abstract contract SaleFactory is Ownable {
     }
 }
 
-abstract contract TokenHash is Ownable {
-    function getTokenHash(string memory _eventCode, string memory _teamName) internal pure returns (bytes32) {
-        return keccak256(bytes(abi.encodePacked(_eventCode, _teamName)));
-    }
-}
-
-abstract contract RecordingTradePairs is Ownable {
-    address[] private _allTradingPairs;
-    mapping(address => ArrayElRef) _tradingPairMapping;
-
-    /**
-     * @dev Adds the trading pair address to array and creates a O(1) get reference. Function will revert if pair is already registered.
-     */
-    function addTPAddress(address tradingPair) public onlyOwner returns (bool) {
-        require(!_tradingPairMapping[tradingPair].status, "DBTokenSale: pair already created");
-        uint256 index = _allTradingPairs.length;
-        _allTradingPairs.push(tradingPair);
-        _tradingPairMapping[tradingPair] = ArrayElRef(true, index);
-
-        return true;
-    }
-
-    // Get pair index from array. Function will revert if pair is not registered
-    function getTPAddressIndex(address tradingPair) public view returns (uint256) {
-        require(_tradingPairMapping[tradingPair].status, "DBTokenSale: pair not initialized");
-        return _tradingPairMapping[tradingPair].arrayIndex;
-    }
-
-    function getAllTPAddresses() public view returns (address[] memory) {
-        return _allTradingPairs;
-    }
-
-    /**
-     * @dev Delete the trading pair address from array and reference. Function will revert if address is not active.
-     * Note that function will only set address to address(0). Array length will stay the same
-     */
-    function deleteTPAddress(address tradingPair) public onlyOwner returns (bool) {
-        uint256 index = getTPAddressIndex(tradingPair);
-        _allTradingPairs[index] = address(0);
-        _tradingPairMapping[tradingPair] = ArrayElRef(false, 0);
-        return true;
-    }
-
-    /**
-     * @dev Low level function. Will calculate circulating supply for given token
-     */
-    function _calculateCirculatingSupply(DBToken token) internal view returns (uint256) {
-        uint256 supply = token.totalSupply();
-        uint256 length = _allTradingPairs.length;
-
-        uint256 balance;
-        for (uint256 i; i < length; i++) {
-            balance = token.balanceOf(_allTradingPairs[i]);
-            unchecked {
-                supply -= balance;
-            }
-        }
-
-        return supply;
-    }
-}
-
-abstract contract RecordingTokensSold is TokenHash {
-    struct TokensSold {
-        bytes32 eventHash;
-        bytes32 tokenHash;
-        uint256 amountSold;
-    }
-    TokensSold[] _currentSale;
-    mapping(bytes32 => ArrayElRef) private _saleArrayMapping;
-
-    struct EventTokensSold {
-        bytes32 eventHash;
-        uint256 amountSold;
-    }
-    EventTokensSold[] _currentEventSale;
-    mapping(bytes32 => ArrayElRef) private _saleEventArrayMapping;
-
-    function tokensSold() public view onlyOwner returns (TokensSold[] memory) {
-        return _currentSale;
-    }
-
-    function eventTokensSold() public view onlyOwner returns (EventTokensSold[] memory) {
-        return _currentEventSale;
-    }
-
-    function initTokensSold(
-        bytes32 tokenHash,
-        bytes32 eventHash,
-        uint256 initialAmount
-    ) private returns (bool) {
-        require(!_saleArrayMapping[tokenHash].status, "DBTokenSale: TokenSold reference already initialized");
-
-        uint256 tokenSoldIndex = _currentSale.length;
-
-        _currentSale.push(TokensSold(eventHash, tokenHash, initialAmount));
-        _saleArrayMapping[tokenHash] = ArrayElRef(true, tokenSoldIndex);
-
-        return true;
-    }
-
-    function increaseTokensSold(bytes32 tokenHash, uint256 amount) private returns (bool) {
-        require(_saleArrayMapping[tokenHash].status, "DBTokenSale: TokenSold reference is not initialized");
-
-        _currentSale[_saleArrayMapping[tokenHash].arrayIndex].amountSold += amount;
-
-        return true;
-    }
-
-    function recordTokensSold(
-        string memory _eventCode,
-        string memory _teamName,
-        uint256 amount
-    ) internal returns (bool) {
-        bytes32 tokenHash = getTokenHash(_eventCode, _teamName);
-        bytes32 eventHash = bytes32(keccak256(bytes(_eventCode)));
-
-        recordEventTokensSold(eventHash, amount);
-
-        if (!_saleArrayMapping[tokenHash].status) {
-            initTokensSold(tokenHash, eventHash, amount);
-        } else {
-            increaseTokensSold(tokenHash, amount);
-        }
-
-        return true;
-    }
-
-    function initEventTokensSold(bytes32 eventHash, uint256 amount) private returns (bool) {
-        require(!_saleEventArrayMapping[eventHash].status, "DBTokenSale: EventTokenSold reference already initialized");
-
-        uint256 index = _currentEventSale.length;
-
-        _currentEventSale.push(EventTokensSold(eventHash, amount));
-        _saleEventArrayMapping[eventHash] = ArrayElRef(true, index);
-
-        return true;
-    }
-
-    function increaseEventTokensSold(bytes32 eventHash, uint256 amount) private returns (bool) {
-        require(_saleEventArrayMapping[eventHash].status, "DBTokenSale: EventTokenSold reference is not initialized");
-        _currentEventSale[_saleEventArrayMapping[eventHash].arrayIndex].amountSold += amount;
-
-        return true;
-    }
-
-    function recordEventTokensSold(bytes32 eventHash, uint256 amount) private returns (bool) {
-        if (!_saleEventArrayMapping[eventHash].status) {
-            initEventTokensSold(eventHash, amount);
-        } else {
-            increaseEventTokensSold(eventHash, amount);
-        }
-
-        return true;
-    }
-}
-
-contract StoringDBTokens is TokenHash, Pausable {
-    mapping(bytes32 => DBToken) internal _dbtokens;
-
-    function pause() public override onlyOwner whileNotPaused returns (bool) {
-        return super.pause();
-    }
-
-    function unPause() public override onlyOwner whilePaused returns (bool) {
-        return super.unPause();
-    }
-
-    /**
-     * @dev This function adds DBToken references to the _dbtokens mapping. The function expects event code and team name to be supplied.
-     * This is only added for additional security to check if the owner is adding the correct address.
-     * @param _token Address of the DBToken you are adding
-     * @param _eventCode Event code of the DBToken reference. Has to match the event code the token has been initialized with.
-     * @param _teamName Same as event code. Has to match the team name the token has been initialized with
-     */
-    function addDBTokenReference(
-        DBToken _token,
-        string memory _eventCode,
-        string memory _teamName
-    ) public virtual onlyOwner returns (bool) {
-        bytes32 tokenEventCode = keccak256(bytes(_token.eventCode()));
-        bytes32 tokenTeamName = keccak256(bytes(_token.teamName()));
-        bytes32 givenEventCode = keccak256(bytes(_eventCode));
-        bytes32 givenTeamName = keccak256(bytes(_teamName));
-
-        require(tokenEventCode == givenEventCode, "DBTokenSale: given event code doesn't match reference event code");
-        require(tokenTeamName == givenTeamName, "DBTokenSale: given team name doesn't match reference team name");
-
-        bytes32 tokenHash = getTokenHash(_eventCode, _teamName);
-
-        _dbtokens[tokenHash] = _token;
-
-        // _dbtokens[tokenHash]._mint(address(this), initialAmount);
-        return true;
-    }
-
-    // Get token by event code and team name. Revert on not found
-    function getToken(string memory _eventCode, string memory _teamName) public view returns (DBToken) {
-        bytes32 tokenHash = getTokenHash(_eventCode, _teamName);
-        require(address(_dbtokens[tokenHash]) != address(0), "DBTokenSale: token doesn't exist");
-        return _dbtokens[tokenHash];
-    }
-}
-
-/**********************************************************************
+/***********************************************************************
  ***********************************************************************
- ********************      DB TOKEN REWARD      ************************
+ ******************         DB TOKEN SELL        ***********************
  ***********************************************************************
  **********************************************************************/
 
-contract DBTokenReward is StoringDBTokens, SaleFactory {
-    /**
-     * The DBTokenReward shares a lot of similarities with DBTokenSale contract. Notable differences are:
-     * 1) This contract uses SaleFactory in the same way DBTokenSale does, but the sale here signifies when the tokens for the given event can be sold to this contract. DBTokenSale uses it for other way around.
-     * 2) Rate for each token can be set individually by the owner. Rate is a ratio between getToken(eventCode, teamName)/standard token
-     * 3) Instead of buyTokens, we have a sellTokens function which performs an immediate exchange taking in DBTokens from the user and providing Standard Tokens
-     */
+contract DBTokenSellV2 is SaleFactory {
+    enum OfferStatus {
+        NotInitialized,
+        Open,
+        Closed
+    }
 
-    StandardToken private _standardToken;
+    struct Bid {
+        address biddingUser;
+        uint256 standardTokensOffered;
+    }
 
-    constructor(StandardToken standardToken_) Ownable() {
-        _standardToken = standardToken_;
+    struct DBTokenOffer {
+        string offerId;
+        OfferStatus status;
+        address offeringUser;
+        DBToken tokenInstance;
+        uint256 tokensOffered;
+        uint256 minStandardTokensRequested;
+        Bid[] bids;
+    }
+
+    mapping(bytes32 => mapping(bytes32 => DBTokenOffer)) private eventTokenOffers;
+    mapping(bytes32 => bytes32[]) private allEventOffers;
+    mapping(bytes32 => address[]) private allBiddingUsers;
+
+    StandardToken private stdToken;
+
+    constructor(StandardToken _stdToken) Ownable() {
+        stdToken = _stdToken;
+    }
+
+    function getOffer(string memory eventCode, string memory offerId) private view returns (DBTokenOffer storage) {
+        return eventTokenOffers[StringUtils.hashStr(eventCode)][StringUtils.hashStr(offerId)];
     }
 
     /**
-     * @dev getRate(eventCode, teamName) returns a ratio between getToken(eventCode, teamName)/standard token
-     * Examples:
-     * 1) getToken(eventCode, teamName) is 2x the value of standard token (or for each DBToken you receive 2 standard tokens) getRate(eventCode, teamName) => (numerator 2, denominator 1)
-     * 2) getToken(eventCode, teamName) is 0.75x the value of standard token (or for 4 DBTokens you receive 3 standard tokens) getRate(eventCode, teamName) => (numerator 3, denominator 4)
-     * 3) getToken(eventCode, teamName) is 0.125x the value of standard token (or for 8 DBTokens you receive 1 standard tokens) getRate(eventCode, teamName) => (numerator 1, denominator 8)
-     * 4) getToken(eventCode, teamName) is 2.5x the value of standard token (or for 2 DBTokens you receive 5 standard tokens) getRate(eventCode, teamName) => (numerator 5, denominator 2)
-     * 5) getToken(eventCode, teamName) is 1x the value of standard token (or for 2 DBTokens you receive 5 standard tokens) getRate(eventCode, teamName) => (numerator 1, denominator 1) [This is initially set for each new token reference added]
+     * @dev Method allowing any user holding DBTokens to put them up for bidding
+     * during the appropriate sale period. The user must first approve the tokens
+     * towards this contract. The tokens are immediately transferred to this address
+     * as escrow.
+     *
+     * @param eventCode string code of event in which to add the offer
+     * @param token address of the DBToken placed for offer. The event code
+     *  on the token must match the given eventCode
+     * @param tokensOffered amount of DBTokens being offered. The user offering
+     *  must first hold enough tokens in wallet and approve the same amount towards
+     *  this contract.
+     * @param minStandardTokens minimum amount of standard tokens requested for trade.
+     *  All bids must offer at least this many tokens for trade.
      */
-    struct Ratio {
-        uint256 numerator;
-        uint256 denominator;
+    function addOffer(
+        string memory eventCode,
+        DBToken token,
+        uint256 tokensOffered,
+        uint256 minStandardTokens
+    ) public duringSale(eventCode) {
+        require(
+            StringUtils.matchStrings(eventCode, token.eventCode()),
+            "DBTokenSellV2: token does not belong to this sale"
+        );
+        require(token.balanceOf(_msgSender()) >= tokensOffered, "DBTokenSellV2: insufficient token amount");
+        require(token.allowance(_msgSender(), address(this)) >= tokensOffered, "DBTokenSellV2: insufficient allowance");
+
+        bytes32 eventHash = StringUtils.hashStr(eventCode);
+        string memory offerId = getNextAvailableOfferId(eventCode, token.teamName());
+        bytes32 offerHash = StringUtils.hashStr(offerId);
+
+        DBTokenOffer storage offer = eventTokenOffers[eventHash][offerHash];
+
+        offer.offerId = offerId;
+        offer.status = OfferStatus.Open;
+        offer.offeringUser = _msgSender();
+        offer.tokenInstance = token;
+        offer.tokensOffered = tokensOffered;
+        offer.minStandardTokensRequested = minStandardTokens;
+
+        allEventOffers[eventHash].push(offerHash);
+
+        token.transferFrom(_msgSender(), address(this), tokensOffered);
     }
-    mapping(bytes32 => Ratio) private _rates;
 
     /**
-     * @dev Allows the owner to set a rate for specific token. Numerator and denominator must be greater than 0
-     * Please use the smallest possible numerator and denominator. So instead of (6/8) use (3/4). Check not included in function to save gas
+     * @dev Allows the user who added the offer to finalize it. This method sets the
+     * status to closed, meaning no further bids can be placed and all the funds added as
+     * escrow towards this offer can be now withdrawn.
+     * @param eventCode to which the offer belongs
+     * @param offerId of the offer to finalize. Can be read with getAllEventOffers
      */
-    function setRate(
-        string memory eventCode,
-        string memory teamName,
-        uint256 numerator,
-        uint256 denominator
-    ) public onlyOwner returns (bool) {
-        require(numerator > 0, "DBTokenReward: numerator must be larger than 0");
-        require(denominator > 0, "DBTokenReward: denominator must be larger than 0");
-        bytes32 tokenHash = getTokenHash(eventCode, teamName);
+    function finalizeOffer(string memory eventCode, string memory offerId) public {
+        DBTokenOffer storage offer = getOffer(eventCode, offerId);
 
-        _rates[tokenHash] = Ratio(numerator, denominator);
-        return true;
+        require(offer.offeringUser == _msgSender(), "DBTokenSellV2: only offering user can finalize the offer");
+        require(offer.status == OfferStatus.Open, "DBTokenSellV2: offer is not open for bids");
+
+        offer.status = OfferStatus.Closed;
     }
 
-    // Each token has a specific rate. If rate is 0, token has not been initialized
-    function getRate(string memory eventCode, string memory teamName) public view returns (Ratio memory) {
-        bytes32 tokenHash = getTokenHash(eventCode, teamName);
-        require(_rates[tokenHash].denominator != 0, "DBTokenReward: rate not initialized");
-
-        return _rates[tokenHash];
-    }
-
-    // Function calculates how many standard tokens you will receive for getToken(eventCode, teamName) based on the rate of the token
-    function standardTokensFor(
-        uint256 amount,
-        string memory eventCode,
-        string memory teamName
-    ) public view returns (uint256) {
-        require(amount != 0, "DBTokenReward: amount cannot be 0");
-        Ratio memory rate = getRate(eventCode, teamName);
-        return uint256((amount * rate.numerator) / rate.denominator);
-    }
-
-    // We override the function so we can set the rate for the token to one immediately
-    function addDBTokenReference(
-        DBToken _token,
-        string memory _eventCode,
-        string memory _teamName
-    ) public override onlyOwner returns (bool) {
-        super.addDBTokenReference(_token, _eventCode, _teamName);
-        setRate(_eventCode, _teamName, 1, 1);
-
-        return true;
-    }
-
-    // Function is basically the same as buyTokens from DBTokenSale contract, except the transfer is done the other way around
-    // Contract has to have at least the given amount of standardToken tokens for this function to work
-    function sellTokens(
-        string memory eventCode,
-        string memory teamName,
-        uint256 amount
-    ) public duringSale(eventCode) returns (bool) {
-        DBToken token = getToken(eventCode, teamName);
-
-        uint256 allowance = token.allowance(_msgSender(), address(this));
-        require(allowance >= amount, "DBTokenReward: insufficient token allowance");
-
-        uint256 standardTokenAmount = standardTokensFor(amount, eventCode, teamName);
-        uint256 standardTokenBalance = _standardToken.balanceOf(address(this));
+    /**
+     * @dev Allows ANY user to withdraw all the funds held as escrow towards the referenced
+     * offer.
+     *
+     * If there are no bids on the given offer, the offered tokens are transferred back to
+     * the original user's wallet.
+     *
+     * If there are bids on the given offer, the offered tokens are transferred to the user
+     * with the highest bid. Standard tokens offered as the part of the highest bid are
+     * transferred toward the user who initially offered the tokens for sale. All other
+     * standard tokens that are sent as a bid are transferred back to their original owners.
+     * Users which have placed multiple bids will only receive back the amount for the highest bid
+     */
+    function withdrawAllFromOffer(string memory eventCode, string memory offerId) public {
+        DBTokenOffer storage offer = getOffer(eventCode, offerId);
+        (bool saleIsActive, , ) = isSaleOn(eventCode);
 
         require(
-            standardTokenBalance >= standardTokenAmount,
-            "DBTokenReward: insufficient contract reward token balance"
+            !saleIsActive || offer.status == OfferStatus.Closed,
+            "DBTokenSellV2: can withdraw only if sale or offer is closed"
         );
 
-        token.transferFrom(_msgSender(), address(this), amount);
-        _standardToken.transfer(_msgSender(), standardTokenAmount);
+        DBToken token = offer.tokenInstance;
+        offer.status = OfferStatus.Closed;
 
-        return true;
+        if (offer.bids.length == 0) {
+            token.transfer(offer.offeringUser, offer.tokensOffered);
+            return;
+        }
+
+        Bid[] storage bids = offer.bids;
+        token.transfer(bids[bids.length - 1].biddingUser, offer.tokensOffered);
+        address[] storage biddingUsers = getAllBiddingUsers(offerId);
+        uint256 highestBid = getHighestBid(offer);
+
+        for (uint256 i = 0; i < biddingUsers.length; i++) {
+            uint256 userHighestBid = getUserHighestBid(offer, biddingUsers[i]);
+            bool isHighestBid = userHighestBid == highestBid;
+            address user = isHighestBid ? offer.offeringUser : biddingUsers[i];
+
+            stdToken.transfer(user, userHighestBid);
+        }
+    }
+
+    function getHighestBid(DBTokenOffer storage offer) private view returns (uint256) {
+        if (offer.bids.length == 0) return 0;
+        return offer.bids[offer.bids.length - 1].standardTokensOffered;
+    }
+
+    function getUserHighestBid(DBTokenOffer storage offer, address user) private view returns (uint256) {
+        if (offer.bids.length == 0) return 0;
+        uint256 highestBid = 0;
+
+        for (uint256 i = 0; i < offer.bids.length; i++) {
+            if (offer.bids[i].biddingUser == user) {
+                highestBid = offer.bids[i].standardTokensOffered;
+            }
+        }
+
+        return highestBid;
+    }
+
+    function getAllBiddingUsers(string memory offerId) private view returns (address[] storage) {
+        return allBiddingUsers[StringUtils.hashStr(offerId)];
+    }
+
+    function recordBiddingUser(string memory offerId, address user) private {
+        allBiddingUsers[StringUtils.hashStr(offerId)].push(user);
+    }
+
+    /**
+     * @dev Allows any user to place a bid on the given offer. Bidding is only
+     * allowed while the offer and sale are both open. The user must bid more
+     * than the current highest bid and the minimum standard tokens requested
+     * in the offer. If the user has already placed a bid on this offer, then
+     * only the difference between this and the user's highest bid are transferred
+     * into the contracts address for escrow.
+     *
+     * @param eventCode to which the offer belongs
+     * @param offerId of the offer for which the user is bidding
+     * @param bidAmount of standard tokens
+     */
+    function bidOnOffer(
+        string memory eventCode,
+        string memory offerId,
+        uint256 bidAmount
+    ) public duringSale(eventCode) {
+        DBTokenOffer storage offer = getOffer(eventCode, offerId);
+        uint256 currentUserHighestBid = getUserHighestBid(offer, _msgSender());
+        uint256 highestBidDiff = bidAmount - currentUserHighestBid;
+
+        require(offer.status == OfferStatus.Open, "DBTokenSellV2: offer is not open to bids");
+        require(bidAmount >= offer.minStandardTokensRequested, "DBTokenSellV2: cannot offer less than minimum requested");
+        require(bidAmount > getHighestBid(offer), "DBTokenSellV2: must bid more than the current highest bid");
+        require(stdToken.balanceOf(_msgSender()) >= highestBidDiff, "DBTokenSellV2: insufficient token amount");
+        require(
+            stdToken.allowance(_msgSender(), address(this)) >= highestBidDiff,
+            "DBTokenSellV2: insufficient allowance"
+        );
+
+        if (currentUserHighestBid == 0) recordBiddingUser(offerId, _msgSender());
+
+        stdToken.transferFrom(_msgSender(), address(this), highestBidDiff);
+        offer.bids.push(Bid(_msgSender(), bidAmount));
+    }
+
+    function createOfferId(
+        string memory eventCode,
+        string memory teamName,
+        uint256 index
+    ) private pure returns (string memory) {
+        string[] memory hashParams = new string[](5);
+        hashParams[0] = eventCode;
+        hashParams[1] = "-";
+        hashParams[2] = teamName;
+        hashParams[3] = "-";
+        hashParams[4] = StringUtils.toString(index);
+
+        return StringUtils.concatArrayOfStrings(hashParams);
+    }
+
+    /**
+     * Returns the next available offer ID. The ID is contructed in the below way
+     * {eventCode}-{teamName}-{int id 0...}
+     * The int id at the end is incremented for each next offer for the same
+     * event and team name.
+     */
+    function getNextAvailableOfferId(string memory eventCode, string memory teamName)
+        private
+        view
+        returns (string memory)
+    {
+        uint256 offerIndex = 0;
+        bytes32 eventHash = StringUtils.hashStr(eventCode);
+        while (true) {
+            string memory offerId = createOfferId(eventCode, teamName, offerIndex);
+            DBTokenOffer storage offer = eventTokenOffers[eventHash][StringUtils.hashStr(offerId)];
+            if (offer.status == OfferStatus.NotInitialized) return offerId;
+            offerIndex++;
+        }
+
+        return "";
+    }
+
+    /**
+     * @dev Returns an array of all offers for the given event. Shows all offer data including all
+     * current bids placed for the offer.
+     */
+    function getAllEventOffers(string memory eventCode) public view returns (DBTokenOffer[] memory) {
+        bytes32 eventHash = StringUtils.hashStr(eventCode);
+        bytes32[] memory offerHashes = allEventOffers[eventHash];
+        DBTokenOffer[] memory eventOffers = new DBTokenOffer[](offerHashes.length);
+
+        for (uint256 i = 0; i < offerHashes.length; i++) {
+            eventOffers[i] = eventTokenOffers[eventHash][offerHashes[i]];
+        }
+
+        return eventOffers;
     }
 }

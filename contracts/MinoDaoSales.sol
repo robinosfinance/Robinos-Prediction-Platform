@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: MIT
+// OpenZeppelin Contracts v4.3.2 (token/ERC721/ERC721.sol)
 
 pragma solidity ^0.8.10;
 
@@ -280,7 +281,7 @@ library Address {
         require(address(this).balance >= amount, "Address: insufficient balance");
 
         (bool success, ) = recipient.call{value: amount}("");
-        require(success, "Address: unable to send value, recipient may have reverted");
+        require(success, "unable to send");
     }
 
     /**
@@ -302,7 +303,7 @@ library Address {
      * _Available since v3.1._
      */
     function functionCall(address target, bytes memory data) internal returns (bytes memory) {
-        return functionCall(target, data, "Address: low-level call failed");
+        return functionCall(target, data, "failed");
     }
 
     /**
@@ -335,7 +336,7 @@ library Address {
         bytes memory data,
         uint256 value
     ) internal returns (bytes memory) {
-        return functionCallWithValue(target, data, value, "Address: low-level call with value failed");
+        return functionCallWithValue(target, data, value, "failed");
     }
 
     /**
@@ -350,8 +351,8 @@ library Address {
         uint256 value,
         string memory errorMessage
     ) internal returns (bytes memory) {
-        require(address(this).balance >= value, "Address: insufficient balance for call");
-        require(isContract(target), "Address: call to non-contract");
+        require(address(this).balance >= value, "insufficient balance");
+        require(isContract(target), "non-contract");
 
         (bool success, bytes memory returndata) = target.call{value: value}(data);
         return verifyCallResult(success, returndata, errorMessage);
@@ -364,7 +365,7 @@ library Address {
      * _Available since v3.3._
      */
     function functionStaticCall(address target, bytes memory data) internal view returns (bytes memory) {
-        return functionStaticCall(target, data, "Address: low-level static call failed");
+        return functionStaticCall(target, data, "failed");
     }
 
     /**
@@ -378,7 +379,7 @@ library Address {
         bytes memory data,
         string memory errorMessage
     ) internal view returns (bytes memory) {
-        require(isContract(target), "Address: static call to non-contract");
+        require(isContract(target), "non-contract");
 
         (bool success, bytes memory returndata) = target.staticcall(data);
         return verifyCallResult(success, returndata, errorMessage);
@@ -391,7 +392,7 @@ library Address {
      * _Available since v3.4._
      */
     function functionDelegateCall(address target, bytes memory data) internal returns (bytes memory) {
-        return functionDelegateCall(target, data, "Address: low-level delegate call failed");
+        return functionDelegateCall(target, data, "failed");
     }
 
     /**
@@ -405,7 +406,7 @@ library Address {
         bytes memory data,
         string memory errorMessage
     ) internal returns (bytes memory) {
-        require(isContract(target), "Address: delegate call to non-contract");
+        require(isContract(target), "non-contract");
 
         (bool success, bytes memory returndata) = target.delegatecall(data);
         return verifyCallResult(success, returndata, errorMessage);
@@ -642,7 +643,7 @@ contract ERC721 is Context, ERC165, IERC721, IERC721Metadata {
      * @dev See {IERC721-balanceOf}.
      */
     function balanceOf(address owner) public view virtual override returns (uint256) {
-        require(owner != address(0), "ERC721: balance query for the zero address");
+        require(owner != address(0), "zero address");
         return _balances[owner];
     }
 
@@ -651,7 +652,7 @@ contract ERC721 is Context, ERC165, IERC721, IERC721Metadata {
      */
     function ownerOf(uint256 tokenId) public view virtual override returns (address) {
         address owner = _owners[tokenId];
-        require(owner != address(0), "ERC721: owner query for nonexistent token");
+        require(owner != address(0), "nonexistent token");
         return owner;
     }
 
@@ -673,7 +674,7 @@ contract ERC721 is Context, ERC165, IERC721, IERC721Metadata {
      * @dev See {IERC721Metadata-tokenURI}.
      */
     function tokenURI(uint256 tokenId) public view virtual override returns (string memory) {
-        require(_exists(tokenId), "ERC721Metadata: URI query for nonexistent token");
+        require(_exists(tokenId), "nonexistent token");
 
         string memory baseURI = _baseURI();
         return bytes(baseURI).length > 0 ? string(abi.encodePacked(baseURI, tokenId.toString())) : "";
@@ -693,12 +694,9 @@ contract ERC721 is Context, ERC165, IERC721, IERC721Metadata {
      */
     function approve(address to, uint256 tokenId) public virtual override {
         address owner = ERC721.ownerOf(tokenId);
-        require(to != owner, "ERC721: approval to current owner");
+        require(to != owner, "owner");
 
-        require(
-            _msgSender() == owner || isApprovedForAll(owner, _msgSender()),
-            "ERC721: approve caller is not owner nor approved for all"
-        );
+        require(_msgSender() == owner || isApprovedForAll(owner, _msgSender()), "not approved");
 
         _approve(to, tokenId);
     }
@@ -707,7 +705,7 @@ contract ERC721 is Context, ERC165, IERC721, IERC721Metadata {
      * @dev See {IERC721-getApproved}.
      */
     function getApproved(uint256 tokenId) public view virtual override returns (address) {
-        require(_exists(tokenId), "ERC721: approved query for nonexistent token");
+        require(_exists(tokenId), "nonexistent token");
 
         return _tokenApprovals[tokenId];
     }
@@ -735,7 +733,7 @@ contract ERC721 is Context, ERC165, IERC721, IERC721Metadata {
         uint256 tokenId
     ) public virtual override {
         //solhint-disable-next-line max-line-length
-        require(_isApprovedOrOwner(_msgSender(), tokenId), "ERC721: transfer caller is not owner nor approved");
+        require(_isApprovedOrOwner(_msgSender(), tokenId), "not approved");
 
         _transfer(from, to, tokenId);
     }
@@ -760,7 +758,7 @@ contract ERC721 is Context, ERC165, IERC721, IERC721Metadata {
         uint256 tokenId,
         bytes memory _data
     ) public virtual override {
-        require(_isApprovedOrOwner(_msgSender(), tokenId), "ERC721: transfer caller is not owner nor approved");
+        require(_isApprovedOrOwner(_msgSender(), tokenId), "not approved");
         _safeTransfer(from, to, tokenId, _data);
     }
 
@@ -789,7 +787,7 @@ contract ERC721 is Context, ERC165, IERC721, IERC721Metadata {
         bytes memory _data
     ) internal virtual {
         _transfer(from, to, tokenId);
-        require(_checkOnERC721Received(from, to, tokenId, _data), "ERC721: transfer to non ERC721Receiver implementer");
+        require(_checkOnERC721Received(from, to, tokenId, _data), "non ERC721Receiver");
     }
 
     /**
@@ -812,7 +810,7 @@ contract ERC721 is Context, ERC165, IERC721, IERC721Metadata {
      * - `tokenId` must exist.
      */
     function _isApprovedOrOwner(address spender, uint256 tokenId) internal view virtual returns (bool) {
-        require(_exists(tokenId), "ERC721: operator query for nonexistent token");
+        require(_exists(tokenId), "nonexistent token");
         address owner = ERC721.ownerOf(tokenId);
         return (spender == owner || getApproved(tokenId) == spender || isApprovedForAll(owner, spender));
     }
@@ -841,10 +839,7 @@ contract ERC721 is Context, ERC165, IERC721, IERC721Metadata {
         bytes memory _data
     ) internal virtual {
         _mint(to, tokenId);
-        require(
-            _checkOnERC721Received(address(0), to, tokenId, _data),
-            "ERC721: transfer to non ERC721Receiver implementer"
-        );
+        require(_checkOnERC721Received(address(0), to, tokenId, _data), "non ERC721Receiver");
     }
 
     /**
@@ -860,8 +855,8 @@ contract ERC721 is Context, ERC165, IERC721, IERC721Metadata {
      * Emits a {Transfer} event.
      */
     function _mint(address to, uint256 tokenId) internal virtual {
-        require(to != address(0), "ERC721: mint to the zero address");
-        require(!_exists(tokenId), "ERC721: token already minted");
+        require(to != address(0), "zero address");
+        require(!_exists(tokenId), "already minted");
 
         _beforeTokenTransfer(address(0), to, tokenId);
 
@@ -911,8 +906,8 @@ contract ERC721 is Context, ERC165, IERC721, IERC721Metadata {
         address to,
         uint256 tokenId
     ) internal virtual {
-        require(ERC721.ownerOf(tokenId) == from, "ERC721: transfer of token that is not own");
-        require(to != address(0), "ERC721: transfer to the zero address");
+        require(ERC721.ownerOf(tokenId) == from, "not own");
+        require(to != address(0), "zero address");
 
         _beforeTokenTransfer(from, to, tokenId);
 
@@ -1005,6 +1000,148 @@ contract ERC721 is Context, ERC165, IERC721, IERC721Metadata {
     ) internal virtual {}
 }
 
+abstract contract RecordingTokenIds {
+    uint256[] private tokenIds;
+
+    function recordTokenId(uint256 tokenId) internal {
+        tokenIds.push(tokenId);
+    }
+
+    /**
+     * @dev Returns an array of all minted token IDs
+     */
+    function getTokenIds() public view returns (uint256[] memory) {
+        return tokenIds;
+    }
+
+    /**
+     * @dev Returns total number of minted tokens
+     */
+    function getTokenIdsLength() public view returns (uint256) {
+        return tokenIds.length;
+    }
+}
+
+abstract contract HonorableToken {
+    mapping(uint256 => bool) private _isHonorary;
+
+    function setHonorary(uint256 tokenId, bool honorary) public virtual {
+        _isHonorary[tokenId] = honorary;
+    }
+
+    function isHonorary(uint256 tokenId) public view virtual returns (bool) {
+        return _isHonorary[tokenId];
+    }
+}
+
+contract MinoDao is ERC721, RecordingTokenIds, HonorableToken, Ownable {
+    string private baseURI;
+
+    struct TokenData {
+        uint256 tokenId;
+        address owner;
+        bool honorary;
+    }
+
+    constructor(
+        string memory name_,
+        string memory symbol_,
+        string memory baseURI_
+    ) ERC721(name_, symbol_) Ownable() {
+        baseURI = baseURI_;
+    }
+
+    /**
+     * Checks if the token has been minted
+     */
+    modifier isExistingToken(uint256 tokenId) {
+        require(_exists(tokenId), "MinoDao: must specify an existing token id");
+        _;
+    }
+
+    /**
+     * @dev Allows owner to mint a new token with the given ID if
+     * if the token hasn't been minted yet. The token is immediately
+     * recorded in an array of token IDs
+     */
+    function mint(uint256 tokenId) public onlyOwner {
+        _safeMint(owner(), tokenId);
+        recordTokenId(tokenId);
+    }
+
+    /**
+     * @dev Allows owner to set the {honorary} flag on a provided token
+     * on or off, if that token has been already minted.
+     */
+    function setHonorary(uint256 tokenId, bool honorary) public override onlyOwner isExistingToken(tokenId) {
+        super.setHonorary(tokenId, honorary);
+    }
+
+    /**
+     * @param tokenId to check if honorary
+     * @return {bool} if token is honorary or not
+     */
+    function isHonorary(uint256 tokenId) public view override isExistingToken(tokenId) returns (bool) {
+        return super.isHonorary(tokenId);
+    }
+
+    /**
+     * @dev Returns an array of token IDs for honorary tokens
+     */
+    function getHonoraryTokenIds() public view returns (uint256[] memory) {
+        uint256[] memory tokenIds = getTokenIds();
+        uint256[] memory honoraryTokenIds = new uint256[](tokenIds.length);
+        uint256 numOfHonoraryTokens = 0;
+
+        for (uint256 i = 0; i < tokenIds.length; i++) {
+            if (isHonorary(tokenIds[i])) {
+                honoraryTokenIds[numOfHonoraryTokens] = tokenIds[i];
+                numOfHonoraryTokens++;
+            }
+        }
+
+        assembly {
+            mstore(honoraryTokenIds, numOfHonoraryTokens)
+        }
+
+        return honoraryTokenIds;
+    }
+
+    /**
+     * @dev Returns token ID, owner address and honorary flag for every
+     * minted token.
+     * @return {TokenData[]} array of structs (tokenId, owner, honorary)
+     */
+    function getAllTokensData() public view returns (TokenData[] memory) {
+        uint256[] memory tokenIds = getTokenIds();
+        TokenData[] memory tokensData = new TokenData[](tokenIds.length);
+
+        for (uint256 i = 0; i < tokenIds.length; i++) {
+            uint256 tokenId = tokenIds[i];
+            tokensData[i] = TokenData(tokenId, ownerOf(tokenId), isHonorary(tokenId));
+        }
+
+        return tokensData;
+    }
+
+    function _baseURI() internal view override returns (string memory) {
+        return baseURI;
+    }
+}
+
+abstract contract ERC721Receiver {
+    bytes4 constant receiverSignature = bytes4(keccak256("onERC721Received(address,address,uint256,bytes)"));
+
+    function onERC721Received(
+        address,
+        address,
+        uint256,
+        bytes calldata
+    ) external virtual returns (bytes4) {
+        return receiverSignature;
+    }
+}
+
 /**
  * @dev Interface of the ERC20 standard as defined in the EIP.
  */
@@ -1083,633 +1220,864 @@ interface IERC20 {
     event Approval(address indexed owner, address indexed spender, uint256 value);
 }
 
-abstract contract MatchingStrings {
-    function matchStrings(string memory a, string memory b) internal pure returns (bool) {
-        return keccak256(bytes(a)) == keccak256(bytes(b));
-    }
+/**
+ * @dev Interface for the optional metadata functions from the ERC20 standard.
+ *
+ * _Available since v4.1._
+ */
+interface IERC20Metadata is IERC20 {
+    /**
+     * @dev Returns the name of the token.
+     */
+    function name() external view returns (string memory);
+
+    /**
+     * @dev Returns the symbol of the token.
+     */
+    function symbol() external view returns (string memory);
+
+    /**
+     * @dev Returns the decimals places of the token.
+     */
+    function decimals() external view returns (uint8);
 }
 
-contract Period {
-    string private _label;
-    uint256 private _multiplier;
+/**
+ * @dev Implementation of the {IERC20} interface.
+ *
+ * This implementation is agnostic to the way tokens are created. This means
+ * that a supply mechanism has to be added in a derived contract using {_mint}.
+ * For a generic mechanism see {ERC20PresetMinterPauser}.
+ *
+ * TIP: For a detailed writeup see our guide
+ * https://forum.zeppelin.solutions/t/how-to-implement-erc20-supply-mechanisms/226[How
+ * to implement supply mechanisms].
+ *
+ * We have followed general OpenZeppelin Contracts guidelines: functions revert
+ * instead returning `false` on failure. This behavior is nonetheless
+ * conventional and does not conflict with the expectations of ERC20
+ * applications.
+ *
+ * Additionally, an {Approval} event is emitted on calls to {transferFrom}.
+ * This allows applications to reconstruct the allowance for all accounts just
+ * by listening to said events. Other implementations of the EIP may not emit
+ * these events, as it isn't required by the specification.
+ *
+ * Finally, the non-standard {decreaseAllowance} and {increaseAllowance}
+ * functions have been added to mitigate the well-known issues around setting
+ * allowances. See {IERC20-approve}.
+ */
+contract ERC20 is Context, IERC20, IERC20Metadata {
+    mapping(address => uint256) private _balances;
 
-    constructor(string memory label_, uint256 multiplier_) {
-        _label = label_;
-        _multiplier = multiplier_;
-    }
+    mapping(address => mapping(address => uint256)) private _allowances;
 
-    function label() external view returns (string memory) {
-        return _label;
-    }
+    uint256 private _totalSupply;
 
-    function multiplier() external view returns (uint256) {
-        return _multiplier;
-    }
-}
+    string private _name;
+    string private _symbol;
 
-abstract contract HandlingTime is MatchingStrings {
-    Period[5] private periods = [
-        new Period("seconds", 1),
-        new Period("minutes", 60),
-        new Period("hours", 60),
-        new Period("days", 24),
-        new Period("weeks", 7)
-    ];
-
-    function periodLabels() private view returns (string[] memory) {
-        uint256 length = periods.length;
-        string[] memory periodLabelsArray = new string[](length);
-        for (uint256 i = 0; i < length; i++) {
-            periodLabelsArray[i] = periods[i].label();
-        }
-        return periodLabelsArray;
-    }
-
-    function getArrayIndexOf(string[] memory array, string memory str) private pure returns (uint256) {
-        for (uint256 i = 0; i < array.length; i++) {
-            if (matchStrings(str, array[i])) {
-                return i;
-            }
-        }
-        require(false, "HandlingTime: undefined period passed");
-        return 0;
-    }
-
-    function toUnixTime(string memory period, uint256 amount) internal view returns (uint256) {
-        uint256 periodIndex = getArrayIndexOf(periodLabels(), period);
-        uint256 totalAmount = amount;
-        for (uint256 i = periodIndex; i > 0; i--) {
-            totalAmount *= periods[i].multiplier();
-        }
-        return totalAmount;
-    }
-}
-
-abstract contract ReadingTime {
-    // Return current timestamp
-    function time() internal view returns (uint256) {
-        return block.timestamp;
-    }
-}
-
-abstract contract SaleFactory is Ownable, ReadingTime {
-    // Each sale has an entry in the eventCode hash table with start and end time.
-    // If both saleStart and saleEnd are 0, sale is not initialized
-    struct Sale {
-        uint256 saleStart;
-        uint256 saleEnd;
-    }
-    mapping(bytes32 => Sale) private _eventSale;
-    bytes32[] private _allSales;
-
-    // Modifier allowing a call if and only if there are no active sales at the moment
-    modifier noActiveSale() {
-        for (uint256 i; i < _allSales.length; i++) {
-            require(!saleIsActive(_eventSale[_allSales[i]]), "SaleFactory: unavailable while a sale is active");
-        }
-        _;
-    }
-
-    // Modifier allowing a call only if event by eventCode is currently active
-    modifier duringSale(string memory eventCode) {
-        Sale storage eventSale = getEventSale(eventCode);
-        require(saleIsActive(eventSale), "SaleFactory: function can only be called during sale");
-        _;
-        clearExpiredSales();
-    }
-
-    // Modifier allowing a call only if event by eventCode is currently inactive
-    modifier outsideOfSale(string memory eventCode) {
-        // We are fetching the event directly through a hash, since getEventSale reverts if sale is not initialized
-        Sale storage eventSale = _eventSale[hashStr(eventCode)];
-        require(!saleIsActive(eventSale), "SaleFactory: function can only be called outside of sale");
-
-        _;
-    }
-
-    modifier afterSale(string memory eventCode) {
-        uint256 saleEnd = _eventSale[hashStr(eventCode)].saleEnd;
-        require(saleEnd != 0 && saleEnd < time(), "SaleFactory: function can only be called after sale");
-
-        _;
-    }
-
-    modifier beforeSaleEnd(string memory eventCode) {
-        uint256 saleEnd = _eventSale[hashStr(eventCode)].saleEnd;
-        require(saleEnd != 0 && saleEnd > time(), "SaleFactory: function can only be called before sale end");
-
-        _;
-    }
-
-    function saleIsActive(Sale memory sale) private view returns (bool) {
-        return (time() >= sale.saleStart) && (time() < sale.saleEnd);
-    }
-
-    // Returns all active or soon-to-be active sales in an array ordered by sale end time
-    function getAllSales() public view returns (Sale[] memory) {
-        uint256 length = _allSales.length;
-
-        Sale[] memory sales = new Sale[](length);
-
-        for (uint256 i; i < length; i++) {
-            sales[i] = _eventSale[_allSales[i]];
-        }
-        return sales;
-    }
-
-    // Clears all sales from the _allSales array who's saleEnd time is in the past
-    function clearExpiredSales() private returns (bool) {
-        uint256 length = _allSales.length;
-        if (length > 0 && _eventSale[_allSales[0]].saleEnd <= time()) {
-            uint256 endDelete = 1;
-
-            bytes32[] memory copyAllSales = _allSales;
-
-            uint256 i = 1;
-            while (i < length) {
-                if (_eventSale[_allSales[i]].saleEnd > time()) {
-                    endDelete = i;
-                    break;
-                }
-                i++;
-            }
-
-            for (i = 0; i < length; i++) {
-                if (i < length - endDelete) {
-                    _allSales[i] = copyAllSales[i + endDelete];
-                } else {
-                    _allSales.pop();
-                }
-            }
-        }
-        return true;
-    }
-
-    function hashStr(string memory str) internal pure returns (bytes32) {
-        return bytes32(keccak256(bytes(str)));
+    /**
+     * @dev Sets the values for {name} and {symbol}.
+     *
+     * The default value of {decimals} is 18. To select a different value for
+     * {decimals} you should overload it.
+     *
+     * All two of these values are immutable: they can only be set once during
+     * construction.
+     */
+    constructor(string memory name_, string memory symbol_) {
+        _name = name_;
+        _symbol = symbol_;
     }
 
     /**
-     * @dev Function inserts a sale reference in the _allSales array and orders it by saleEnd time
-     * in ascending order. This means the first sale in the array will expire first.
-     * @param saleHash hash reference to the sale mapping structure
+     * @dev Returns the name of the token.
      */
-    function insertSale(bytes32 saleHash) private returns (bool) {
-        uint256 length = _allSales.length;
+    function name() public view virtual override returns (string memory) {
+        return _name;
+    }
 
-        bytes32 unorderedSale = saleHash;
-        bytes32 tmpSale;
+    /**
+     * @dev Returns the symbol of the token, usually a shorter version of the
+     * name.
+     */
+    function symbol() public view virtual override returns (string memory) {
+        return _symbol;
+    }
 
-        for (uint256 i; i <= length; i++) {
-            if (i == length) {
-                _allSales.push(unorderedSale);
-            } else {
-                if (_eventSale[_allSales[i]].saleEnd > _eventSale[unorderedSale].saleEnd) {
-                    tmpSale = _allSales[i];
-                    _allSales[i] = unorderedSale;
-                    unorderedSale = tmpSale;
-                }
-            }
-        }
+    /**
+     * @dev Returns the number of decimals used to get its user representation.
+     * For example, if `decimals` equals `2`, a balance of `505` tokens should
+     * be displayed to a user as `5.05` (`505 / 10 ** 2`).
+     *
+     * Tokens usually opt for a value of 18, imitating the relationship between
+     * Ether and Wei. This is the value {ERC20} uses, unless this function is
+     * overridden;
+     *
+     * NOTE: This information is only used for _display_ purposes: it in
+     * no way affects any of the arithmetic of the contract, including
+     * {IERC20-balanceOf} and {IERC20-transfer}.
+     */
+    function decimals() public view virtual override returns (uint8) {
+        return 18;
+    }
+
+    /**
+     * @dev See {IERC20-totalSupply}.
+     */
+    function totalSupply() public view virtual override returns (uint256) {
+        return _totalSupply;
+    }
+
+    /**
+     * @dev See {IERC20-balanceOf}.
+     */
+    function balanceOf(address account) public view virtual override returns (uint256) {
+        return _balances[account];
+    }
+
+    /**
+     * @dev See {IERC20-transfer}.
+     *
+     * Requirements:
+     *
+     * - `recipient` cannot be the zero address.
+     * - the caller must have a balance of at least `amount`.
+     */
+    function transfer(address recipient, uint256 amount) public virtual override returns (bool) {
+        _transfer(_msgSender(), recipient, amount);
         return true;
     }
 
     /**
-     * @dev Function returns Sale struct with saleEnd and saleStart. Function reverts if event is not initialized
-     * @param eventCode string code of event
+     * @dev See {IERC20-allowance}.
      */
-    function getEventSale(string memory eventCode) private view returns (Sale storage) {
-        Sale storage eventSale = _eventSale[hashStr(eventCode)];
-        require(eventSale.saleStart > 0 || eventSale.saleEnd > 0, "SaleFactory: sale not initialized");
-        return eventSale;
+    function allowance(address owner, address spender) public view virtual override returns (uint256) {
+        return _allowances[owner][spender];
     }
 
     /**
-     * @dev Function to set the start and end time of the next sale.
-     * @param start Unix time stamp of the start of sale. Needs to be a timestamp in the future. If the start is 0, the sale will start immediately.
-     * @param end Unix time stamp of the end of sale. Needs to be a timestamp after the start
+     * @dev See {IERC20-approve}.
+     *
+     * NOTE: If `amount` is the maximum `uint256`, the allowance is not updated on
+     * `transferFrom`. This is semantically equivalent to an infinite approval.
+     *
+     * Requirements:
+     *
+     * - `spender` cannot be the zero address.
      */
-    function setSaleStartEnd(
-        string memory eventCode,
-        uint256 start,
-        uint256 end
-    ) public onlyOwner returns (bool) {
-        bytes32 saleHash = hashStr(eventCode);
-        Sale storage eventSale = _eventSale[saleHash];
-        bool initialized = eventSale.saleStart != 0;
+    function approve(address spender, uint256 amount) public virtual override returns (bool) {
+        _approve(_msgSender(), spender, amount);
+        return true;
+    }
 
-        if (start != 0) {
-            require(start > time(), "SaleFactory: given past sale start time");
-        } else {
-            start = time();
+    /**
+     * @dev See {IERC20-transferFrom}.
+     *
+     * Emits an {Approval} event indicating the updated allowance. This is not
+     * required by the EIP. See the note at the beginning of {ERC20}.
+     *
+     * NOTE: Does not update the allowance if the current allowance
+     * is the maximum `uint256`.
+     *
+     * Requirements:
+     *
+     * - `sender` and `recipient` cannot be the zero address.
+     * - `sender` must have a balance of at least `amount`.
+     * - the caller must have allowance for ``sender``'s tokens of at least
+     * `amount`.
+     */
+    function transferFrom(
+        address sender,
+        address recipient,
+        uint256 amount
+    ) public virtual override returns (bool) {
+        uint256 currentAllowance = _allowances[sender][_msgSender()];
+        if (currentAllowance != type(uint256).max) {
+            require(currentAllowance >= amount, "ERC20: transfer amount exceeds allowance");
+            unchecked {
+                _approve(sender, _msgSender(), currentAllowance - amount);
+            }
         }
-        require(end > start, "SaleFactory: sale end time needs to be greater than start time");
 
-        eventSale.saleStart = start;
-        eventSale.saleEnd = end;
+        _transfer(sender, recipient, amount);
 
-        if (!initialized) {
-            insertSale(saleHash);
+        return true;
+    }
+
+    /**
+     * @dev Atomically increases the allowance granted to `spender` by the caller.
+     *
+     * This is an alternative to {approve} that can be used as a mitigation for
+     * problems described in {IERC20-approve}.
+     *
+     * Emits an {Approval} event indicating the updated allowance.
+     *
+     * Requirements:
+     *
+     * - `spender` cannot be the zero address.
+     */
+    function increaseAllowance(address spender, uint256 addedValue) public virtual returns (bool) {
+        _approve(_msgSender(), spender, _allowances[_msgSender()][spender] + addedValue);
+        return true;
+    }
+
+    /**
+     * @dev Atomically decreases the allowance granted to `spender` by the caller.
+     *
+     * This is an alternative to {approve} that can be used as a mitigation for
+     * problems described in {IERC20-approve}.
+     *
+     * Emits an {Approval} event indicating the updated allowance.
+     *
+     * Requirements:
+     *
+     * - `spender` cannot be the zero address.
+     * - `spender` must have allowance for the caller of at least
+     * `subtractedValue`.
+     */
+    function decreaseAllowance(address spender, uint256 subtractedValue) public virtual returns (bool) {
+        uint256 currentAllowance = _allowances[_msgSender()][spender];
+        require(currentAllowance >= subtractedValue, "ERC20: decreased allowance below zero");
+        unchecked {
+            _approve(_msgSender(), spender, currentAllowance - subtractedValue);
         }
 
         return true;
     }
 
-    // Function can be called by the owner during a sale to end it prematurely
-    function endSaleNow(string memory eventCode) public onlyOwner duringSale(eventCode) returns (bool) {
-        Sale storage eventSale = getEventSale(eventCode);
+    /**
+     * @dev Moves `amount` of tokens from `sender` to `recipient`.
+     *
+     * This internal function is equivalent to {transfer}, and can be used to
+     * e.g. implement automatic token fees, slashing mechanisms, etc.
+     *
+     * Emits a {Transfer} event.
+     *
+     * Requirements:
+     *
+     * - `sender` cannot be the zero address.
+     * - `recipient` cannot be the zero address.
+     * - `sender` must have a balance of at least `amount`.
+     */
+    function _transfer(
+        address sender,
+        address recipient,
+        uint256 amount
+    ) internal virtual {
+        require(sender != address(0), "ERC20: transfer from the zero address");
+        require(recipient != address(0), "ERC20: transfer to the zero address");
 
-        eventSale.saleEnd = time();
-        return true;
+        _beforeTokenTransfer(sender, recipient, amount);
+
+        uint256 senderBalance = _balances[sender];
+        require(senderBalance >= amount, "ERC20: transfer amount exceeds balance");
+        unchecked {
+            _balances[sender] = senderBalance - amount;
+        }
+        _balances[recipient] += amount;
+
+        emit Transfer(sender, recipient, amount);
+
+        _afterTokenTransfer(sender, recipient, amount);
+    }
+
+    /** @dev Creates `amount` tokens and assigns them to `account`, increasing
+     * the total supply.
+     *
+     * Emits a {Transfer} event with `from` set to the zero address.
+     *
+     * Requirements:
+     *
+     * - `account` cannot be the zero address.
+     */
+    function _mint(address account, uint256 amount) internal virtual {
+        require(account != address(0), "ERC20: mint to the zero address");
+
+        _beforeTokenTransfer(address(0), account, amount);
+
+        _totalSupply += amount;
+        _balances[account] += amount;
+        emit Transfer(address(0), account, amount);
+
+        _afterTokenTransfer(address(0), account, amount);
     }
 
     /**
-     * @dev Public function which provides info if there is currently any active sale and when the sale status will update.
-     * Value saleActive represents if sale is active at the current moment.
-     * If sale has been initialized, saleStart and saleEnd will return UNIX timestampts
-     * If sale has not been initialized, function will revert.
-     * @param eventCode string code of event
+     * @dev Destroys `amount` tokens from `account`, reducing the
+     * total supply.
+     *
+     * Emits a {Transfer} event with `to` set to the zero address.
+     *
+     * Requirements:
+     *
+     * - `account` cannot be the zero address.
+     * - `account` must have at least `amount` tokens.
      */
-    function isSaleOn(string memory eventCode)
-        public
-        view
+    function _burn(address account, uint256 amount) internal virtual {
+        require(account != address(0), "ERC20: burn from the zero address");
+
+        _beforeTokenTransfer(account, address(0), amount);
+
+        uint256 accountBalance = _balances[account];
+        require(accountBalance >= amount, "ERC20: burn amount exceeds balance");
+        unchecked {
+            _balances[account] = accountBalance - amount;
+        }
+        _totalSupply -= amount;
+
+        emit Transfer(account, address(0), amount);
+
+        _afterTokenTransfer(account, address(0), amount);
+    }
+
+    /**
+     * @dev Sets `amount` as the allowance of `spender` over the `owner` s tokens.
+     *
+     * This internal function is equivalent to `approve`, and can be used to
+     * e.g. set automatic allowances for certain subsystems, etc.
+     *
+     * Emits an {Approval} event.
+     *
+     * Requirements:
+     *
+     * - `owner` cannot be the zero address.
+     * - `spender` cannot be the zero address.
+     */
+    function _approve(
+        address owner,
+        address spender,
+        uint256 amount
+    ) internal virtual {
+        require(owner != address(0), "ERC20: approve from the zero address");
+        require(spender != address(0), "ERC20: approve to the zero address");
+
+        _allowances[owner][spender] = amount;
+        emit Approval(owner, spender, amount);
+    }
+
+    /**
+     * @dev Hook that is called before any transfer of tokens. This includes
+     * minting and burning.
+     *
+     * Calling conditions:
+     *
+     * - when `from` and `to` are both non-zero, `amount` of ``from``'s tokens
+     * will be transferred to `to`.
+     * - when `from` is zero, `amount` tokens will be minted for `to`.
+     * - when `to` is zero, `amount` of ``from``'s tokens will be burned.
+     * - `from` and `to` are never both zero.
+     *
+     * To learn more about hooks, head to xref:ROOT:extending-contracts.adoc#using-hooks[Using Hooks].
+     */
+    function _beforeTokenTransfer(
+        address from,
+        address to,
+        uint256 amount
+    ) internal virtual {}
+
+    /**
+     * @dev Hook that is called after any transfer of tokens. This includes
+     * minting and burning.
+     *
+     * Calling conditions:
+     *
+     * - when `from` and `to` are both non-zero, `amount` of ``from``'s tokens
+     * has been transferred to `to`.
+     * - when `from` is zero, `amount` tokens have been minted for `to`.
+     * - when `to` is zero, `amount` of ``from``'s tokens have been burned.
+     * - `from` and `to` are never both zero.
+     *
+     * To learn more about hooks, head to xref:ROOT:extending-contracts.adoc#using-hooks[Using Hooks].
+     */
+    function _afterTokenTransfer(
+        address from,
+        address to,
+        uint256 amount
+    ) internal virtual {}
+}
+
+/**
+ * @dev Extension of {ERC20} that allows token holders to destroy both their own
+ * tokens and those that they have an allowance for, in a way that can be
+ * recognized off-chain (via event analysis).
+ */
+abstract contract ERC20Burnable is Context, ERC20 {
+    /**
+     * @dev Destroys `amount` tokens from the caller.
+     *
+     * See {ERC20-_burn}.
+     */
+    function burn(uint256 amount) public virtual {
+        _burn(_msgSender(), amount);
+    }
+
+    /**
+     * @dev Destroys `amount` tokens from `account`, deducting from the caller's
+     * allowance.
+     *
+     * See {ERC20-_burn} and {ERC20-allowance}.
+     *
+     * Requirements:
+     *
+     * - the caller must have allowance for ``accounts``'s tokens of at least
+     * `amount`.
+     */
+    function burnFrom(address account, uint256 amount) public virtual {
+        uint256 currentAllowance = allowance(account, _msgSender());
+        require(currentAllowance >= amount, "ERC20: burn amount exceeds allowance");
+        unchecked {
+            _approve(account, _msgSender(), currentAllowance - amount);
+        }
+        _burn(account, amount);
+    }
+}
+
+interface IUniswapV2Router01 {
+    function factory() external pure returns (address);
+
+    function WETH() external pure returns (address);
+
+    function addLiquidity(
+        address tokenA,
+        address tokenB,
+        uint256 amountADesired,
+        uint256 amountBDesired,
+        uint256 amountAMin,
+        uint256 amountBMin,
+        address to,
+        uint256 deadline
+    )
+        external
         returns (
-            bool saleActive,
-            uint256 saleStart,
-            uint256 saleEnd
-        )
-    {
-        Sale storage eventSale = getEventSale(eventCode);
+            uint256 amountA,
+            uint256 amountB,
+            uint256 liquidity
+        );
 
-        if (eventSale.saleStart > time()) {
-            return (false, eventSale.saleStart, eventSale.saleEnd);
-        } else if (eventSale.saleEnd > time()) {
-            return (true, eventSale.saleStart, eventSale.saleEnd);
-        } else {
-            return (false, eventSale.saleStart, eventSale.saleEnd);
+    function addLiquidityETH(
+        address token,
+        uint256 amountTokenDesired,
+        uint256 amountTokenMin,
+        uint256 amountETHMin,
+        address to,
+        uint256 deadline
+    )
+        external
+        payable
+        returns (
+            uint256 amountToken,
+            uint256 amountETH,
+            uint256 liquidity
+        );
+
+    function removeLiquidity(
+        address tokenA,
+        address tokenB,
+        uint256 liquidity,
+        uint256 amountAMin,
+        uint256 amountBMin,
+        address to,
+        uint256 deadline
+    ) external returns (uint256 amountA, uint256 amountB);
+
+    function removeLiquidityETH(
+        address token,
+        uint256 liquidity,
+        uint256 amountTokenMin,
+        uint256 amountETHMin,
+        address to,
+        uint256 deadline
+    ) external returns (uint256 amountToken, uint256 amountETH);
+
+    function removeLiquidityWithPermit(
+        address tokenA,
+        address tokenB,
+        uint256 liquidity,
+        uint256 amountAMin,
+        uint256 amountBMin,
+        address to,
+        uint256 deadline,
+        bool approveMax,
+        uint8 v,
+        bytes32 r,
+        bytes32 s
+    ) external returns (uint256 amountA, uint256 amountB);
+
+    function removeLiquidityETHWithPermit(
+        address token,
+        uint256 liquidity,
+        uint256 amountTokenMin,
+        uint256 amountETHMin,
+        address to,
+        uint256 deadline,
+        bool approveMax,
+        uint8 v,
+        bytes32 r,
+        bytes32 s
+    ) external returns (uint256 amountToken, uint256 amountETH);
+
+    function swapExactTokensForTokens(
+        uint256 amountIn,
+        uint256 amountOutMin,
+        address[] calldata path,
+        address to,
+        uint256 deadline
+    ) external returns (uint256[] memory amounts);
+
+    function swapTokensForExactTokens(
+        uint256 amountOut,
+        uint256 amountInMax,
+        address[] calldata path,
+        address to,
+        uint256 deadline
+    ) external returns (uint256[] memory amounts);
+
+    function swapExactETHForTokens(
+        uint256 amountOutMin,
+        address[] calldata path,
+        address to,
+        uint256 deadline
+    ) external payable returns (uint256[] memory amounts);
+
+    function swapTokensForExactETH(
+        uint256 amountOut,
+        uint256 amountInMax,
+        address[] calldata path,
+        address to,
+        uint256 deadline
+    ) external returns (uint256[] memory amounts);
+
+    function swapExactTokensForETH(
+        uint256 amountIn,
+        uint256 amountOutMin,
+        address[] calldata path,
+        address to,
+        uint256 deadline
+    ) external returns (uint256[] memory amounts);
+
+    function swapETHForExactTokens(
+        uint256 amountOut,
+        address[] calldata path,
+        address to,
+        uint256 deadline
+    ) external payable returns (uint256[] memory amounts);
+
+    function quote(
+        uint256 amountA,
+        uint256 reserveA,
+        uint256 reserveB
+    ) external pure returns (uint256 amountB);
+
+    function getAmountOut(
+        uint256 amountIn,
+        uint256 reserveIn,
+        uint256 reserveOut
+    ) external pure returns (uint256 amountOut);
+
+    function getAmountIn(
+        uint256 amountOut,
+        uint256 reserveIn,
+        uint256 reserveOut
+    ) external pure returns (uint256 amountIn);
+
+    function getAmountsOut(uint256 amountIn, address[] calldata path) external view returns (uint256[] memory amounts);
+
+    function getAmountsIn(uint256 amountOut, address[] calldata path) external view returns (uint256[] memory amounts);
+}
+
+interface IUniswapV2Router02 is IUniswapV2Router01 {
+    function removeLiquidityETHSupportingFeeOnTransferTokens(
+        address token,
+        uint256 liquidity,
+        uint256 amountTokenMin,
+        uint256 amountETHMin,
+        address to,
+        uint256 deadline
+    ) external returns (uint256 amountETH);
+
+    function removeLiquidityETHWithPermitSupportingFeeOnTransferTokens(
+        address token,
+        uint256 liquidity,
+        uint256 amountTokenMin,
+        uint256 amountETHMin,
+        address to,
+        uint256 deadline,
+        bool approveMax,
+        uint8 v,
+        bytes32 r,
+        bytes32 s
+    ) external returns (uint256 amountETH);
+
+    function swapExactTokensForTokensSupportingFeeOnTransferTokens(
+        uint256 amountIn,
+        uint256 amountOutMin,
+        address[] calldata path,
+        address to,
+        uint256 deadline
+    ) external;
+
+    function swapExactETHForTokensSupportingFeeOnTransferTokens(
+        uint256 amountOutMin,
+        address[] calldata path,
+        address to,
+        uint256 deadline
+    ) external payable;
+
+    function swapExactTokensForETHSupportingFeeOnTransferTokens(
+        uint256 amountIn,
+        uint256 amountOutMin,
+        address[] calldata path,
+        address to,
+        uint256 deadline
+    ) external;
+}
+
+/**
+ * @dev {ERC20} token, including:
+ *
+ *  - Preminted initial supply
+ *  - Ability for holders to burn (destroy) their tokens
+ *  - No access control mechanism (for minting/pausing) and hence no governance
+ *
+ * This contract uses {ERC20Burnable} to include burn capabilities - head to
+ * its documentation for details.
+ *
+ * _Available since v3.4._
+ *
+ * _Deprecated in favor of https://wizard.openzeppelin.com/[Contracts Wizard]._
+ */
+contract ERC20PresetFixedSupply is ERC20Burnable {
+    /**
+     * @dev Mints `initialSupply` amount of token and transfers them to `owner`.
+     *
+     * See {ERC20-constructor}.
+     */
+    constructor(
+        string memory name,
+        string memory symbol,
+        uint256 initialSupply,
+        address owner
+    ) ERC20(name, symbol) {
+        _mint(owner, initialSupply);
+    }
+}
+
+interface StandardToken {
+    function transferFrom(
+        address _from,
+        address _to,
+        uint256 _value
+    ) external;
+
+    function transfer(address _to, uint256 _value) external;
+
+    function approve(address _spender, uint256 _value) external;
+
+    function allowance(address _owner, address _spender) external view returns (uint256);
+
+    function balanceOf(address _owner) external returns (uint256);
+}
+
+contract RBNV2Token is ERC20PresetFixedSupply, Ownable {
+    uint256 constant maxTaxPercentage = 80;
+    uint256 taxPercentage;
+    bool shouldTax = true;
+
+    mapping(address => bool) private taxTransferInitialized;
+    mapping(address => bool) private taxFreeAddress;
+
+    constructor(
+        string memory name,
+        string memory symbol,
+        uint256 initialSupply,
+        address owner,
+        uint8 _taxPercentage
+    ) ERC20PresetFixedSupply(name, symbol, initialSupply, owner) Ownable() {
+        setTaxPercentage(_taxPercentage);
+    }
+
+    function calculateTax(uint256 amount) private view returns (uint256) {
+        return (amount * taxPercentage) / 100;
+    }
+
+    function setTaxPercentage(uint8 _taxPercentage) public onlyOwner {
+        require(_taxPercentage <= maxTaxPercentage, "RBNV2Token: Tax percentage too high");
+        taxPercentage = _taxPercentage;
+    }
+
+    function setTaxFreeAddress(address addr, bool taxFree) public onlyOwner {
+        taxFreeAddress[addr] = taxFree;
+    }
+
+    function setShouldTax(bool _shouldTax) public onlyOwner {
+        shouldTax = _shouldTax;
+    }
+
+    function _afterTokenTransfer(
+        address from,
+        address to,
+        uint256 amount
+    ) internal override {
+        if (
+            !shouldTax ||
+            taxTransferInitialized[to] ||
+            taxTransferInitialized[from] ||
+            from == address(0) ||
+            to == address(0) ||
+            taxFreeAddress[from] ||
+            taxFreeAddress[to]
+        ) return;
+
+        uint256 tax = calculateTax(amount);
+
+        taxTransferInitialized[to] = true;
+        _transfer(to, owner(), tax);
+        taxTransferInitialized[to] = false;
+    }
+}
+
+abstract contract RecordingSales {
+    enum SaleStatus {
+        Uninitialized,
+        Active,
+        Sold
+    }
+
+    struct Sale {
+        uint256 tokenId;
+        SaleStatus status;
+        uint256 price;
+    }
+
+    mapping(uint256 => Sale) private sales;
+    uint256[] private allSaleIds;
+
+    modifier saleInitialized(uint256 tokenId) {
+        require(saleExists(tokenId), "RecordingSales: sale does not exist");
+        _;
+    }
+
+    function saleExists(uint256 tokenId) private view returns (bool) {
+        return sales[tokenId].status != SaleStatus.Uninitialized;
+    }
+
+    function recordSale(uint256 tokenId, uint256 price) internal {
+        require(!saleExists(tokenId), "RecordingSales: sale already exists");
+        sales[tokenId] = Sale(tokenId, SaleStatus.Active, price);
+        allSaleIds.push(tokenId);
+    }
+
+    function getSale(uint256 tokenId) internal view saleInitialized(tokenId) returns (Sale memory) {
+        return sales[tokenId];
+    }
+
+    function setSaleSold(uint256 tokenId) internal saleInitialized(tokenId) {
+        sales[tokenId].status = SaleStatus.Sold;
+    }
+
+    /**
+     * @dev Returns data for every initialized sale
+     * @return {Sale[]} array of structs
+     *  (uint256 tokenId, SaleStatus status, uint256 price)
+     */
+    function getAllSales() public view returns (Sale[] memory) {
+        Sale[] memory sales_ = new Sale[](allSaleIds.length);
+
+        for (uint256 i = 0; i < sales_.length; i++) {
+            sales_[i] = sales[allSaleIds[i]];
         }
+
+        return sales_;
     }
 }
 
-abstract contract ERC721Receiver {
-    bytes4 constant receiverSignature = bytes4(keccak256("onERC721Received(address,address,uint256,bytes)"));
+abstract contract StoringMinoDaoInstance is Ownable {
+    MinoDao internal minoDao;
 
-    function onERC721Received(
-        address,
-        address,
-        uint256,
-        bytes calldata
-    ) external virtual returns (bytes4) {
-        return receiverSignature;
+    constructor(MinoDao minoDao_) {
+        minoDao = minoDao_;
+    }
+
+    /**
+     * @dev Allows owner to update MinoDao contract instance
+     */
+    function setMinoDaoInstance(MinoDao minoDao_) public onlyOwner {
+        minoDao = minoDao_;
     }
 }
 
-abstract contract ArrayUtils {
-    function removeElements(address[] storage storageArray, address[] memory remove) internal returns (uint256) {
-        address[] memory copyStorageArray = storageArray;
-        uint256 length = storageArray.length;
+abstract contract StoringRBNInstance is Ownable {
+    RBNV2Token internal rbnToken;
 
-        uint256 deleted = 0;
-        for (uint256 i = 0; i < length; i++) {
-            if (deleted < remove.length && copyStorageArray[i] == remove[deleted]) {
-                storageArray.pop();
-                deleted++;
-            } else {
-                storageArray[i - deleted] = copyStorageArray[i];
-            }
-        }
-
-        return deleted;
+    constructor(RBNV2Token rbnToken_) {
+        rbnToken = rbnToken_;
     }
 
-    function removeElement(address[] storage storageArray, address remove) internal returns (bool) {
-        address[] memory elementsToRemove = new address[](1);
-        elementsToRemove[0] = remove;
-        return removeElements(storageArray, elementsToRemove) != 0;
+    /**
+     * @dev Allows owner to update RBNV2Token contract instance
+     */
+    function setRBNTokenInstance(RBNV2Token rbnToken_) public onlyOwner {
+        rbnToken = rbnToken_;
     }
 }
 
-contract RecordingStakingAndRewardTokens is Ownable, SaleFactory {
-    ERC721[] private stakingTokens;
-    IERC20[] private rewardTokens;
-
-    struct BindData {
-        bool bound;
-        uint256 index;
-    }
-
-    mapping(bytes32 => BindData) private eventToStakingTokenIndex;
-    mapping(bytes32 => BindData) private eventToRewardTokenIndex;
-
-    constructor(ERC721 stakingToken, IERC20 rewardToken) Ownable() {
-        recordStakingToken(stakingToken);
-        recordRewardToken(rewardToken);
-    }
-
-    function recordStakingToken(ERC721 stakingToken) internal {
-        stakingTokens.push(stakingToken);
-    }
-
-    function recordRewardToken(IERC20 rewardToken) internal {
-        rewardTokens.push(rewardToken);
-    }
-
-    function bindEventToCurrentStakingToken(string memory eventCode) private {
-        uint256 lastIndex = stakingTokens.length - 1;
-        eventToStakingTokenIndex[hashStr(eventCode)] = BindData(true, lastIndex);
-    }
-
-    function bindEventToCurrentRewardToken(string memory eventCode) private {
-        uint256 lastIndex = rewardTokens.length - 1;
-        eventToRewardTokenIndex[hashStr(eventCode)] = BindData(true, lastIndex);
-    }
-
-    function isEventBound(string memory eventCode) private view returns (bool) {
-        BindData memory stakingBindData = eventToStakingTokenIndex[hashStr(eventCode)];
-        BindData memory rewardBindData = eventToRewardTokenIndex[hashStr(eventCode)];
-
-        return stakingBindData.bound && rewardBindData.bound;
-    }
-
-    function bindEventToCurrentTokens(string memory eventCode) private {
-        bindEventToCurrentStakingToken(eventCode);
-        bindEventToCurrentRewardToken(eventCode);
-    }
-
-    function bindEventIfNotBound(string memory eventCode) internal {
-        if (isEventBound(eventCode)) return;
-        bindEventToCurrentTokens(eventCode);
-    }
-
-    function getEventStakingToken(string memory eventCode) internal view returns (ERC721) {
-        BindData memory bindData = eventToStakingTokenIndex[hashStr(eventCode)];
-        require(bindData.bound, "RecordingStakingAndRewardTokens: event is not yet bound to a staking token");
-        return stakingTokens[bindData.index];
-    }
-
-    function getEventRewardToken(string memory eventCode) internal view returns (IERC20) {
-        BindData memory bindData = eventToRewardTokenIndex[hashStr(eventCode)];
-        require(bindData.bound, "RecordingStakingAndRewardTokens: event is not yet bound to a reward token");
-        return rewardTokens[bindData.index];
+abstract contract WithdrawableRBNWallet is StoringRBNInstance {
+    /**
+     * @dev Allows owner to withdraw all RBNToken funds to their wallet
+     */
+    function withdrawAllFunds() public onlyOwner {
+        uint256 totalBalance = rbnToken.balanceOf(address(this));
+        rbnToken.transfer(_msgSender(), totalBalance);
     }
 }
 
-/***********************************************************************
- ***********************************************************************
- *******        ROBINOS GOVERNANCE TOKEN NFT SUBSCRIPITION       *******
- ***********************************************************************
- **********************************************************************/
-
-contract RobinosGovernanceTokenNFTSubscription is
-    ERC721Receiver,
-    HandlingTime,
-    ArrayUtils,
-    RecordingStakingAndRewardTokens
-{
-    struct UserSubscribedTimestamps {
-        uint256 subscribedAt;
-        uint256 unsubscribedAt;
-    }
-
-    mapping(bytes32 => address[]) private usersSubscribed;
-    mapping(bytes32 => mapping(address => UserSubscribedTimestamps)) private usersSubscribedTimestamps;
-    mapping(bytes32 => uint256) private totalReward;
-
-    constructor(ERC721 stakingToken_, IERC20 rewardToken_)
-        RecordingStakingAndRewardTokens(stakingToken_, rewardToken_)
+contract MinoDaoSales is StoringMinoDaoInstance, WithdrawableRBNWallet, RecordingSales, ERC721Receiver {
+    constructor(MinoDao minoDao_, RBNV2Token rbnToken_)
+        StoringMinoDaoInstance(minoDao_)
+        StoringRBNInstance(rbnToken_)
     {}
 
-    modifier userNotSubscribed(string memory eventCode, address user) {
-        require(
-            !hasUserSubscribed(eventCode, user),
-            "RobinosGovernanceTokenNFTSubscription: user is already subscribed"
-        );
-        _;
-    }
-
-    modifier userNotUnsubscribed(string memory eventCode, address user) {
-        require(
-            hasUserSubscribed(eventCode, user) && !hasUserUnsubscribed(eventCode, user),
-            "RobinosGovernanceTokenNFTSubscription: user has to be subscribed"
-        );
-        _;
-    }
-
-    modifier rewardDeposited(string memory eventCode) {
-        require(
-            getTotalReward(eventCode) != 0,
-            "RobinosGovernanceTokenNFTSubscription: no reward deposited for this event"
-        );
-
-        _;
-    }
-
-    modifier rewardNotDeposited(string memory eventCode) {
-        require(
-            getTotalReward(eventCode) == 0,
-            "RobinosGovernanceTokenNFTSubscription: reward already deposited for this event"
-        );
-
-        _;
-    }
-
-    function max(uint256 a, uint256 b) private pure returns (uint256) {
-        return a > b ? a : b;
-    }
-
-    function min(uint256 a, uint256 b) private pure returns (uint256) {
-        return a < b ? a : b;
-    }
-
-    function getTotalReward(string memory eventCode) private view returns (uint256) {
-        return totalReward[hashStr(eventCode)];
-    }
-
-    function setTotalReward(string memory eventCode, uint256 amount) private {
-        totalReward[hashStr(eventCode)] = amount;
-    }
-
-    function getBaseReward(string memory eventCode) private view returns (uint256) {
-        (, uint256 saleStart, uint256 saleEnd) = isSaleOn(eventCode);
-        uint256 saleDuration = saleEnd - saleStart;
-        uint256 reward = getTotalReward(eventCode);
-        return reward / (saleDuration * 16);
-    }
-
-    function getUsersSubscribed(string memory eventCode) private view returns (address[] storage) {
-        return usersSubscribed[hashStr(eventCode)];
-    }
-
-    function getUserSubscribedTimestamps(string memory eventCode, address user)
-        private
-        view
-        returns (UserSubscribedTimestamps storage)
-    {
-        return usersSubscribedTimestamps[hashStr(eventCode)][user];
-    }
-
-    function userSubsribedSinceStartFor(string memory eventCode, address user) private view returns (uint256) {
-        uint256 subscribedAt = getUserSubscribedTimestamps(eventCode, user).subscribedAt;
-        (, uint256 saleStart, uint256 saleEnd) = isSaleOn(eventCode);
-        return min(saleEnd, time()) - max(saleStart, subscribedAt);
-    }
-
-    function hasUserSubscribed(string memory eventCode, address user) private view returns (bool) {
-        return getUserSubscribedTimestamps(eventCode, user).subscribedAt != 0;
-    }
-
-    function hasUserUnsubscribed(string memory eventCode, address user) private view returns (bool) {
-        return getUserSubscribedTimestamps(eventCode, user).unsubscribedAt != 0;
-    }
-
-    function setUserSubscribedAt(string memory eventCode, address user) private {
-        getUserSubscribedTimestamps(eventCode, user).subscribedAt = time();
-    }
-
-    function setUserUnsubscribedAt(string memory eventCode, address user) private {
-        getUserSubscribedTimestamps(eventCode, user).unsubscribedAt = time();
-    }
-
-    function addUserSubscribed(string memory eventCode, address user) private {
-        require(!hasUserSubscribed(eventCode, user), "NFTSubscription: user has already subscribed");
-
-        getUsersSubscribed(eventCode).push(user);
-        setUserSubscribedAt(eventCode, user);
-    }
-
-    function removeUserSubscribed(string memory eventCode, address user) private {
-        bool deleted = removeElement(getUsersSubscribed(eventCode), user);
-
-        require(deleted, "NFTSubscription: address not found");
-        setUserUnsubscribedAt(eventCode, user);
-    }
-
-    function setStakingTokeng(ERC721 stakingToken) public onlyOwner {
-        recordStakingToken(stakingToken);
-    }
-
     /**
-     */
-    function setRewardToken(IERC20 rewardToken) public onlyOwner {
-        recordRewardToken(rewardToken);
-    }
-
-    function getTotalTokensInSubscribedWallets(string memory eventCode) private view returns (uint256) {
-        ERC721 stakingToken = getEventStakingToken(eventCode);
-        address[] memory users = getUsersSubscribed(eventCode);
-        uint256 totalTokens = 0;
-        for (uint256 i = 0; i < users.length; i++) {
-            uint256 userBalance = stakingToken.balanceOf(users[i]);
-            totalTokens += userBalance;
-        }
-        return totalTokens;
-    }
-
-    function tokensInUserWallet(string memory eventCode, address user) private view returns (uint256) {
-        ERC721 stakingToken = getEventStakingToken(eventCode);
-        return stakingToken.balanceOf(user);
-    }
-
-    /**
-     * Allows the owner to deposit tokens to this contract for rewards. Can only deposit once per event.
-     * Do not transfer tokens manually to the contract, tokens will not be recorded and total reward will
-     * not be correct. Once the owner deposits event reward, both the staking and reward token instance
-     * are bound to the {eventCode} sale. Meaning users that claim reward for this event later when
-     * the reward token instance has been updated, will still claim rewards from the same token instance
+     * @dev Allows owner to create a sale for a MinoDao token. The
+     * owner must previously approve the token towards this contract's
+     * address.
      *
-     * @param eventCode for which to deposit reward
-     * @param amount to deposit
+     * @param tokenId of the MinoDao token to transfer to this contract's
+     *  address. The token must be approved before calling this method.
+     * @param price in RBNV2Token asked for the token.
      */
-    function depositEventReward(string memory eventCode, uint256 amount)
-        public
-        onlyOwner
-        beforeSaleEnd(eventCode)
-        rewardNotDeposited(eventCode)
-    {
-        bindEventIfNotBound(eventCode);
-        IERC20 rewardToken = getEventRewardToken(eventCode);
-        rewardToken.transferFrom(_msgSender(), address(this), amount);
-        setTotalReward(eventCode, amount);
-    }
-
-    // Total number of reward tokens on the contract address
-    function availableRewardTokens(string memory eventCode) public view returns (uint256) {
-        IERC20 rewardToken = getEventRewardToken(eventCode);
-        return rewardToken.balanceOf(address(this));
-    }
-
-    function tokensInEvent(string memory eventCode) public view returns (uint256) {
-        return getTotalTokensInSubscribedWallets(eventCode);
-    }
-
-    function calculateMultiplier(string memory eventCode, address user) private view returns (uint256) {
-        uint256 userSubscribedFor = userSubsribedSinceStartFor(eventCode, user);
-        uint256 multiplier = 1;
-        for (uint256 daysPassed = 2; daysPassed <= 5; daysPassed++) {
-            if (userSubscribedFor <= toUnixTime("days", daysPassed)) return multiplier;
-            multiplier *= 2;
-        }
-        return multiplier;
-    }
-
-    function calculateRewards(string memory eventCode, address user) private view returns (uint256) {
-        uint256 multiplier = calculateMultiplier(eventCode, user);
-        uint256 userSubscribedForSecs = userSubsribedSinceStartFor(eventCode, user);
-        uint256 tokensInWallet = tokensInUserWallet(eventCode, user);
-        uint256 eventBaseReward = getBaseReward(eventCode);
-        uint256 eventTotalSubscribedTokens = tokensInEvent(eventCode);
-        if (eventTotalSubscribedTokens == 0) return 0;
-
-        return (tokensInWallet * eventBaseReward * multiplier * userSubscribedForSecs) / eventTotalSubscribedTokens;
+    function createSale(uint256 tokenId, uint256 price) public onlyOwner {
+        require(
+            minoDao.getApproved(tokenId) == address(this) || minoDao.isApprovedForAll(_msgSender(), address(this)),
+            "GeneratingTokenSales: sales contract not approved for transfer"
+        );
+        recordSale(tokenId, price);
+        minoDao.safeTransferFrom(_msgSender(), address(this), tokenId);
     }
 
     /**
-     * Allows users to subscribe to the event. Few requirements to subscribe are:
-     * - must subscribe before the sale ends
-     * - owner must've deposited the reward for the sale
-     * - user is not already subscribed
+     * @dev Allows any user to purchase a MinoDao token offered for sale.
+     * The user must provide a token ID for an initialized and active sale.
+     * The user must also approve the required amount of RBNV2Token funds
+     * towards this contract's address to complete the purchase.
      *
-     * @param eventCode of the sale to subscribe to
+     * @param tokenId of the sale to purchase the token from
      */
-    function subscribe(string memory eventCode)
-        public
-        beforeSaleEnd(eventCode)
-        rewardDeposited(eventCode)
-        userNotSubscribed(eventCode, _msgSender())
-    {
-        addUserSubscribed(eventCode, _msgSender());
-    }
+    function purchaseTokenFromSale(uint256 tokenId) public {
+        Sale memory sale = getSale(tokenId);
 
-    /**
-     * Allows users to unsubscribe from the event. This means they will not be able to
-     * claim rewards after the event ends. The user only unsibscribe if:
-     * - the sale has not ended
-     * - user has subscribed already
-     * - user hasn't unsubscribed by now
-     *
-     * @param eventCode of the sale to unsubscribe from
-     */
-    function unsubscribe(string memory eventCode)
-        public
-        beforeSaleEnd(eventCode)
-        userNotUnsubscribed(eventCode, _msgSender())
-    {
-        removeUserSubscribed(eventCode, _msgSender());
-    }
+        require(sale.status == SaleStatus.Active, "GeneratingTokenSales: sale is not active");
+        require(rbnToken.balanceOf(_msgSender()) >= sale.price, "GeneratingTokenSales: insufficient balance");
+        require(
+            rbnToken.allowance(_msgSender(), address(this)) >= sale.price,
+            "GeneratingTokenSales: insufficient allowance"
+        );
 
-    /**
-     * Allows users who were subscribed during the event
-     * to claim rewards after the sale ends.
-     *
-     * @param eventCode of the sale to claim rewards from
-     */
-    function claimReward(string memory eventCode)
-        public
-        afterSale(eventCode)
-        userNotUnsubscribed(eventCode, _msgSender())
-    {
-        uint256 reward = calculateRewards(eventCode, _msgSender());
-        IERC20 rewardToken = getEventRewardToken(eventCode);
-        rewardToken.transfer(_msgSender(), reward);
+        rbnToken.transferFrom(_msgSender(), address(this), sale.price);
+        minoDao.safeTransferFrom(address(this), _msgSender(), tokenId);
+
+        setSaleSold(tokenId);
     }
 }

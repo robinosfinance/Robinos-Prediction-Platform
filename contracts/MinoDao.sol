@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: MIT
+// OpenZeppelin Contracts v4.3.2 (token/ERC721/ERC721.sol)
 
 pragma solidity ^0.8.10;
 
@@ -280,7 +281,7 @@ library Address {
         require(address(this).balance >= amount, "Address: insufficient balance");
 
         (bool success, ) = recipient.call{value: amount}("");
-        require(success, "Address: unable to send value, recipient may have reverted");
+        require(success, "unable to send");
     }
 
     /**
@@ -302,7 +303,7 @@ library Address {
      * _Available since v3.1._
      */
     function functionCall(address target, bytes memory data) internal returns (bytes memory) {
-        return functionCall(target, data, "Address: low-level call failed");
+        return functionCall(target, data, "failed");
     }
 
     /**
@@ -335,7 +336,7 @@ library Address {
         bytes memory data,
         uint256 value
     ) internal returns (bytes memory) {
-        return functionCallWithValue(target, data, value, "Address: low-level call with value failed");
+        return functionCallWithValue(target, data, value, "failed");
     }
 
     /**
@@ -350,8 +351,8 @@ library Address {
         uint256 value,
         string memory errorMessage
     ) internal returns (bytes memory) {
-        require(address(this).balance >= value, "Address: insufficient balance for call");
-        require(isContract(target), "Address: call to non-contract");
+        require(address(this).balance >= value, "insufficient balance");
+        require(isContract(target), "non-contract");
 
         (bool success, bytes memory returndata) = target.call{value: value}(data);
         return verifyCallResult(success, returndata, errorMessage);
@@ -364,7 +365,7 @@ library Address {
      * _Available since v3.3._
      */
     function functionStaticCall(address target, bytes memory data) internal view returns (bytes memory) {
-        return functionStaticCall(target, data, "Address: low-level static call failed");
+        return functionStaticCall(target, data, "failed");
     }
 
     /**
@@ -378,7 +379,7 @@ library Address {
         bytes memory data,
         string memory errorMessage
     ) internal view returns (bytes memory) {
-        require(isContract(target), "Address: static call to non-contract");
+        require(isContract(target), "non-contract");
 
         (bool success, bytes memory returndata) = target.staticcall(data);
         return verifyCallResult(success, returndata, errorMessage);
@@ -391,7 +392,7 @@ library Address {
      * _Available since v3.4._
      */
     function functionDelegateCall(address target, bytes memory data) internal returns (bytes memory) {
-        return functionDelegateCall(target, data, "Address: low-level delegate call failed");
+        return functionDelegateCall(target, data, "failed");
     }
 
     /**
@@ -405,7 +406,7 @@ library Address {
         bytes memory data,
         string memory errorMessage
     ) internal returns (bytes memory) {
-        require(isContract(target), "Address: delegate call to non-contract");
+        require(isContract(target), "non-contract");
 
         (bool success, bytes memory returndata) = target.delegatecall(data);
         return verifyCallResult(success, returndata, errorMessage);
@@ -642,7 +643,7 @@ contract ERC721 is Context, ERC165, IERC721, IERC721Metadata {
      * @dev See {IERC721-balanceOf}.
      */
     function balanceOf(address owner) public view virtual override returns (uint256) {
-        require(owner != address(0), "ERC721: balance query for the zero address");
+        require(owner != address(0), "zero address");
         return _balances[owner];
     }
 
@@ -651,7 +652,7 @@ contract ERC721 is Context, ERC165, IERC721, IERC721Metadata {
      */
     function ownerOf(uint256 tokenId) public view virtual override returns (address) {
         address owner = _owners[tokenId];
-        require(owner != address(0), "ERC721: owner query for nonexistent token");
+        require(owner != address(0), "nonexistent token");
         return owner;
     }
 
@@ -673,7 +674,7 @@ contract ERC721 is Context, ERC165, IERC721, IERC721Metadata {
      * @dev See {IERC721Metadata-tokenURI}.
      */
     function tokenURI(uint256 tokenId) public view virtual override returns (string memory) {
-        require(_exists(tokenId), "ERC721Metadata: URI query for nonexistent token");
+        require(_exists(tokenId), "nonexistent token");
 
         string memory baseURI = _baseURI();
         return bytes(baseURI).length > 0 ? string(abi.encodePacked(baseURI, tokenId.toString())) : "";
@@ -693,12 +694,9 @@ contract ERC721 is Context, ERC165, IERC721, IERC721Metadata {
      */
     function approve(address to, uint256 tokenId) public virtual override {
         address owner = ERC721.ownerOf(tokenId);
-        require(to != owner, "ERC721: approval to current owner");
+        require(to != owner, "owner");
 
-        require(
-            _msgSender() == owner || isApprovedForAll(owner, _msgSender()),
-            "ERC721: approve caller is not owner nor approved for all"
-        );
+        require(_msgSender() == owner || isApprovedForAll(owner, _msgSender()), "not approved");
 
         _approve(to, tokenId);
     }
@@ -707,7 +705,7 @@ contract ERC721 is Context, ERC165, IERC721, IERC721Metadata {
      * @dev See {IERC721-getApproved}.
      */
     function getApproved(uint256 tokenId) public view virtual override returns (address) {
-        require(_exists(tokenId), "ERC721: approved query for nonexistent token");
+        require(_exists(tokenId), "nonexistent token");
 
         return _tokenApprovals[tokenId];
     }
@@ -735,7 +733,7 @@ contract ERC721 is Context, ERC165, IERC721, IERC721Metadata {
         uint256 tokenId
     ) public virtual override {
         //solhint-disable-next-line max-line-length
-        require(_isApprovedOrOwner(_msgSender(), tokenId), "ERC721: transfer caller is not owner nor approved");
+        require(_isApprovedOrOwner(_msgSender(), tokenId), "not approved");
 
         _transfer(from, to, tokenId);
     }
@@ -760,7 +758,7 @@ contract ERC721 is Context, ERC165, IERC721, IERC721Metadata {
         uint256 tokenId,
         bytes memory _data
     ) public virtual override {
-        require(_isApprovedOrOwner(_msgSender(), tokenId), "ERC721: transfer caller is not owner nor approved");
+        require(_isApprovedOrOwner(_msgSender(), tokenId), "not approved");
         _safeTransfer(from, to, tokenId, _data);
     }
 
@@ -789,7 +787,7 @@ contract ERC721 is Context, ERC165, IERC721, IERC721Metadata {
         bytes memory _data
     ) internal virtual {
         _transfer(from, to, tokenId);
-        require(_checkOnERC721Received(from, to, tokenId, _data), "ERC721: transfer to non ERC721Receiver implementer");
+        require(_checkOnERC721Received(from, to, tokenId, _data), "non ERC721Receiver");
     }
 
     /**
@@ -812,7 +810,7 @@ contract ERC721 is Context, ERC165, IERC721, IERC721Metadata {
      * - `tokenId` must exist.
      */
     function _isApprovedOrOwner(address spender, uint256 tokenId) internal view virtual returns (bool) {
-        require(_exists(tokenId), "ERC721: operator query for nonexistent token");
+        require(_exists(tokenId), "nonexistent token");
         address owner = ERC721.ownerOf(tokenId);
         return (spender == owner || getApproved(tokenId) == spender || isApprovedForAll(owner, spender));
     }
@@ -841,10 +839,7 @@ contract ERC721 is Context, ERC165, IERC721, IERC721Metadata {
         bytes memory _data
     ) internal virtual {
         _mint(to, tokenId);
-        require(
-            _checkOnERC721Received(address(0), to, tokenId, _data),
-            "ERC721: transfer to non ERC721Receiver implementer"
-        );
+        require(_checkOnERC721Received(address(0), to, tokenId, _data), "non ERC721Receiver");
     }
 
     /**
@@ -860,8 +855,8 @@ contract ERC721 is Context, ERC165, IERC721, IERC721Metadata {
      * Emits a {Transfer} event.
      */
     function _mint(address to, uint256 tokenId) internal virtual {
-        require(to != address(0), "ERC721: mint to the zero address");
-        require(!_exists(tokenId), "ERC721: token already minted");
+        require(to != address(0), "zero address");
+        require(!_exists(tokenId), "already minted");
 
         _beforeTokenTransfer(address(0), to, tokenId);
 
@@ -911,8 +906,8 @@ contract ERC721 is Context, ERC165, IERC721, IERC721Metadata {
         address to,
         uint256 tokenId
     ) internal virtual {
-        require(ERC721.ownerOf(tokenId) == from, "ERC721: transfer of token that is not own");
-        require(to != address(0), "ERC721: transfer to the zero address");
+        require(ERC721.ownerOf(tokenId) == from, "not own");
+        require(to != address(0), "zero address");
 
         _beforeTokenTransfer(from, to, tokenId);
 
@@ -1005,711 +1000,131 @@ contract ERC721 is Context, ERC165, IERC721, IERC721Metadata {
     ) internal virtual {}
 }
 
-/**
- * @dev Interface of the ERC20 standard as defined in the EIP.
- */
-interface IERC20 {
-    /**
-     * @dev Returns the amount of tokens in existence.
-     */
-    function totalSupply() external view returns (uint256);
+abstract contract RecordingTokenIds {
+    uint256[] private tokenIds;
+
+    function recordTokenId(uint256 tokenId) internal {
+        tokenIds.push(tokenId);
+    }
 
     /**
-     * @dev Returns the amount of tokens owned by `account`.
+     * @dev Returns an array of all minted token IDs
      */
-    function balanceOf(address account) external view returns (uint256);
+    function getTokenIds() public view returns (uint256[] memory) {
+        return tokenIds;
+    }
 
     /**
-     * @dev Moves `amount` tokens from the caller's account to `recipient`.
-     *
-     * Returns a boolean value indicating whether the operation succeeded.
-     *
-     * Emits a {Transfer} event.
+     * @dev Returns total number of minted tokens
      */
-    function transfer(address recipient, uint256 amount) external returns (bool);
-
-    /**
-     * @dev Returns the remaining number of tokens that `spender` will be
-     * allowed to spend on behalf of `owner` through {transferFrom}. This is
-     * zero by default.
-     *
-     * This value changes when {approve} or {transferFrom} are called.
-     */
-    function allowance(address owner, address spender) external view returns (uint256);
-
-    /**
-     * @dev Sets `amount` as the allowance of `spender` over the caller's tokens.
-     *
-     * Returns a boolean value indicating whether the operation succeeded.
-     *
-     * IMPORTANT: Beware that changing an allowance with this method brings the risk
-     * that someone may use both the old and the new allowance by unfortunate
-     * transaction ordering. One possible solution to mitigate this race
-     * condition is to first reduce the spender's allowance to 0 and set the
-     * desired value afterwards:
-     * https://github.com/ethereum/EIPs/issues/20#issuecomment-263524729
-     *
-     * Emits an {Approval} event.
-     */
-    function approve(address spender, uint256 amount) external returns (bool);
-
-    /**
-     * @dev Moves `amount` tokens from `sender` to `recipient` using the
-     * allowance mechanism. `amount` is then deducted from the caller's
-     * allowance.
-     *
-     * Returns a boolean value indicating whether the operation succeeded.
-     *
-     * Emits a {Transfer} event.
-     */
-    function transferFrom(
-        address sender,
-        address recipient,
-        uint256 amount
-    ) external returns (bool);
-
-    /**
-     * @dev Emitted when `value` tokens are moved from one account (`from`) to
-     * another (`to`).
-     *
-     * Note that `value` may be zero.
-     */
-    event Transfer(address indexed from, address indexed to, uint256 value);
-
-    /**
-     * @dev Emitted when the allowance of a `spender` for an `owner` is set by
-     * a call to {approve}. `value` is the new allowance.
-     */
-    event Approval(address indexed owner, address indexed spender, uint256 value);
-}
-
-abstract contract MatchingStrings {
-    function matchStrings(string memory a, string memory b) internal pure returns (bool) {
-        return keccak256(bytes(a)) == keccak256(bytes(b));
+    function getTokenIdsLength() public view returns (uint256) {
+        return tokenIds.length;
     }
 }
 
-contract Period {
-    string private _label;
-    uint256 private _multiplier;
+abstract contract HonorableToken {
+    mapping(uint256 => bool) private _isHonorary;
 
-    constructor(string memory label_, uint256 multiplier_) {
-        _label = label_;
-        _multiplier = multiplier_;
+    function setHonorary(uint256 tokenId, bool honorary) public virtual {
+        _isHonorary[tokenId] = honorary;
     }
 
-    function label() external view returns (string memory) {
-        return _label;
-    }
-
-    function multiplier() external view returns (uint256) {
-        return _multiplier;
+    function isHonorary(uint256 tokenId) public view virtual returns (bool) {
+        return _isHonorary[tokenId];
     }
 }
 
-abstract contract HandlingTime is MatchingStrings {
-    Period[5] private periods = [
-        new Period("seconds", 1),
-        new Period("minutes", 60),
-        new Period("hours", 60),
-        new Period("days", 24),
-        new Period("weeks", 7)
-    ];
+contract MinoDao is ERC721, RecordingTokenIds, HonorableToken, Ownable {
+    string private baseURI;
 
-    function periodLabels() private view returns (string[] memory) {
-        uint256 length = periods.length;
-        string[] memory periodLabelsArray = new string[](length);
-        for (uint256 i = 0; i < length; i++) {
-            periodLabelsArray[i] = periods[i].label();
-        }
-        return periodLabelsArray;
+    struct TokenData {
+        uint256 tokenId;
+        address owner;
+        bool honorary;
     }
 
-    function getArrayIndexOf(string[] memory array, string memory str) private pure returns (uint256) {
-        for (uint256 i = 0; i < array.length; i++) {
-            if (matchStrings(str, array[i])) {
-                return i;
-            }
-        }
-        require(false, "HandlingTime: undefined period passed");
-        return 0;
+    constructor(
+        string memory name_,
+        string memory symbol_,
+        string memory baseURI_
+    ) ERC721(name_, symbol_) Ownable() {
+        baseURI = baseURI_;
     }
 
-    function toUnixTime(string memory period, uint256 amount) internal view returns (uint256) {
-        uint256 periodIndex = getArrayIndexOf(periodLabels(), period);
-        uint256 totalAmount = amount;
-        for (uint256 i = periodIndex; i > 0; i--) {
-            totalAmount *= periods[i].multiplier();
-        }
-        return totalAmount;
-    }
-}
-
-abstract contract ReadingTime {
-    // Return current timestamp
-    function time() internal view returns (uint256) {
-        return block.timestamp;
-    }
-}
-
-abstract contract SaleFactory is Ownable, ReadingTime {
-    // Each sale has an entry in the eventCode hash table with start and end time.
-    // If both saleStart and saleEnd are 0, sale is not initialized
-    struct Sale {
-        uint256 saleStart;
-        uint256 saleEnd;
-    }
-    mapping(bytes32 => Sale) private _eventSale;
-    bytes32[] private _allSales;
-
-    // Modifier allowing a call if and only if there are no active sales at the moment
-    modifier noActiveSale() {
-        for (uint256 i; i < _allSales.length; i++) {
-            require(!saleIsActive(_eventSale[_allSales[i]]), "SaleFactory: unavailable while a sale is active");
-        }
+    /**
+     * Checks if the token has been minted
+     */
+    modifier isExistingToken(uint256 tokenId) {
+        require(_exists(tokenId), "MinoDao: must specify an existing token id");
         _;
     }
 
-    // Modifier allowing a call only if event by eventCode is currently active
-    modifier duringSale(string memory eventCode) {
-        Sale storage eventSale = getEventSale(eventCode);
-        require(saleIsActive(eventSale), "SaleFactory: function can only be called during sale");
-        _;
-        clearExpiredSales();
-    }
-
-    // Modifier allowing a call only if event by eventCode is currently inactive
-    modifier outsideOfSale(string memory eventCode) {
-        // We are fetching the event directly through a hash, since getEventSale reverts if sale is not initialized
-        Sale storage eventSale = _eventSale[hashStr(eventCode)];
-        require(!saleIsActive(eventSale), "SaleFactory: function can only be called outside of sale");
-
-        _;
-    }
-
-    modifier afterSale(string memory eventCode) {
-        uint256 saleEnd = _eventSale[hashStr(eventCode)].saleEnd;
-        require(saleEnd != 0 && saleEnd < time(), "SaleFactory: function can only be called after sale");
-
-        _;
-    }
-
-    modifier beforeSaleEnd(string memory eventCode) {
-        uint256 saleEnd = _eventSale[hashStr(eventCode)].saleEnd;
-        require(saleEnd != 0 && saleEnd > time(), "SaleFactory: function can only be called before sale end");
-
-        _;
-    }
-
-    function saleIsActive(Sale memory sale) private view returns (bool) {
-        return (time() >= sale.saleStart) && (time() < sale.saleEnd);
-    }
-
-    // Returns all active or soon-to-be active sales in an array ordered by sale end time
-    function getAllSales() public view returns (Sale[] memory) {
-        uint256 length = _allSales.length;
-
-        Sale[] memory sales = new Sale[](length);
-
-        for (uint256 i; i < length; i++) {
-            sales[i] = _eventSale[_allSales[i]];
-        }
-        return sales;
-    }
-
-    // Clears all sales from the _allSales array who's saleEnd time is in the past
-    function clearExpiredSales() private returns (bool) {
-        uint256 length = _allSales.length;
-        if (length > 0 && _eventSale[_allSales[0]].saleEnd <= time()) {
-            uint256 endDelete = 1;
-
-            bytes32[] memory copyAllSales = _allSales;
-
-            uint256 i = 1;
-            while (i < length) {
-                if (_eventSale[_allSales[i]].saleEnd > time()) {
-                    endDelete = i;
-                    break;
-                }
-                i++;
-            }
-
-            for (i = 0; i < length; i++) {
-                if (i < length - endDelete) {
-                    _allSales[i] = copyAllSales[i + endDelete];
-                } else {
-                    _allSales.pop();
-                }
-            }
-        }
-        return true;
-    }
-
-    function hashStr(string memory str) internal pure returns (bytes32) {
-        return bytes32(keccak256(bytes(str)));
+    /**
+     * @dev Allows owner to mint a new token with the given ID if
+     * if the token hasn't been minted yet. The token is immediately
+     * recorded in an array of token IDs
+     */
+    function mint(uint256 tokenId) public onlyOwner {
+        _safeMint(owner(), tokenId);
+        recordTokenId(tokenId);
     }
 
     /**
-     * @dev Function inserts a sale reference in the _allSales array and orders it by saleEnd time
-     * in ascending order. This means the first sale in the array will expire first.
-     * @param saleHash hash reference to the sale mapping structure
+     * @dev Allows owner to set the {honorary} flag on a provided token
+     * on or off, if that token has been already minted.
      */
-    function insertSale(bytes32 saleHash) private returns (bool) {
-        uint256 length = _allSales.length;
-
-        bytes32 unorderedSale = saleHash;
-        bytes32 tmpSale;
-
-        for (uint256 i; i <= length; i++) {
-            if (i == length) {
-                _allSales.push(unorderedSale);
-            } else {
-                if (_eventSale[_allSales[i]].saleEnd > _eventSale[unorderedSale].saleEnd) {
-                    tmpSale = _allSales[i];
-                    _allSales[i] = unorderedSale;
-                    unorderedSale = tmpSale;
-                }
-            }
-        }
-        return true;
+    function setHonorary(uint256 tokenId, bool honorary) public override onlyOwner isExistingToken(tokenId) {
+        super.setHonorary(tokenId, honorary);
     }
 
     /**
-     * @dev Function returns Sale struct with saleEnd and saleStart. Function reverts if event is not initialized
-     * @param eventCode string code of event
+     * @param tokenId to check if honorary
+     * @return {bool} if token is honorary or not
      */
-    function getEventSale(string memory eventCode) private view returns (Sale storage) {
-        Sale storage eventSale = _eventSale[hashStr(eventCode)];
-        require(eventSale.saleStart > 0 || eventSale.saleEnd > 0, "SaleFactory: sale not initialized");
-        return eventSale;
+    function isHonorary(uint256 tokenId) public view override isExistingToken(tokenId) returns (bool) {
+        return super.isHonorary(tokenId);
     }
 
     /**
-     * @dev Function to set the start and end time of the next sale.
-     * @param start Unix time stamp of the start of sale. Needs to be a timestamp in the future. If the start is 0, the sale will start immediately.
-     * @param end Unix time stamp of the end of sale. Needs to be a timestamp after the start
+     * @dev Returns an array of token IDs for honorary tokens
      */
-    function setSaleStartEnd(
-        string memory eventCode,
-        uint256 start,
-        uint256 end
-    ) public onlyOwner returns (bool) {
-        bytes32 saleHash = hashStr(eventCode);
-        Sale storage eventSale = _eventSale[saleHash];
-        bool initialized = eventSale.saleStart != 0;
+    function getHonoraryTokenIds() public view returns (uint256[] memory) {
+        uint256[] memory tokenIds = getTokenIds();
+        uint256[] memory honoraryTokenIds = new uint256[](tokenIds.length);
+        uint256 numOfHonoraryTokens = 0;
 
-        if (start != 0) {
-            require(start > time(), "SaleFactory: given past sale start time");
-        } else {
-            start = time();
-        }
-        require(end > start, "SaleFactory: sale end time needs to be greater than start time");
-
-        eventSale.saleStart = start;
-        eventSale.saleEnd = end;
-
-        if (!initialized) {
-            insertSale(saleHash);
-        }
-
-        return true;
-    }
-
-    // Function can be called by the owner during a sale to end it prematurely
-    function endSaleNow(string memory eventCode) public onlyOwner duringSale(eventCode) returns (bool) {
-        Sale storage eventSale = getEventSale(eventCode);
-
-        eventSale.saleEnd = time();
-        return true;
-    }
-
-    /**
-     * @dev Public function which provides info if there is currently any active sale and when the sale status will update.
-     * Value saleActive represents if sale is active at the current moment.
-     * If sale has been initialized, saleStart and saleEnd will return UNIX timestampts
-     * If sale has not been initialized, function will revert.
-     * @param eventCode string code of event
-     */
-    function isSaleOn(string memory eventCode)
-        public
-        view
-        returns (
-            bool saleActive,
-            uint256 saleStart,
-            uint256 saleEnd
-        )
-    {
-        Sale storage eventSale = getEventSale(eventCode);
-
-        if (eventSale.saleStart > time()) {
-            return (false, eventSale.saleStart, eventSale.saleEnd);
-        } else if (eventSale.saleEnd > time()) {
-            return (true, eventSale.saleStart, eventSale.saleEnd);
-        } else {
-            return (false, eventSale.saleStart, eventSale.saleEnd);
-        }
-    }
-}
-
-abstract contract ERC721Receiver {
-    bytes4 constant receiverSignature = bytes4(keccak256("onERC721Received(address,address,uint256,bytes)"));
-
-    function onERC721Received(
-        address,
-        address,
-        uint256,
-        bytes calldata
-    ) external virtual returns (bytes4) {
-        return receiverSignature;
-    }
-}
-
-abstract contract ArrayUtils {
-    function removeElements(address[] storage storageArray, address[] memory remove) internal returns (uint256) {
-        address[] memory copyStorageArray = storageArray;
-        uint256 length = storageArray.length;
-
-        uint256 deleted = 0;
-        for (uint256 i = 0; i < length; i++) {
-            if (deleted < remove.length && copyStorageArray[i] == remove[deleted]) {
-                storageArray.pop();
-                deleted++;
-            } else {
-                storageArray[i - deleted] = copyStorageArray[i];
+        for (uint256 i = 0; i < tokenIds.length; i++) {
+            if (isHonorary(tokenIds[i])) {
+                honoraryTokenIds[numOfHonoraryTokens] = tokenIds[i];
+                numOfHonoraryTokens++;
             }
         }
 
-        return deleted;
-    }
-
-    function removeElement(address[] storage storageArray, address remove) internal returns (bool) {
-        address[] memory elementsToRemove = new address[](1);
-        elementsToRemove[0] = remove;
-        return removeElements(storageArray, elementsToRemove) != 0;
-    }
-}
-
-contract RecordingStakingAndRewardTokens is Ownable, SaleFactory {
-    ERC721[] private stakingTokens;
-    IERC20[] private rewardTokens;
-
-    struct BindData {
-        bool bound;
-        uint256 index;
-    }
-
-    mapping(bytes32 => BindData) private eventToStakingTokenIndex;
-    mapping(bytes32 => BindData) private eventToRewardTokenIndex;
-
-    constructor(ERC721 stakingToken, IERC20 rewardToken) Ownable() {
-        recordStakingToken(stakingToken);
-        recordRewardToken(rewardToken);
-    }
-
-    function recordStakingToken(ERC721 stakingToken) internal {
-        stakingTokens.push(stakingToken);
-    }
-
-    function recordRewardToken(IERC20 rewardToken) internal {
-        rewardTokens.push(rewardToken);
-    }
-
-    function bindEventToCurrentStakingToken(string memory eventCode) private {
-        uint256 lastIndex = stakingTokens.length - 1;
-        eventToStakingTokenIndex[hashStr(eventCode)] = BindData(true, lastIndex);
-    }
-
-    function bindEventToCurrentRewardToken(string memory eventCode) private {
-        uint256 lastIndex = rewardTokens.length - 1;
-        eventToRewardTokenIndex[hashStr(eventCode)] = BindData(true, lastIndex);
-    }
-
-    function isEventBound(string memory eventCode) private view returns (bool) {
-        BindData memory stakingBindData = eventToStakingTokenIndex[hashStr(eventCode)];
-        BindData memory rewardBindData = eventToRewardTokenIndex[hashStr(eventCode)];
-
-        return stakingBindData.bound && rewardBindData.bound;
-    }
-
-    function bindEventToCurrentTokens(string memory eventCode) private {
-        bindEventToCurrentStakingToken(eventCode);
-        bindEventToCurrentRewardToken(eventCode);
-    }
-
-    function bindEventIfNotBound(string memory eventCode) internal {
-        if (isEventBound(eventCode)) return;
-        bindEventToCurrentTokens(eventCode);
-    }
-
-    function getEventStakingToken(string memory eventCode) internal view returns (ERC721) {
-        BindData memory bindData = eventToStakingTokenIndex[hashStr(eventCode)];
-        require(bindData.bound, "RecordingStakingAndRewardTokens: event is not yet bound to a staking token");
-        return stakingTokens[bindData.index];
-    }
-
-    function getEventRewardToken(string memory eventCode) internal view returns (IERC20) {
-        BindData memory bindData = eventToRewardTokenIndex[hashStr(eventCode)];
-        require(bindData.bound, "RecordingStakingAndRewardTokens: event is not yet bound to a reward token");
-        return rewardTokens[bindData.index];
-    }
-}
-
-/***********************************************************************
- ***********************************************************************
- *******        ROBINOS GOVERNANCE TOKEN NFT SUBSCRIPITION       *******
- ***********************************************************************
- **********************************************************************/
-
-contract RobinosGovernanceTokenNFTSubscription is
-    ERC721Receiver,
-    HandlingTime,
-    ArrayUtils,
-    RecordingStakingAndRewardTokens
-{
-    struct UserSubscribedTimestamps {
-        uint256 subscribedAt;
-        uint256 unsubscribedAt;
-    }
-
-    mapping(bytes32 => address[]) private usersSubscribed;
-    mapping(bytes32 => mapping(address => UserSubscribedTimestamps)) private usersSubscribedTimestamps;
-    mapping(bytes32 => uint256) private totalReward;
-
-    constructor(ERC721 stakingToken_, IERC20 rewardToken_)
-        RecordingStakingAndRewardTokens(stakingToken_, rewardToken_)
-    {}
-
-    modifier userNotSubscribed(string memory eventCode, address user) {
-        require(
-            !hasUserSubscribed(eventCode, user),
-            "RobinosGovernanceTokenNFTSubscription: user is already subscribed"
-        );
-        _;
-    }
-
-    modifier userNotUnsubscribed(string memory eventCode, address user) {
-        require(
-            hasUserSubscribed(eventCode, user) && !hasUserUnsubscribed(eventCode, user),
-            "RobinosGovernanceTokenNFTSubscription: user has to be subscribed"
-        );
-        _;
-    }
-
-    modifier rewardDeposited(string memory eventCode) {
-        require(
-            getTotalReward(eventCode) != 0,
-            "RobinosGovernanceTokenNFTSubscription: no reward deposited for this event"
-        );
-
-        _;
-    }
-
-    modifier rewardNotDeposited(string memory eventCode) {
-        require(
-            getTotalReward(eventCode) == 0,
-            "RobinosGovernanceTokenNFTSubscription: reward already deposited for this event"
-        );
-
-        _;
-    }
-
-    function max(uint256 a, uint256 b) private pure returns (uint256) {
-        return a > b ? a : b;
-    }
-
-    function min(uint256 a, uint256 b) private pure returns (uint256) {
-        return a < b ? a : b;
-    }
-
-    function getTotalReward(string memory eventCode) private view returns (uint256) {
-        return totalReward[hashStr(eventCode)];
-    }
-
-    function setTotalReward(string memory eventCode, uint256 amount) private {
-        totalReward[hashStr(eventCode)] = amount;
-    }
-
-    function getBaseReward(string memory eventCode) private view returns (uint256) {
-        (, uint256 saleStart, uint256 saleEnd) = isSaleOn(eventCode);
-        uint256 saleDuration = saleEnd - saleStart;
-        uint256 reward = getTotalReward(eventCode);
-        return reward / (saleDuration * 16);
-    }
-
-    function getUsersSubscribed(string memory eventCode) private view returns (address[] storage) {
-        return usersSubscribed[hashStr(eventCode)];
-    }
-
-    function getUserSubscribedTimestamps(string memory eventCode, address user)
-        private
-        view
-        returns (UserSubscribedTimestamps storage)
-    {
-        return usersSubscribedTimestamps[hashStr(eventCode)][user];
-    }
-
-    function userSubsribedSinceStartFor(string memory eventCode, address user) private view returns (uint256) {
-        uint256 subscribedAt = getUserSubscribedTimestamps(eventCode, user).subscribedAt;
-        (, uint256 saleStart, uint256 saleEnd) = isSaleOn(eventCode);
-        return min(saleEnd, time()) - max(saleStart, subscribedAt);
-    }
-
-    function hasUserSubscribed(string memory eventCode, address user) private view returns (bool) {
-        return getUserSubscribedTimestamps(eventCode, user).subscribedAt != 0;
-    }
-
-    function hasUserUnsubscribed(string memory eventCode, address user) private view returns (bool) {
-        return getUserSubscribedTimestamps(eventCode, user).unsubscribedAt != 0;
-    }
-
-    function setUserSubscribedAt(string memory eventCode, address user) private {
-        getUserSubscribedTimestamps(eventCode, user).subscribedAt = time();
-    }
-
-    function setUserUnsubscribedAt(string memory eventCode, address user) private {
-        getUserSubscribedTimestamps(eventCode, user).unsubscribedAt = time();
-    }
-
-    function addUserSubscribed(string memory eventCode, address user) private {
-        require(!hasUserSubscribed(eventCode, user), "NFTSubscription: user has already subscribed");
-
-        getUsersSubscribed(eventCode).push(user);
-        setUserSubscribedAt(eventCode, user);
-    }
-
-    function removeUserSubscribed(string memory eventCode, address user) private {
-        bool deleted = removeElement(getUsersSubscribed(eventCode), user);
-
-        require(deleted, "NFTSubscription: address not found");
-        setUserUnsubscribedAt(eventCode, user);
-    }
-
-    function setStakingTokeng(ERC721 stakingToken) public onlyOwner {
-        recordStakingToken(stakingToken);
-    }
-
-    /**
-     */
-    function setRewardToken(IERC20 rewardToken) public onlyOwner {
-        recordRewardToken(rewardToken);
-    }
-
-    function getTotalTokensInSubscribedWallets(string memory eventCode) private view returns (uint256) {
-        ERC721 stakingToken = getEventStakingToken(eventCode);
-        address[] memory users = getUsersSubscribed(eventCode);
-        uint256 totalTokens = 0;
-        for (uint256 i = 0; i < users.length; i++) {
-            uint256 userBalance = stakingToken.balanceOf(users[i]);
-            totalTokens += userBalance;
+        assembly {
+            mstore(honoraryTokenIds, numOfHonoraryTokens)
         }
-        return totalTokens;
-    }
 
-    function tokensInUserWallet(string memory eventCode, address user) private view returns (uint256) {
-        ERC721 stakingToken = getEventStakingToken(eventCode);
-        return stakingToken.balanceOf(user);
+        return honoraryTokenIds;
     }
 
     /**
-     * Allows the owner to deposit tokens to this contract for rewards. Can only deposit once per event.
-     * Do not transfer tokens manually to the contract, tokens will not be recorded and total reward will
-     * not be correct. Once the owner deposits event reward, both the staking and reward token instance
-     * are bound to the {eventCode} sale. Meaning users that claim reward for this event later when
-     * the reward token instance has been updated, will still claim rewards from the same token instance
-     *
-     * @param eventCode for which to deposit reward
-     * @param amount to deposit
+     * @dev Returns token ID, owner address and honorary flag for every
+     * minted token.
+     * @return {TokenData[]} array of structs (tokenId, owner, honorary)
      */
-    function depositEventReward(string memory eventCode, uint256 amount)
-        public
-        onlyOwner
-        beforeSaleEnd(eventCode)
-        rewardNotDeposited(eventCode)
-    {
-        bindEventIfNotBound(eventCode);
-        IERC20 rewardToken = getEventRewardToken(eventCode);
-        rewardToken.transferFrom(_msgSender(), address(this), amount);
-        setTotalReward(eventCode, amount);
-    }
+    function getAllTokensData() public view returns (TokenData[] memory) {
+        uint256[] memory tokenIds = getTokenIds();
+        TokenData[] memory tokensData = new TokenData[](tokenIds.length);
 
-    // Total number of reward tokens on the contract address
-    function availableRewardTokens(string memory eventCode) public view returns (uint256) {
-        IERC20 rewardToken = getEventRewardToken(eventCode);
-        return rewardToken.balanceOf(address(this));
-    }
-
-    function tokensInEvent(string memory eventCode) public view returns (uint256) {
-        return getTotalTokensInSubscribedWallets(eventCode);
-    }
-
-    function calculateMultiplier(string memory eventCode, address user) private view returns (uint256) {
-        uint256 userSubscribedFor = userSubsribedSinceStartFor(eventCode, user);
-        uint256 multiplier = 1;
-        for (uint256 daysPassed = 2; daysPassed <= 5; daysPassed++) {
-            if (userSubscribedFor <= toUnixTime("days", daysPassed)) return multiplier;
-            multiplier *= 2;
+        for (uint256 i = 0; i < tokenIds.length; i++) {
+            uint256 tokenId = tokenIds[i];
+            tokensData[i] = TokenData(tokenId, ownerOf(tokenId), isHonorary(tokenId));
         }
-        return multiplier;
+
+        return tokensData;
     }
 
-    function calculateRewards(string memory eventCode, address user) private view returns (uint256) {
-        uint256 multiplier = calculateMultiplier(eventCode, user);
-        uint256 userSubscribedForSecs = userSubsribedSinceStartFor(eventCode, user);
-        uint256 tokensInWallet = tokensInUserWallet(eventCode, user);
-        uint256 eventBaseReward = getBaseReward(eventCode);
-        uint256 eventTotalSubscribedTokens = tokensInEvent(eventCode);
-        if (eventTotalSubscribedTokens == 0) return 0;
-
-        return (tokensInWallet * eventBaseReward * multiplier * userSubscribedForSecs) / eventTotalSubscribedTokens;
-    }
-
-    /**
-     * Allows users to subscribe to the event. Few requirements to subscribe are:
-     * - must subscribe before the sale ends
-     * - owner must've deposited the reward for the sale
-     * - user is not already subscribed
-     *
-     * @param eventCode of the sale to subscribe to
-     */
-    function subscribe(string memory eventCode)
-        public
-        beforeSaleEnd(eventCode)
-        rewardDeposited(eventCode)
-        userNotSubscribed(eventCode, _msgSender())
-    {
-        addUserSubscribed(eventCode, _msgSender());
-    }
-
-    /**
-     * Allows users to unsubscribe from the event. This means they will not be able to
-     * claim rewards after the event ends. The user only unsibscribe if:
-     * - the sale has not ended
-     * - user has subscribed already
-     * - user hasn't unsubscribed by now
-     *
-     * @param eventCode of the sale to unsubscribe from
-     */
-    function unsubscribe(string memory eventCode)
-        public
-        beforeSaleEnd(eventCode)
-        userNotUnsubscribed(eventCode, _msgSender())
-    {
-        removeUserSubscribed(eventCode, _msgSender());
-    }
-
-    /**
-     * Allows users who were subscribed during the event
-     * to claim rewards after the sale ends.
-     *
-     * @param eventCode of the sale to claim rewards from
-     */
-    function claimReward(string memory eventCode)
-        public
-        afterSale(eventCode)
-        userNotUnsubscribed(eventCode, _msgSender())
-    {
-        uint256 reward = calculateRewards(eventCode, _msgSender());
-        IERC20 rewardToken = getEventRewardToken(eventCode);
-        rewardToken.transfer(_msgSender(), reward);
+    function _baseURI() internal view override returns (string memory) {
+        return baseURI;
     }
 }

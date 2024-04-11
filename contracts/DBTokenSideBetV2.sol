@@ -279,7 +279,7 @@ contract DBToken is IERC20, IERC20Metadata, Ownable {
     }
 
     function decimals() external pure override returns (uint8) {
-        return 18;
+        return 6;
     }
 
     function totalSupply() external view override returns (uint256) {
@@ -449,7 +449,7 @@ abstract contract SaleFactory is Ownable {
         return block.timestamp;
     }
 
-    function hashStr(string memory str) private pure returns (bytes32) {
+    function hashStr(string memory str) public pure returns (bytes32) {
         return bytes32(keccak256(bytes(str)));
     }
 
@@ -561,311 +561,324 @@ abstract contract TokenHash is Ownable {
     }
 }
 
-abstract contract RecordingTradePairs is Ownable {
-    address[] private _allTradingPairs;
-    mapping(address => ArrayElRef) _tradingPairMapping;
-
-    /**
-     * @dev Adds the trading pair address to array and creates a O(1) get reference. Function will revert if pair is already registered.
-     */
-    function addTPAddress(address tradingPair) public onlyOwner returns (bool) {
-        require(!_tradingPairMapping[tradingPair].status, "DBTokenSale: pair already created");
-        uint256 index = _allTradingPairs.length;
-        _allTradingPairs.push(tradingPair);
-        _tradingPairMapping[tradingPair] = ArrayElRef(true, index);
-
-        return true;
-    }
-
-    // Get pair index from array. Function will revert if pair is not registered
-    function getTPAddressIndex(address tradingPair) public view returns (uint256) {
-        require(_tradingPairMapping[tradingPair].status, "DBTokenSale: pair not initialized");
-        return _tradingPairMapping[tradingPair].arrayIndex;
-    }
-
-    function getAllTPAddresses() public view returns (address[] memory) {
-        return _allTradingPairs;
-    }
-
-    /**
-     * @dev Delete the trading pair address from array and reference. Function will revert if address is not active.
-     * Note that function will only set address to address(0). Array length will stay the same
-     */
-    function deleteTPAddress(address tradingPair) public onlyOwner returns (bool) {
-        uint256 index = getTPAddressIndex(tradingPair);
-        _allTradingPairs[index] = address(0);
-        _tradingPairMapping[tradingPair] = ArrayElRef(false, 0);
-        return true;
-    }
-
-    /**
-     * @dev Low level function. Will calculate circulating supply for given token
-     */
-    function _calculateCirculatingSupply(DBToken token) internal view returns (uint256) {
-        uint256 supply = token.totalSupply();
-        uint256 length = _allTradingPairs.length;
-
-        uint256 balance;
-        for (uint256 i; i < length; i++) {
-            balance = token.balanceOf(_allTradingPairs[i]);
-            unchecked {
-                supply -= balance;
-            }
-        }
-
-        return supply;
-    }
-}
-
-abstract contract RecordingTokensSold is TokenHash {
-    struct TokensSold {
-        bytes32 eventHash;
-        bytes32 tokenHash;
-        uint256 amountSold;
-    }
-    TokensSold[] _currentSale;
-    mapping(bytes32 => ArrayElRef) private _saleArrayMapping;
-
-    struct EventTokensSold {
-        bytes32 eventHash;
-        uint256 amountSold;
-    }
-    EventTokensSold[] _currentEventSale;
-    mapping(bytes32 => ArrayElRef) private _saleEventArrayMapping;
-
-    function tokensSold() public view onlyOwner returns (TokensSold[] memory) {
-        return _currentSale;
-    }
-
-    function eventTokensSold() public view onlyOwner returns (EventTokensSold[] memory) {
-        return _currentEventSale;
-    }
-
-    function initTokensSold(
-        bytes32 tokenHash,
-        bytes32 eventHash,
-        uint256 initialAmount
-    ) private returns (bool) {
-        require(!_saleArrayMapping[tokenHash].status, "DBTokenSale: TokenSold reference already initialized");
-
-        uint256 tokenSoldIndex = _currentSale.length;
-
-        _currentSale.push(TokensSold(eventHash, tokenHash, initialAmount));
-        _saleArrayMapping[tokenHash] = ArrayElRef(true, tokenSoldIndex);
-
-        return true;
-    }
-
-    function increaseTokensSold(bytes32 tokenHash, uint256 amount) private returns (bool) {
-        require(_saleArrayMapping[tokenHash].status, "DBTokenSale: TokenSold reference is not initialized");
-
-        _currentSale[_saleArrayMapping[tokenHash].arrayIndex].amountSold += amount;
-
-        return true;
-    }
-
-    function recordTokensSold(
-        string memory _eventCode,
-        string memory _teamName,
-        uint256 amount
-    ) internal returns (bool) {
-        bytes32 tokenHash = getTokenHash(_eventCode, _teamName);
-        bytes32 eventHash = bytes32(keccak256(bytes(_eventCode)));
-
-        recordEventTokensSold(eventHash, amount);
-
-        if (!_saleArrayMapping[tokenHash].status) {
-            initTokensSold(tokenHash, eventHash, amount);
-        } else {
-            increaseTokensSold(tokenHash, amount);
-        }
-
-        return true;
-    }
-
-    function initEventTokensSold(bytes32 eventHash, uint256 amount) private returns (bool) {
-        require(!_saleEventArrayMapping[eventHash].status, "DBTokenSale: EventTokenSold reference already initialized");
-
-        uint256 index = _currentEventSale.length;
-
-        _currentEventSale.push(EventTokensSold(eventHash, amount));
-        _saleEventArrayMapping[eventHash] = ArrayElRef(true, index);
-
-        return true;
-    }
-
-    function increaseEventTokensSold(bytes32 eventHash, uint256 amount) private returns (bool) {
-        require(_saleEventArrayMapping[eventHash].status, "DBTokenSale: EventTokenSold reference is not initialized");
-        _currentEventSale[_saleEventArrayMapping[eventHash].arrayIndex].amountSold += amount;
-
-        return true;
-    }
-
-    function recordEventTokensSold(bytes32 eventHash, uint256 amount) private returns (bool) {
-        if (!_saleEventArrayMapping[eventHash].status) {
-            initEventTokensSold(eventHash, amount);
-        } else {
-            increaseEventTokensSold(eventHash, amount);
-        }
-
-        return true;
-    }
-}
-
-contract StoringDBTokens is TokenHash, Pausable {
-    mapping(bytes32 => DBToken) internal _dbtokens;
-
-    function pause() public override onlyOwner whileNotPaused returns (bool) {
-        return super.pause();
-    }
-
-    function unPause() public override onlyOwner whilePaused returns (bool) {
-        return super.unPause();
-    }
-
-    /**
-     * @dev This function adds DBToken references to the _dbtokens mapping. The function expects event code and team name to be supplied.
-     * This is only added for additional security to check if the owner is adding the correct address.
-     * @param _token Address of the DBToken you are adding
-     * @param _eventCode Event code of the DBToken reference. Has to match the event code the token has been initialized with.
-     * @param _teamName Same as event code. Has to match the team name the token has been initialized with
-     */
-    function addDBTokenReference(
-        DBToken _token,
-        string memory _eventCode,
-        string memory _teamName
-    ) public virtual onlyOwner returns (bool) {
-        bytes32 tokenEventCode = keccak256(bytes(_token.eventCode()));
-        bytes32 tokenTeamName = keccak256(bytes(_token.teamName()));
-        bytes32 givenEventCode = keccak256(bytes(_eventCode));
-        bytes32 givenTeamName = keccak256(bytes(_teamName));
-
-        require(tokenEventCode == givenEventCode, "DBTokenSale: given event code doesn't match reference event code");
-        require(tokenTeamName == givenTeamName, "DBTokenSale: given team name doesn't match reference team name");
-
-        bytes32 tokenHash = getTokenHash(_eventCode, _teamName);
-
-        _dbtokens[tokenHash] = _token;
-
-        // _dbtokens[tokenHash]._mint(address(this), initialAmount);
-        return true;
-    }
-
-    // Get token by event code and team name. Revert on not found
-    function getToken(string memory _eventCode, string memory _teamName) public view returns (DBToken) {
-        bytes32 tokenHash = getTokenHash(_eventCode, _teamName);
-        require(address(_dbtokens[tokenHash]) != address(0), "DBTokenSale: token doesn't exist");
-        return _dbtokens[tokenHash];
-    }
-}
-
-/**********************************************************************
+/***********************************************************************
  ***********************************************************************
- ********************      DB TOKEN REWARD      ************************
+ *****************        DB TOKEN SIDE BET       **********************
  ***********************************************************************
  **********************************************************************/
 
-contract DBTokenReward is StoringDBTokens, SaleFactory {
-    /**
-     * The DBTokenReward shares a lot of similarities with DBTokenSale contract. Notable differences are:
-     * 1) This contract uses SaleFactory in the same way DBTokenSale does, but the sale here signifies when the tokens for the given event can be sold to this contract. DBTokenSale uses it for other way around.
-     * 2) Rate for each token can be set individually by the owner. Rate is a ratio between getToken(eventCode, teamName)/standard token
-     * 3) Instead of buyTokens, we have a sellTokens function which performs an immediate exchange taking in DBTokens from the user and providing Standard Tokens
-     */
-
-    StandardToken private _standardToken;
-
-    constructor(StandardToken standardToken_) Ownable() {
-        _standardToken = standardToken_;
+contract DBTokenSideBetV2 is SaleFactory {
+    enum TeamTokenIndex {
+        First,
+        Second
     }
 
-    /**
-     * @dev getRate(eventCode, teamName) returns a ratio between getToken(eventCode, teamName)/standard token
-     * Examples:
-     * 1) getToken(eventCode, teamName) is 2x the value of standard token (or for each DBToken you receive 2 standard tokens) getRate(eventCode, teamName) => (numerator 2, denominator 1)
-     * 2) getToken(eventCode, teamName) is 0.75x the value of standard token (or for 4 DBTokens you receive 3 standard tokens) getRate(eventCode, teamName) => (numerator 3, denominator 4)
-     * 3) getToken(eventCode, teamName) is 0.125x the value of standard token (or for 8 DBTokens you receive 1 standard tokens) getRate(eventCode, teamName) => (numerator 1, denominator 8)
-     * 4) getToken(eventCode, teamName) is 2.5x the value of standard token (or for 2 DBTokens you receive 5 standard tokens) getRate(eventCode, teamName) => (numerator 5, denominator 2)
-     * 5) getToken(eventCode, teamName) is 1x the value of standard token (or for 2 DBTokens you receive 5 standard tokens) getRate(eventCode, teamName) => (numerator 1, denominator 1) [This is initially set for each new token reference added]
-     */
-    struct Ratio {
-        uint256 numerator;
-        uint256 denominator;
-    }
-    mapping(bytes32 => Ratio) private _rates;
-
-    /**
-     * @dev Allows the owner to set a rate for specific token. Numerator and denominator must be greater than 0
-     * Please use the smallest possible numerator and denominator. So instead of (6/8) use (3/4). Check not included in function to save gas
-     */
-    function setRate(
-        string memory eventCode,
-        string memory teamName,
-        uint256 numerator,
-        uint256 denominator
-    ) public onlyOwner returns (bool) {
-        require(numerator > 0, "DBTokenReward: numerator must be larger than 0");
-        require(denominator > 0, "DBTokenReward: denominator must be larger than 0");
-        bytes32 tokenHash = getTokenHash(eventCode, teamName);
-
-        _rates[tokenHash] = Ratio(numerator, denominator);
-        return true;
+    struct SideBet {
+        DBToken[2] teamTokens;
+        StandardToken standardToken;
+        uint256 totalEventReward;
+        bool winnerSet;
+        TeamTokenIndex winningIndex;
+        bool rewardDistributed;
+        bool cancelled;
+        address[][2] eventStakingUsers;
+        mapping(address => uint256[2]) userStakedTokens;
+        mapping(address => bool[2]) userUnstaked;
+        uint256[2] totalTokensStaked;
     }
 
-    // Each token has a specific rate. If rate is 0, token has not been initialized
-    function getRate(string memory eventCode, string memory teamName) public view returns (Ratio memory) {
-        bytes32 tokenHash = getTokenHash(eventCode, teamName);
-        require(_rates[tokenHash].denominator != 0, "DBTokenReward: rate not initialized");
+    mapping(bytes32 => SideBet) private sideBets;
 
-        return _rates[tokenHash];
+    modifier winnerIsSet(string memory eventCode) {
+        require(getSideBet(eventCode).winnerSet, "DBTokenSideBetV2: winning team index not selected");
+        _;
     }
 
-    // Function calculates how many standard tokens you will receive for getToken(eventCode, teamName) based on the rate of the token
-    function standardTokensFor(
-        uint256 amount,
-        string memory eventCode,
-        string memory teamName
-    ) public view returns (uint256) {
-        require(amount != 0, "DBTokenReward: amount cannot be 0");
-        Ratio memory rate = getRate(eventCode, teamName);
-        return uint256((amount * rate.numerator) / rate.denominator);
+    modifier sideBetActive(string memory eventCode) {
+        SideBet storage sideBet = getSideBet(eventCode);
+        require(!sideBet.rewardDistributed, "DBTokenSideBetV2: reward is already distributed");
+        require(!sideBet.cancelled, "DBTokenSideBetV2: side bet has been cancelled");
+        _;
     }
 
-    // We override the function so we can set the rate for the token to one immediately
-    function addDBTokenReference(
-        DBToken _token,
-        string memory _eventCode,
-        string memory _teamName
-    ) public override onlyOwner returns (bool) {
-        super.addDBTokenReference(_token, _eventCode, _teamName);
-        setRate(_eventCode, _teamName, 1, 1);
-
-        return true;
-    }
-
-    // Function is basically the same as buyTokens from DBTokenSale contract, except the transfer is done the other way around
-    // Contract has to have at least the given amount of standardToken tokens for this function to work
-    function sellTokens(
-        string memory eventCode,
-        string memory teamName,
-        uint256 amount
-    ) public duringSale(eventCode) returns (bool) {
-        DBToken token = getToken(eventCode, teamName);
-
-        uint256 allowance = token.allowance(_msgSender(), address(this));
-        require(allowance >= amount, "DBTokenReward: insufficient token allowance");
-
-        uint256 standardTokenAmount = standardTokensFor(amount, eventCode, teamName);
-        uint256 standardTokenBalance = _standardToken.balanceOf(address(this));
-
+    function getSideBet(string memory eventCode) private view returns (SideBet storage) {
+        SideBet storage sideBet = sideBets[hashStr(eventCode)];
         require(
-            standardTokenBalance >= standardTokenAmount,
-            "DBTokenReward: insufficient contract reward token balance"
+            address(sideBet.teamTokens[0]) != address(0) && address(sideBet.teamTokens[1]) != address(0),
+            "DBTokenSideBetV2: side bet is not initialized"
+        );
+        return sideBet;
+    }
+
+    /**
+     * @dev Returns all data for the selected side bet. Method will revert if the side bet has not been initialized.
+     * Indices of {uint256[][2]} userStakedTokens and {bool[][2]} usersUnstaked correspond to indices in
+     * {address[][2]} eventStakingUsers. Meaning that userStakedTokens[0][3] corresponds to user eventStakingUsers[0][3]
+     * as does usersUnstaked[0][3].
+     */
+    function getSideBetData(string memory eventCode)
+        public
+        view
+        returns (
+            address[2] memory teamTokenAddresses,
+            address standardTokenAddress,
+            uint256 totalEventReward,
+            bool winnerSet,
+            TeamTokenIndex winningIndex,
+            bool rewardDistributed,
+            bool cancelled,
+            address[][2] memory eventStakingUsers,
+            uint256[][2] memory userStakedTokens,
+            bool[][2] memory usersUnstaked,
+            uint256[2] memory totalTokensStaked
+        )
+    {
+        SideBet storage sideBet = getSideBet(eventCode);
+
+        teamTokenAddresses = [address(sideBet.teamTokens[0]), address(sideBet.teamTokens[1])];
+        standardTokenAddress = address(sideBet.standardToken);
+        totalEventReward = sideBet.totalEventReward;
+        winnerSet = sideBet.winnerSet;
+        winningIndex = sideBet.winningIndex;
+        rewardDistributed = sideBet.rewardDistributed;
+        cancelled = sideBet.cancelled;
+        eventStakingUsers = sideBet.eventStakingUsers;
+        totalTokensStaked = sideBet.totalTokensStaked;
+
+        userStakedTokens = [new uint256[](eventStakingUsers[0].length), new uint256[](eventStakingUsers[1].length)];
+        usersUnstaked = [new bool[](eventStakingUsers[0].length), new bool[](eventStakingUsers[1].length)];
+
+        for (uint256 teamIndex = 0; teamIndex < 2; teamIndex++) {
+            for (uint256 i = 0; i < eventStakingUsers[teamIndex].length; i++) {
+                address user = eventStakingUsers[teamIndex][i];
+                userStakedTokens[teamIndex][i] = sideBet.userStakedTokens[user][teamIndex];
+                usersUnstaked[teamIndex][i] = sideBet.userUnstaked[user][teamIndex];
+            }
+        }
+    }
+
+    function getUserTokensStaked(string memory eventCode, address user) public view returns (uint256[2] memory) {
+        SideBet storage sideBet = getSideBet(eventCode);
+
+        return sideBet.userStakedTokens[user];
+    }
+
+    function userHasStaked(
+        SideBet storage sideBet,
+        TeamTokenIndex index,
+        address user
+    ) private view returns (bool) {
+        return sideBet.userStakedTokens[user][uint8(index)] != 0;
+    }
+
+    /**
+     * @dev Allows owner to simultaneously initialize a side bet, start a sale and deposit the bet reward.
+     * Owner must approve the required amount of standard tokens before triggering this method, otherwise
+     * the method will revert.
+     *
+     * @param eventCode of the side bet to be initialized
+     * @param teamTokenA first DBToken instance
+     * @param teamTokenB second DBToken instance
+     * @param standardToken contract instance used as a reward token
+     * @param totalEventReward total amount to be deposited to this contract as side bet reward
+     * @param saleStart unix time for sale start. Same as in setSaleStartEnd
+     * @param saleEnd unix time for sale end
+     */
+    function initializeSideBetAndDepositReward(
+        string memory eventCode,
+        DBToken teamTokenA,
+        DBToken teamTokenB,
+        StandardToken standardToken,
+        uint256 totalEventReward,
+        uint256 saleStart,
+        uint256 saleEnd
+    ) public onlyOwner {
+        require(
+            address(teamTokenA) != address(0) &&
+                address(teamTokenB) != address(0) &&
+                address(standardToken) != address(0),
+            "DBTokenSideBetV2: address zero supplied"
+        );
+        require(totalEventReward != 0, "DBTokenSideBetV2: event reward must be greater than zero");
+
+        SideBet storage sideBet = sideBets[hashStr(eventCode)];
+        require(
+            address(sideBet.teamTokens[0]) == address(0) && address(sideBet.teamTokens[1]) == address(0),
+            "DBTokenSideBetV2: side bet is already initialized"
         );
 
-        token.transferFrom(_msgSender(), address(this), amount);
-        _standardToken.transfer(_msgSender(), standardTokenAmount);
+        uint256 allowance = standardToken.allowance(_msgSender(), address(this));
+        require(allowance >= totalEventReward, "DBTokenSideBetV2: insufficient allowance for transfer");
+        standardToken.transferFrom(_msgSender(), address(this), totalEventReward);
 
-        return true;
+        setSaleStartEnd(eventCode, saleStart, saleEnd);
+
+        sideBet.teamTokens = [teamTokenA, teamTokenB];
+        sideBet.standardToken = standardToken;
+        sideBet.totalEventReward = totalEventReward;
+    }
+
+    function returnAllStakedTokens(string memory eventCode) private {
+        SideBet storage sideBet = getSideBet(eventCode);
+
+        for (uint256 teamTokenIndex = 0; teamTokenIndex < 2; teamTokenIndex++) {
+            DBToken teamToken = sideBet.teamTokens[teamTokenIndex];
+            address[] storage stakingUsers = sideBet.eventStakingUsers[teamTokenIndex];
+
+            for (uint256 i = 0; i < stakingUsers.length; i++) {
+                address user = stakingUsers[i];
+                uint256 userStaked = sideBet.userStakedTokens[user][teamTokenIndex];
+
+                teamToken.transfer(user, userStaked);
+            }
+        }
+    }
+
+    function returnRewardToOwner(string memory eventCode) private {
+        SideBet storage sideBet = getSideBet(eventCode);
+        StandardToken stToken = sideBet.standardToken;
+        uint256 totalReward = sideBet.totalEventReward;
+
+        stToken.transfer(owner(), totalReward);
+    }
+
+    function setSideBetCancelled(string memory eventCode) private {
+        SideBet storage sideBet = getSideBet(eventCode);
+
+        sideBet.cancelled = true;
+    }
+
+    /**
+     * @dev Allows owner to cancel the side bet, refund all staked tokens to participating
+     * users and refund the deposited standard tokens
+     *
+     * @param eventCode of the sale you want to cancel
+     */
+    function cancelBetAndRefundTokens(string memory eventCode) public onlyOwner sideBetActive(eventCode) {
+        setSideBetCancelled(eventCode);
+        returnAllStakedTokens(eventCode);
+        returnRewardToOwner(eventCode);
+    }
+
+    /**
+     * @dev Allows owner to select a winning team only after the sale ends
+     *
+     * @param eventCode of the sale you finalize
+     * @param index index of the DBToken proclaimed as a winner
+     */
+    function selectWinningTeam(string memory eventCode, TeamTokenIndex index)
+        public
+        onlyOwner
+        outsideOfSale(eventCode)
+        sideBetActive(eventCode)
+    {
+        SideBet storage sideBet = getSideBet(eventCode);
+
+        sideBet.winnerSet = true;
+        sideBet.winningIndex = index;
+    }
+
+    /**
+     * @dev If the winner has been selected by the owner, allows anyone to see the
+     * users who've staked the winning team tokens and their corresponding rewards
+     */
+    function getWinningUsersAndUserRewards(string memory eventCode)
+        public
+        view
+        winnerIsSet(eventCode)
+        sideBetActive(eventCode)
+        returns (address[] memory winningUsers, uint256[] memory userRewards)
+    {
+        SideBet storage sideBet = getSideBet(eventCode);
+
+        TeamTokenIndex winningIndex = sideBet.winningIndex;
+        winningUsers = sideBet.eventStakingUsers[uint8(winningIndex)];
+        userRewards = new uint256[](winningUsers.length);
+        uint256 totalEventReward = sideBet.totalEventReward;
+        uint256 totalWinningTokensStaked = sideBet.totalTokensStaked[uint8(winningIndex)];
+
+        uint256 totalRewardDistributed = 0;
+
+        for (uint256 i = 0; i < winningUsers.length; i++) {
+            uint256 userStaked = sideBet.userStakedTokens[winningUsers[i]][uint8(winningIndex)];
+            uint256 userReward = (userStaked * totalEventReward) / totalWinningTokensStaked;
+
+            userRewards[i] = userReward;
+            totalRewardDistributed += userReward;
+        }
+
+        uint256 userIndex = 0;
+        for (uint256 i = 0; i < totalEventReward - totalRewardDistributed; i++) {
+            userRewards[userIndex] += 1;
+            userIndex = userIndex == userRewards.length - 1 ? 0 : userIndex + 1;
+        }
+    }
+
+    /**
+     * @dev Allows owner to distribute the calculated rewards to all users
+     * who've staked the winning team tokens only once after the winner has
+     * been selected
+     */
+    function distributeReward(string memory eventCode)
+        public
+        onlyOwner
+        winnerIsSet(eventCode)
+        sideBetActive(eventCode)
+    {
+        (address[] memory winningUsers, uint256[] memory userRewards) = getWinningUsersAndUserRewards(eventCode);
+        SideBet storage sideBet = getSideBet(eventCode);
+        StandardToken stToken = sideBet.standardToken;
+
+        for (uint256 i = 0; i < winningUsers.length; i++) {
+            address user = winningUsers[i];
+            uint256 userReward = userRewards[i];
+
+            stToken.transfer(user, userReward);
+        }
+
+        sideBet.rewardDistributed = true;
+    }
+
+    /**
+     * Allows users to stake during a sale from one of the 2 given teamTokens
+     * @param eventCode of the sale you want to stake for
+     * @param index of the DBToken you are staking
+     * @param amount of DBTokens you want to stake
+     */
+    function stake(
+        string memory eventCode,
+        TeamTokenIndex index,
+        uint256 amount
+    ) public duringSale(eventCode) sideBetActive(eventCode) {
+        SideBet storage sideBet = getSideBet(eventCode);
+        DBToken teamToken = sideBet.teamTokens[uint8(index)];
+        uint256 allowance = teamToken.allowance(_msgSender(), address(this));
+        require(allowance >= amount, "DBTokenSideBetV2: insufficient allowance for transfer");
+
+        if (!userHasStaked(sideBet, index, _msgSender())) sideBet.eventStakingUsers[uint8(index)].push(_msgSender());
+
+        sideBet.totalTokensStaked[uint8(index)] += amount;
+        sideBet.userStakedTokens[_msgSender()][uint8(index)] += amount;
+
+        teamToken.transferFrom(_msgSender(), address(this), amount);
+    }
+
+    /**
+     * Allows users unstake their DBTokens only the winner has been selected.
+     *
+     * @param eventCode of the sale you want to unstake from
+     * @param index of the DBToken you want to unstake
+     */
+    function unstake(string memory eventCode, TeamTokenIndex index) public winnerIsSet(eventCode) {
+        SideBet storage sideBet = getSideBet(eventCode);
+        DBToken teamToken = sideBet.teamTokens[uint8(index)];
+        uint256 userStakedTokens = sideBet.userStakedTokens[_msgSender()][uint8(index)];
+        require(
+            !sideBet.userUnstaked[_msgSender()][uint8(index)],
+            "DBTokenSideBetV2: user has already unstaked selected tokens"
+        );
+
+        teamToken.transfer(_msgSender(), userStakedTokens);
+        sideBet.userUnstaked[_msgSender()][uint8(index)] = true;
     }
 }

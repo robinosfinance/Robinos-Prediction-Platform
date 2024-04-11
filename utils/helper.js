@@ -1,43 +1,61 @@
-const {
-  formatArgs
-} = require("./debug");
-
-const secondsInTheFuture = (seconds) => Math.floor(Date.now() / 1000) + seconds;
+const { formatArgs } = require('./debug');
 
 const randomInt = (min, max) => {
   const diff = max - min;
   return Math.ceil(Math.random() * diff) + min;
 };
 
-const idsFrom = (fromId, length) => {
-  const idsArray = [];
-  for (let i = 0; i < length; i++) {
-    idsArray.push(fromId + i);
-  }
-  return idsArray;
+const newArray = (length, callback) => {
+  const array = [];
+  for (let i = 0; i < length; i++) array.push(callback(i));
+  return array;
 };
 
+const idsFrom = (fromId, length) => newArray(length, (i) => fromId + i);
+
 const timeInSecs = () => Math.round(Date.now() / 1000);
+
+const secondsInTheFuture = (seconds) => timeInSecs() + seconds;
 
 const useMethodsOn = (contractInstance, methodArgs) => {
   const methods = Array.isArray(methodArgs) ? methodArgs : [methodArgs];
 
   if (methods.length === 0) return Promise.resolve();
+  const state = {};
 
   const recursiveFunction = (methodIndex, promise) =>
     promise.then(async (previousReturnValue) => {
+      if (!methods[methodIndex]) return previousReturnValue;
+
       const {
         method,
-        args,
+        args = [],
         account,
         onReturn,
+        wait = null,
+        then = null,
         catch: catchCallback,
-      } = methods[methodIndex];
+      } = typeof methods[methodIndex] === 'function'
+        ? methods[methodIndex](state)
+        : methods[methodIndex];
+
+      if (wait) {
+        const waitPromise = new Promise((resolve) => {
+          setTimeout(() => resolve(), wait);
+        });
+        return recursiveFunction(methodIndex + 1, waitPromise);
+      }
+
+      if (then) {
+        then(await previousReturnValue);
+        return recursiveFunction(methodIndex + 1, Promise.resolve());
+      }
 
       if (!contractInstance.methods[method])
         throw new Error(`Unknown method called ${method}`);
 
-      const requestInstance = contractInstance.methods[method](...(args || []))[onReturn ? 'call' : 'send']({
+      const requestInstance = contractInstance.methods[method](...args)
+        [onReturn ? 'call' : 'send']({
           from: account,
           gas: '1000000000',
         })
@@ -50,37 +68,48 @@ const useMethodsOn = (contractInstance, methodArgs) => {
           catchCallback(Object.values(err.results)[0].reason);
         });
 
-      onReturn && onReturn(await requestInstance, await previousReturnValue);
-      if (methods[methodIndex + 1])
-        return recursiveFunction(methodIndex + 1, requestInstance);
-      return requestInstance;
+      if (onReturn) {
+        const result = onReturn(
+          await requestInstance,
+          await previousReturnValue
+        );
+
+        if (result !== undefined) {
+          for (const key in result) {
+            state[key] = result[key];
+          }
+        }
+      }
+      return recursiveFunction(methodIndex + 1, requestInstance);
     });
 
   return recursiveFunction(0, Promise.resolve());
 };
 
-const getDeploy = (web3) => ({
-    abi,
-    evm,
-    bytecode
-  }, args, account) => new web3.eth.Contract(abi)
-  .deploy({
-    data: evm ? evm.bytecode.object : bytecode,
-    arguments: args,
-  })
-  .send({
-    from: account,
-    gas: '1000000000',
-  });
-
 const zeroOrOne = () => randomInt(0, 2) - 1;
 
-const newArray = (length, callback) => {
-  const array = [];
-  for (let i = 0; i < length; i++) array.push(callback(i));
-  return array;
+const getBalanceOfUser = async (TokenContract, account) => {
+  const balance = await useMethodsOn(TokenContract, {
+    method: 'balanceOf',
+    args: [account],
+    onReturn: () => {},
+    account,
+  });
+
+  return parseInt(balance);
 };
 
+const valuesWithin = (a, b, delta) => Math.abs(a - b) <= delta;
+
+const getTaxFunction = (taxPercentage) => (amount) =>
+  Math.round((amount / (100 - taxPercentage)) * 100);
+
+const valuesWithinPercentage = (value1, value2, percentage) => {
+  const diff = Math.abs(value1 - value2);
+  const maxDiff = Math.max(value1, value2) * (percentage / 100);
+
+  return diff <= maxDiff;
+};
 
 module.exports = {
   secondsInTheFuture,
@@ -90,5 +119,8 @@ module.exports = {
   useMethodsOn,
   zeroOrOne,
   newArray,
-  getDeploy,
+  getBalanceOfUser,
+  valuesWithin,
+  getTaxFunction,
+  valuesWithinPercentage,
 };

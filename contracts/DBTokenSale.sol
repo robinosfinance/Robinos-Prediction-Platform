@@ -365,7 +365,13 @@ struct ArrayElRef {
     uint256 arrayIndex;
 }
 
-abstract contract SaleFactory is Ownable {
+abstract contract UsingEventHash {
+    function hashStr(string memory str) internal pure returns (bytes32) {
+        return bytes32(keccak256(bytes(str)));
+    }
+}
+
+abstract contract SaleFactory is Ownable, UsingEventHash {
     // Each sale has an entry in the eventCode hash table with start and end time.
     // If both saleStart and saleEnd are 0, sale is not initialized
     struct Sale {
@@ -449,10 +455,6 @@ abstract contract SaleFactory is Ownable {
         return block.timestamp;
     }
 
-    function hashStr(string memory str) private pure returns (bytes32) {
-        return bytes32(keccak256(bytes(str)));
-    }
-
     /**
      * @dev Function inserts a sale reference in the _allSales array and orders it by saleEnd time
      * in ascending order. This means the first sale in the array will expire first.
@@ -490,7 +492,6 @@ abstract contract SaleFactory is Ownable {
 
     /**
      * @dev Function to set the start and end time of the next sale.
-     * Can only be called if there is currently no active sale and needs to be called by the owner of the contract.
      * @param start Unix time stamp of the start of sale. Needs to be a timestamp in the future. If the start is 0, the sale will start immediately.
      * @param end Unix time stamp of the end of sale. Needs to be a timestamp after the start
      */
@@ -498,13 +499,10 @@ abstract contract SaleFactory is Ownable {
         string memory eventCode,
         uint256 start,
         uint256 end
-    ) public onlyOwner outsideOfSale(eventCode) returns (bool) {
-        bool initialized;
+    ) public onlyOwner returns (bool) {
         bytes32 saleHash = hashStr(eventCode);
         Sale storage eventSale = _eventSale[saleHash];
-        if (eventSale.saleStart == 0 && eventSale.saleEnd == 0) {
-            initialized = false;
-        }
+        bool initialized = eventSale.saleStart != 0;
 
         if (start != 0) {
             require(start > time(), "SaleFactory: given past sale start time");
@@ -559,7 +557,7 @@ abstract contract SaleFactory is Ownable {
     }
 }
 
-abstract contract TokenHash is Ownable {
+abstract contract TokenHash {
     function getTokenHash(string memory _eventCode, string memory _teamName) internal pure returns (bytes32) {
         return keccak256(bytes(abi.encodePacked(_eventCode, _teamName)));
     }
@@ -621,7 +619,7 @@ abstract contract RecordingTradePairs is Ownable {
     }
 }
 
-abstract contract RecordingTokensSold is TokenHash {
+abstract contract RecordingTokensSold is TokenHash, Ownable {
     struct TokensSold {
         bytes32 eventHash;
         bytes32 tokenHash;
@@ -716,7 +714,19 @@ abstract contract RecordingTokensSold is TokenHash {
     }
 }
 
-contract StoringDBTokens is TokenHash, Pausable {
+abstract contract RecordingStandardTokens is UsingEventHash {
+    mapping(bytes32 => uint256) private standardTokensReceived;
+
+    function getStandardTokensReceived(string memory eventCode) public view returns (uint256) {
+        return standardTokensReceived[hashStr(eventCode)];
+    }
+
+    function recordStandardTokensReceived(string memory eventCode, uint256 amount) internal {
+        standardTokensReceived[hashStr(eventCode)] += amount;
+    }
+}
+
+contract StoringDBTokens is TokenHash, Pausable, Ownable {
     mapping(bytes32 => DBToken) internal _dbtokens;
 
     function pause() public override onlyOwner whileNotPaused returns (bool) {
@@ -769,11 +779,24 @@ contract StoringDBTokens is TokenHash, Pausable {
  ***********************************************************************
  **********************************************************************/
 
-contract DBTokenSale is StoringDBTokens, RecordingTradePairs, RecordingTokensSold, SaleFactory {
+contract DBTokenSale is
+    StoringDBTokens,
+    RecordingTradePairs,
+    RecordingTokensSold,
+    RecordingStandardTokens,
+    SaleFactory
+{
     address private _owner;
     address private _withrawable;
 
     StandardToken private _standardToken;
+
+    struct Rate {
+        uint256 numerator;
+        uint256 denominator;
+    }
+
+    mapping(bytes32 => Rate) private rate;
 
     /**
      * @param standardToken_ Standard token is the USDT contract from which the sale contract will allow income of funds from. The contract should extend the StandardToken interface
@@ -812,11 +835,12 @@ contract DBTokenSale is StoringDBTokens, RecordingTradePairs, RecordingTokensSol
         uint256 senderAllowance = _standardToken.allowance(_msgSender(), address(this));
         require(senderAllowance >= amount, "DBTokenSale: insufficient allowance for standard token transaction");
 
-        uint256 dbtokenAmount = amount * rate();
-        _standardToken.transferFrom(_msgSender(), address(this), amount);
-        dbtoken._mint(_msgSender(), dbtokenAmount);
+        uint256 stAmount = dbtToSt(getRate(_eventCode), amount);
+        _standardToken.transferFrom(_msgSender(), address(this), stAmount);
+        dbtoken._mint(_msgSender(), amount);
 
-        recordTokensSold(_eventCode, _teamName, dbtokenAmount);
+        recordStandardTokensReceived(_eventCode, stAmount);
+        recordTokensSold(_eventCode, _teamName, amount);
 
         return true;
     }
@@ -841,7 +865,7 @@ contract DBTokenSale is StoringDBTokens, RecordingTradePairs, RecordingTokensSol
         string memory _teamName,
         address mintTo,
         uint256 amount
-    ) public returns (bool) {
+    ) public onlyOwner returns (bool) {
         DBToken dbtoken = getToken(_eventCode, _teamName);
         dbtoken._mint(mintTo, amount);
 
@@ -872,8 +896,23 @@ contract DBTokenSale is StoringDBTokens, RecordingTradePairs, RecordingTokensSol
         return true;
     }
 
-    // Rate represents how many DBTokens can be purchased with 1 USDT
-    function rate() public pure returns (uint256) {
-        return 1;
+    function dbtToSt(Rate memory _rate, uint256 dbAmount) private pure returns (uint256) {
+        uint256 d = _rate.denominator;
+        uint256 n = _rate.numerator;
+        require (d != 0 && n != 0, "DBTokenSale: rate is not set");
+
+        return (dbAmount * d) / n;
+    }
+
+    function setRate(
+        string memory _eventCode,
+        uint256 numerator,
+        uint256 denominator
+    ) public onlyOwner {
+        rate[hashStr(_eventCode)] = Rate(numerator, denominator);
+    }
+
+    function getRate(string memory _eventCode) public view returns (Rate memory) {
+        return rate[hashStr(_eventCode)];
     }
 }
