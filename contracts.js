@@ -17,6 +17,7 @@ module.exports = [
   'SideBetV2.sol',
   'SideBetV3.sol',
   'SideBetV4.sol',
+  'SideBetV5.sol',
   'MinoToken.sol',
   'MinoTokenReward.sol',
   'MinoDao.sol',
