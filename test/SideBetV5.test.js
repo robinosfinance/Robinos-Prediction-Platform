@@ -286,45 +286,5 @@ describe('SideBetV5 tests', () => {
           )
         );
     });
-
-    it('reverts if owner of side bet tries to deposit tokens', () => {
-      const sideBetOwner = accounts[1];
-      const userDepositParams = getUserDepositParams().filter(
-        ({ account }) => account !== sideBetOwner
-      );
-      const teamIndex = zeroOrOne();
-      const amount = randomInt(minDeposit, maxDeposit);
-      let errorRaised = false;
-
-      return prepareSideBetAndUserTokens(sideBetOwner, userDepositParams)
-        .then(() =>
-          useMethodsOn(TetherToken, [
-            {
-              method: 'transfer',
-              args: [sideBetOwner, amount],
-              account: accounts[0],
-            },
-            {
-              method: 'approve',
-              args: [SideBetV5.options.address, amount],
-              account: sideBetOwner,
-            },
-          ])
-        )
-        .then(() =>
-          useMethodsOn(SideBetV5, {
-            method: 'deposit',
-            args: [eventCode, teamIndex, amount],
-            account: sideBetOwner,
-            catch: (err) => {
-              assert.strictEqual(err, 'SideBetV5: owner cannot deposit');
-              errorRaised = true;
-            },
-          })
-        )
-        .then(() => {
-          assert.ok(errorRaised);
-        });
-    });
   });
 });

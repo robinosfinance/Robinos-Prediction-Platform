@@ -580,7 +580,6 @@ contract SideBetV5 is SaleFactory {
         uint256 allowance = standardToken.allowance(_msgSender(), address(this));
         require(amount > 0, "SideBetV5: must deposit at least 1 token");
         require(allowance >= amount, "SideBetV5: insufficient allowance for transfer");
-        require(_msgSender() != sideBet.owner, "SideBetV5: owner cannot deposit");
 
         if (!userHasDeposited(sideBet, index, _msgSender())) sideBet.eventUsers[uint8(index)].push(_msgSender());
 
