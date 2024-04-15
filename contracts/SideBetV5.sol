@@ -618,11 +618,12 @@ contract SideBetV5 is SaleFactory {
         return userSideBets[user];
     }
 
-    function getUserSideBetData(address user) public view returns (UserSideBetData[] memory) {
+    function getUserSideBetData(address user, uint256 maxSideBets) public view returns (UserSideBetData[] memory) {
         bytes32[] memory userSideBetHashes = userSideBets[user];
         UserSideBetData[] memory userSideBetData = new UserSideBetData[](userSideBetHashes.length);
+        uint256 max = maxSideBets < userSideBetHashes.length ? maxSideBets : userSideBetHashes.length;
 
-        for (uint256 i = 0; i < userSideBetHashes.length; i++) {
+        for (uint256 i = 0; i < max; i++) {
             SideBet storage sideBet = sideBets[userSideBetHashes[i]];
             uint256 userReward = calculateUserReward(sideBet, user);
 
