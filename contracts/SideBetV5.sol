@@ -504,9 +504,13 @@ contract SideBetV5 is SaleFactory {
     }
 
     function calculateUserReward(SideBet storage sideBet, address user) private view returns (uint256) {
-        (uint256 totalReward, ) = calculateTotalRewardAndOwnerCut(sideBet);
+        if (!sideBet.winnerSet) return 0;
+
         uint8 winningIndex = uint8(sideBet.winningIndex);
         uint256 totalWinningTokensDeposited = sideBet.totalTokensDeposited[winningIndex];
+        if (totalWinningTokensDeposited == 0) return 0;
+
+        (uint256 totalReward, ) = calculateTotalRewardAndOwnerCut(sideBet);
         uint256 userDeposited = sideBet.userTokens[user][winningIndex];
 
         return (userDeposited * totalReward) / totalWinningTokensDeposited;
@@ -620,12 +624,11 @@ contract SideBetV5 is SaleFactory {
 
     function getUserSideBetData(address user, uint256 maxSideBets) public view returns (UserSideBetData[] memory) {
         bytes32[] memory userSideBetHashes = userSideBets[user];
-        UserSideBetData[] memory userSideBetData = new UserSideBetData[](userSideBetHashes.length);
-        uint256 max = maxSideBets < userSideBetHashes.length ? maxSideBets : userSideBetHashes.length;
+        uint256 resultLength = maxSideBets < userSideBetHashes.length ? maxSideBets : userSideBetHashes.length;
+        UserSideBetData[] memory userSideBetData = new UserSideBetData[](resultLength);
 
-        for (uint256 i = 0; i < max; i++) {
-            SideBet storage sideBet = sideBets[userSideBetHashes[i]];
-            uint256 userReward = calculateUserReward(sideBet, user);
+        for (uint256 i = 0; i < resultLength; i++) {
+            SideBet storage sideBet = sideBets[userSideBetHashes[userSideBetHashes.length - i - 1]];
 
             userSideBetData[i] = UserSideBetData({
                 eventCode: sideBet.eventCode,
@@ -633,7 +636,7 @@ contract SideBetV5 is SaleFactory {
                 winnerSet: sideBet.winnerSet,
                 winningIndex: sideBet.winningIndex,
                 userTokensDeposited: sideBet.userTokens[user],
-                userReward: sideBet.winnerSet ? userReward : 0
+                userReward: calculateUserReward(sideBet, user)
             });
         }
 
