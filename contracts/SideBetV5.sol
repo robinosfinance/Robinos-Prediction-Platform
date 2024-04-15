@@ -310,6 +310,7 @@ contract SideBetV5 is SaleFactory {
     }
 
     struct SideBet {
+        string eventCode;
         string[2] teamNames;
         StandardToken standardToken;
         bool winnerSet;
@@ -322,7 +323,17 @@ contract SideBetV5 is SaleFactory {
         address owner;
     }
 
+    struct UserSideBetData {
+        string eventCode;
+        string[2] teamNames;
+        bool winnerSet;
+        TeamIndex winningIndex;
+        uint256[2] userTokensDeposited;
+        uint256 userReward;
+    }
+
     mapping(bytes32 => SideBet) private sideBets;
+    mapping(address => bytes32[]) private userSideBets;
 
     modifier winnerIsSet(string memory eventCode) {
         require(getSideBet(eventCode).winnerSet, "SideBetV5: winning team index not selected");
@@ -433,6 +444,7 @@ contract SideBetV5 is SaleFactory {
 
         _setSaleStartEnd(eventCode, saleStart, saleEnd);
 
+        sideBet.eventCode = eventCode;
         sideBet.teamNames = [teamNameA, teamNameB];
         sideBet.standardToken = standardToken;
         sideBet.owner = _msgSender();
@@ -467,12 +479,10 @@ contract SideBetV5 is SaleFactory {
      * @param eventCode of the sale you finalize
      * @param index of the team proclaimed as a winner
      */
-    function selectWinningTeam(string memory eventCode, TeamIndex index)
-        public
-        onlyOwner
-        outsideOfSale(eventCode)
-        sideBetActive(eventCode)
-    {
+    function selectWinningTeam(
+        string memory eventCode,
+        TeamIndex index
+    ) public onlyOwner outsideOfSale(eventCode) sideBetActive(eventCode) {
         SideBet storage sideBet = getSideBet(eventCode);
 
         sideBet.winnerSet = true;
@@ -491,6 +501,15 @@ contract SideBetV5 is SaleFactory {
         string memory eventCode
     ) public view returns (uint256 totalReward, uint256 ownerCut) {
         return calculateTotalRewardAndOwnerCut(getSideBet(eventCode));
+    }
+
+    function calculateUserReward(SideBet storage sideBet, address user) private view returns (uint256) {
+        (uint256 totalReward, ) = calculateTotalRewardAndOwnerCut(sideBet);
+        uint8 winningIndex = uint8(sideBet.winningIndex);
+        uint256 totalWinningTokensDeposited = sideBet.totalTokensDeposited[winningIndex];
+        uint256 userDeposited = sideBet.userTokens[user][winningIndex];
+
+        return (userDeposited * totalReward) / totalWinningTokensDeposited;
     }
 
     /**
@@ -520,8 +539,7 @@ contract SideBetV5 is SaleFactory {
         uint256 totalRewardDistributed = 0;
 
         for (uint256 i = 0; i < winningUsers.length; i++) {
-            uint256 userDeposited = sideBet.userTokens[winningUsers[i]][uint8(winningIndex)];
-            uint256 userReward = (userDeposited * totalReward) / totalWinningTokensDeposited;
+            uint256 userReward = calculateUserReward(sideBet, winningUsers[i]);
 
             userRewards[i] = userReward;
             totalRewardDistributed += userReward;
@@ -539,12 +557,9 @@ contract SideBetV5 is SaleFactory {
      * who've deposited the tokens for the winning team only once after the winner has
      * been selected
      */
-    function distributeReward(string memory eventCode)
-        public
-        onlyOwner
-        winnerIsSet(eventCode)
-        sideBetActive(eventCode)
-    {
+    function distributeReward(
+        string memory eventCode
+    ) public onlyOwner winnerIsSet(eventCode) sideBetActive(eventCode) {
         (address[] memory winningUsers, uint256[] memory userRewards) = getWinningUsersAndUserRewards(eventCode);
         SideBet storage sideBet = getSideBet(eventCode);
         StandardToken standardToken = sideBet.standardToken;
@@ -575,17 +590,52 @@ contract SideBetV5 is SaleFactory {
         TeamIndex index,
         uint256 amount
     ) public duringSale(eventCode) sideBetActive(eventCode) {
+        address sender = _msgSender();
+        uint8 uintIndex = uint8(index);
+
         SideBet storage sideBet = getSideBet(eventCode);
         StandardToken standardToken = sideBet.standardToken;
-        uint256 allowance = standardToken.allowance(_msgSender(), address(this));
+        uint256 allowance = standardToken.allowance(sender, address(this));
+
         require(amount > 0, "SideBetV5: must deposit at least 1 token");
         require(allowance >= amount, "SideBetV5: insufficient allowance for transfer");
 
-        if (!userHasDeposited(sideBet, index, _msgSender())) sideBet.eventUsers[uint8(index)].push(_msgSender());
+        if (
+            !userHasDeposited(sideBet, TeamIndex.First, sender) && !userHasDeposited(sideBet, TeamIndex.Second, sender)
+        ) {
+            userSideBets[sender].push(hashStr(eventCode));
+        }
 
-        sideBet.totalTokensDeposited[uint8(index)] += amount;
-        sideBet.userTokens[_msgSender()][uint8(index)] += amount;
+        if (!userHasDeposited(sideBet, index, sender)) sideBet.eventUsers[uintIndex].push(sender);
 
-        standardToken.transferFrom(_msgSender(), address(this), amount);
+        sideBet.totalTokensDeposited[uintIndex] += amount;
+        sideBet.userTokens[sender][uintIndex] += amount;
+
+        standardToken.transferFrom(sender, address(this), amount);
+    }
+
+    function getUserSideBets(address user) public view returns (bytes32[] memory) {
+        return userSideBets[user];
+    }
+
+    function getUserSideBetData(address user) public view returns (UserSideBetData[] memory) {
+        bytes32[] memory userSideBetHashes = userSideBets[user];
+        UserSideBetData[] memory userSideBetData = new UserSideBetData[](userSideBetHashes.length);
+
+        for (uint256 i = 0; i < userSideBetHashes.length; i++) {
+            SideBet storage sideBet = sideBets[userSideBetHashes[i]];
+            uint256 userReward = calculateUserReward(sideBet, user);
+
+            userSideBetData[i] = UserSideBetData({
+                eventCode: sideBet.eventCode,
+                teamNames: sideBet.teamNames,
+                winnerSet: sideBet.winnerSet,
+                winningIndex: sideBet.winningIndex,
+                userTokensDeposited: sideBet.userTokens[user],
+                userReward: sideBet.winnerSet ? userReward : 0
+            });
+        }
+
+        return userSideBetData;
     }
 }

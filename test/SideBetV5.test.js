@@ -115,9 +115,7 @@ describe('SideBetV5 tests', () => {
 
     it('allows users to deposit tokens for their team', () => {
       const sideBetOwner = accounts[1];
-      const userDepositParams = getUserDepositParams().filter(
-        ({ account }) => account !== sideBetOwner
-      );
+      const userDepositParams = getUserDepositParams();
 
       return prepareSideBetAndUserTokens(sideBetOwner, userDepositParams).then(
         () =>
@@ -158,9 +156,7 @@ describe('SideBetV5 tests', () => {
 
     it('allows users to receive rewards for betting on winning team', () => {
       const sideBetOwner = accounts[1];
-      const userDepositParams = getUserDepositParams().filter(
-        ({ account }) => account !== sideBetOwner
-      );
+      const userDepositParams = getUserDepositParams();
       const winningTeamIndex = userDepositParams[0].teamIndex;
       const totalDeposited = userDepositParams.reduce(
         (total, { amount }) => total + amount,
