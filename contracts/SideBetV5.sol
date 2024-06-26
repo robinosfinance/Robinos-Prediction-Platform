@@ -307,17 +307,17 @@ library StringUtils {
  **********************************************************************/
 
 contract SideBetV5 is SaleFactory {
-    event deposited(string indexed eventCode, uint256 amount, uint8 team, address from);
+    event Deposited(string indexed eventCode, uint256 amount, TeamIndex teamIndex, address from);
     event SideBetEventInitialized(
         string indexed eventCode,
         string teamA,
         string teamB,
         StandardToken standardToken,
-        uint256 starttime,
-        uint256 endtime
+        uint256 startTime,
+        uint256 endTime
     );
     event RewardDistributed(string indexed eventCode, uint256[] rewards, address[] users);
-    event WinningTeamSelected(string indexed eventCode, TeamIndex team);
+    event WinningTeamSelected(string indexed eventCode, TeamIndex teamIndex);
     event BetCancelledAndTokensRefunded(string indexed eventCode);
     uint256 constant OWNER_CUT_PERCENT = 5;
 
@@ -506,7 +506,7 @@ contract SideBetV5 is SaleFactory {
 
         sideBet.winnerSet = true;
         sideBet.winningIndex = index;
-        emit WinningTeamSelected(eventCode, sideBet.winningIndex);
+        emit WinningTeamSelected(eventCode, index);
     }
 
     function calculateTotalRewardAndOwnerCut(
@@ -637,7 +637,7 @@ contract SideBetV5 is SaleFactory {
         sideBet.userTokens[sender][uintIndex] += amount;
 
         standardToken.transferFrom(sender, address(this), amount);
-        emit deposited(eventCode, amount, uintIndex, msg.sender);
+        emit Deposited(eventCode, amount, index, _msgSender());
     }
 
     function getUserSideBets(address user) public view returns (bytes32[] memory) {
