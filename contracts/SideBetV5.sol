@@ -47,7 +47,7 @@ abstract contract Context {
  */
 abstract contract Ownable is Context {
     address private _owner;
-
+    event OwnershipRenounced(address indexed ownerAddress);
     event OwnershipTransferred(address indexed previousOwner, address indexed newOwner);
 
     /**
@@ -81,6 +81,7 @@ abstract contract Ownable is Context {
      */
     function renounceOwnership() public virtual onlyOwner {
         _setOwner(address(0));
+        emit OwnershipRenounced(_owner);
     }
 
     /**
@@ -102,6 +103,8 @@ abstract contract Ownable is Context {
 abstract contract SaleFactory is Ownable {
     // Each sale has an entry in the eventCode hash table with start and end time.
     // If both saleStart and saleEnd are 0, sale is not initialized
+    event SaleEnded(string indexed eventCode, uint256 endTime); //! End Time
+    event SaleStartEndTime(string indexed eventCode, uint256 startTime, uint256 endTime);
     struct Sale {
         uint256 saleStart;
         uint256 saleEnd;
@@ -250,6 +253,7 @@ abstract contract SaleFactory is Ownable {
      * @param end Unix time stamp of the end of sale. Needs to be a timestamp after the start
      */
     function setSaleStartEnd(string memory eventCode, uint256 start, uint256 end) public onlyOwner returns (bool) {
+        emit SaleStartEndTime(eventCode, start, end);
         return _setSaleStartEnd(eventCode, start, end);
     }
 
@@ -258,6 +262,7 @@ abstract contract SaleFactory is Ownable {
         Sale storage eventSale = getEventSale(eventCode);
 
         eventSale.saleEnd = time();
+        emit SaleEnded(eventCode, eventSale.saleEnd);
         return true;
     }
 
@@ -302,6 +307,18 @@ library StringUtils {
  **********************************************************************/
 
 contract SideBetV5 is SaleFactory {
+    event Deposited(string indexed eventCode, uint256 amount, TeamIndex teamIndex, address from);
+    event SideBetEventInitialized(
+        string indexed eventCode,
+        string teamA,
+        string teamB,
+        StandardToken standardToken,
+        uint256 startTime,
+        uint256 endTime
+    );
+    event RewardDistributed(string indexed eventCode, uint256[] rewards, address[] users);
+    event WinningTeamSelected(string indexed eventCode, TeamIndex teamIndex);
+    event BetCancelledAndTokensRefunded(string indexed eventCode);
     uint256 constant OWNER_CUT_PERCENT = 5;
 
     enum TeamIndex {
@@ -325,6 +342,7 @@ contract SideBetV5 is SaleFactory {
 
     struct UserSideBetData {
         string eventCode;
+        StandardToken tokenAddress;
         string[2] teamNames;
         bool winnerSet;
         TeamIndex winningIndex;
@@ -448,6 +466,7 @@ contract SideBetV5 is SaleFactory {
         sideBet.teamNames = [teamNameA, teamNameB];
         sideBet.standardToken = standardToken;
         sideBet.owner = _msgSender();
+        emit SideBetEventInitialized(eventCode, teamNameA, teamNameB, standardToken, saleStart, saleEnd);
     }
 
     /**
@@ -469,7 +488,7 @@ contract SideBetV5 is SaleFactory {
                 standardToken.transfer(user, userDeposited);
             }
         }
-
+        emit BetCancelledAndTokensRefunded(eventCode);
         sideBet.cancelled = true;
     }
 
@@ -487,6 +506,7 @@ contract SideBetV5 is SaleFactory {
 
         sideBet.winnerSet = true;
         sideBet.winningIndex = index;
+        emit WinningTeamSelected(eventCode, index);
     }
 
     function calculateTotalRewardAndOwnerCut(
@@ -579,6 +599,7 @@ contract SideBetV5 is SaleFactory {
 
         (, uint256 ownerCut) = calculateTotalRewardAndOwnerCut(sideBet);
         standardToken.transfer(owner(), ownerCut);
+        emit RewardDistributed(eventCode, userRewards, winningUsers);
     }
 
     /**
@@ -616,6 +637,7 @@ contract SideBetV5 is SaleFactory {
         sideBet.userTokens[sender][uintIndex] += amount;
 
         standardToken.transferFrom(sender, address(this), amount);
+        emit Deposited(eventCode, amount, index, _msgSender());
     }
 
     function getUserSideBets(address user) public view returns (bytes32[] memory) {
@@ -632,6 +654,7 @@ contract SideBetV5 is SaleFactory {
 
             userSideBetData[i] = UserSideBetData({
                 eventCode: sideBet.eventCode,
+                tokenAddress: sideBet.standardToken,
                 teamNames: sideBet.teamNames,
                 winnerSet: sideBet.winnerSet,
                 winningIndex: sideBet.winningIndex,
