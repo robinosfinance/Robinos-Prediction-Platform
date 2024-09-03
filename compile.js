@@ -1,10 +1,7 @@
 const path = require('path');
 const fs = require('fs');
 const solc = require('solc');
-const files = require('./contracts');
-const {
-  formatCompileErrors
-} = require('./utils/debug');
+const { formatCompileErrors } = require('./utils/debug');
 
 const input = {
   language: 'Solidity',
@@ -18,11 +15,34 @@ const input = {
   },
 };
 
-files.forEach((file) => {
-  const pathToFile = path.resolve(__dirname, 'contracts', file);
-  const source = fs.readFileSync(pathToFile, 'utf8');
+function getAllFilesWithExtensions(dir, extensions) {
+  const results = [];
+  const list = fs.readdirSync(dir);
 
-  input.sources[file] = {
+  list.forEach((file) => {
+    const filePath = path.join(dir, file);
+    const stat = fs.statSync(filePath);
+
+    if (stat && stat.isDirectory()) {
+      results.push(...getAllFilesWithExtensions(filePath, extensions));
+    } else {
+      if (extensions.includes(path.extname(file))) {
+        results.push(filePath);
+      }
+    }
+  });
+
+  return results;
+}
+
+const files = getAllFilesWithExtensions('./contracts', ['.sol']);
+
+files.forEach((file) => {
+  const pathToFile = path.resolve(__dirname, file);
+  const source = fs.readFileSync(pathToFile, 'utf8');
+  const fileName = file.replace('contracts\\', '').replace( '\\', '/');
+  
+  input.sources[fileName] = {
     content: source,
   };
 });
