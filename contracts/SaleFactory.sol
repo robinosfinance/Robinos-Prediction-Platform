@@ -4,30 +4,24 @@ pragma solidity ^0.8.20;
 import {Ownable} from "./openzeppelin/Ownable.sol";
 import {StringUtils} from "./libraries/StringUtils.sol";
 import {ReadingTime} from "./utils/ReadingTime.sol";
+import {Sale} from "./enums/SaleFactory.sol";
 
 abstract contract SaleFactory is Ownable, ReadingTime {
     using StringUtils for string;
 
-    // Each sale has an entry in the eventCode hash table with start and end time.
-    // If both saleStart and saleEnd are 0, sale is not initialized
-    event SaleEnded(string indexed eventCode, uint256 endTime); //! End Time
-    event SaleStartEndTime(string indexed eventCode, uint256 startTime, uint256 endTime);
-    struct Sale {
-        uint256 saleStart;
-        uint256 saleEnd;
-    }
     mapping(bytes32 => Sale) private _eventSale;
 
     // Modifier allowing a call only if event by eventCode is currently active
     modifier duringSale(string memory eventCode) {
         Sale storage eventSale = getEventSale(eventCode);
-        require(saleIsActive(eventSale), "SaleFactory: function can only be called during sale");
+        require(saleIsActive(eventSale), "sale not active");
+
         _;
     }
 
     modifier saleHasEnded(string memory eventCode) {
         Sale storage eventSale = _eventSale[eventCode.hashStr()];
-        require(time() >= eventSale.saleEnd, "SaleFactory: sale has not ended yet");
+        require(time() >= eventSale.saleEnd, "sale has not ended yet");
 
         _;
     }
@@ -42,7 +36,7 @@ abstract contract SaleFactory is Ownable, ReadingTime {
      */
     function getEventSale(string memory eventCode) private view returns (Sale storage) {
         Sale storage eventSale = _eventSale[eventCode.hashStr()];
-        require(eventSale.saleStart > 0 || eventSale.saleEnd > 0, "SaleFactory: sale not initialized");
+        require(eventSale.saleStart > 0 || eventSale.saleEnd > 0, "sale not initialized");
         return eventSale;
     }
 
@@ -51,11 +45,11 @@ abstract contract SaleFactory is Ownable, ReadingTime {
         Sale storage eventSale = _eventSale[saleHash];
 
         if (start != 0) {
-            require(start > time(), "SaleFactory: given past sale start time");
+            require(start > time(), "given past sale start time");
         } else {
             start = time();
         }
-        require(end > start, "SaleFactory: sale end time needs to be greater than start time");
+        require(end > start, "sale end time needs to be greater than start time");
 
         eventSale.saleStart = start;
         eventSale.saleEnd = end;
@@ -63,13 +57,17 @@ abstract contract SaleFactory is Ownable, ReadingTime {
         return true;
     }
 
+    function updateSale(string memory eventCode, uint256 start, uint256 end) external onlyOwner {
+        require(_eventSale[eventCode.hashStr()].saleStart > 0, "sale not initialized");
+
+        _setSaleStartEnd(eventCode, start, end);
+    }
+
     // Function can be called by the owner during a sale to end it prematurely
-    function endSaleNow(string memory eventCode) public onlyOwner duringSale(eventCode) returns (bool) {
+    function endSaleNow(string memory eventCode) external onlyOwner duringSale(eventCode) {
         Sale storage eventSale = getEventSale(eventCode);
 
         eventSale.saleEnd = time();
-        emit SaleEnded(eventCode, eventSale.saleEnd);
-        return true;
     }
 
     /**

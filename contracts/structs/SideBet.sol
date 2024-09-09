@@ -9,12 +9,12 @@ struct SideBet {
     address standardToken;
     bool winnerSet;
     TeamIndex winningIndex;
-    bool rewardDistributed;
+    bool ownerCutWithdrawn;
     bool cancelled;
+    address[] allUsers;
     address[][2] eventUsers;
     mapping(address => uint256[2]) userTokens;
     uint256[2] totalTokensDeposited;
-    address owner;
 }
 
 struct UserSideBetData {

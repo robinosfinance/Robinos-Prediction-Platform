@@ -40,8 +40,8 @@ const files = getAllFilesWithExtensions('./contracts', ['.sol']);
 files.forEach((file) => {
   const pathToFile = path.resolve(__dirname, file);
   const source = fs.readFileSync(pathToFile, 'utf8');
-  const fileName = file.replace('contracts\\', '').replace( '\\', '/');
-  
+  const fileName = file.replace('contracts\\', '').replace(/\\/g, '/');
+
   input.sources[fileName] = {
     content: source,
   };

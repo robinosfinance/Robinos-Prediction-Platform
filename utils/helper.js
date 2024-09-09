@@ -1,4 +1,12 @@
 const { formatArgs } = require('./debug');
+const { mapObject, filterObject } = require('./objects');
+
+class AssertFailError extends Error {
+  constructor(message) {
+    super(message);
+    this.name = 'AssertFailError';
+  }
+}
 
 const randomInt = (min, max) => {
   const diff = max - min;
@@ -23,6 +31,14 @@ const useMethodsOn = (contractInstance, methodArgs) => {
   if (methods.length === 0) return Promise.resolve();
   const state = {};
 
+  const saveToState = (data) => {
+    if (data === undefined) return;
+
+    for (const key in data) {
+      state[key] = data[key];
+    }
+  };
+
   const recursiveFunction = (methodIndex, promise) =>
     promise.then(async (previousReturnValue) => {
       if (!methods[methodIndex]) return previousReturnValue;
@@ -35,9 +51,15 @@ const useMethodsOn = (contractInstance, methodArgs) => {
         wait = null,
         then = null,
         catch: catchCallback,
+        onEvent,
+        assertFail = false,
       } = typeof methods[methodIndex] === 'function'
         ? methods[methodIndex](state)
         : methods[methodIndex];
+
+      const errorText = `Account ${account} Calling method ${method}${formatArgs(
+        args
+      )}`;
 
       if (wait) {
         const waitPromise = new Promise((resolve) => {
@@ -47,39 +69,71 @@ const useMethodsOn = (contractInstance, methodArgs) => {
       }
 
       if (then) {
-        then(await previousReturnValue);
+        const result = await then(await previousReturnValue);
+        saveToState(result);
+
         return recursiveFunction(methodIndex + 1, Promise.resolve());
       }
 
       if (!contractInstance.methods[method])
         throw new Error(`Unknown method called ${method}`);
 
+      // console.log(errorText);
+
       const requestInstance = contractInstance.methods[method](...args)
         [onReturn ? 'call' : 'send']({
           from: account,
           gas: '1000000000',
         })
-        .catch((err) => {
-          if (!catchCallback) {
-            throw new Error(
-              `Calling method ${method}${formatArgs(args)} ${err}`
-            );
-          }
-          catchCallback(Object.values(err.results)[0].reason);
-        });
+        .catch(() =>
+          contractInstance.methods[method](...args)
+            .call({ from: account })
+            .catch((err) => {
+              const reason = err.message.split(': revert ')[1];
+
+              if (!catchCallback) {
+                throw new Error(`${errorText} ${reason}`);
+              }
+
+              catchCallback(reason, err.data);
+
+              if (assertFail) throw err;
+            })
+        );
+
+      if (assertFail) {
+        try {
+          await requestInstance;
+          throw new AssertFailError(
+            `${errorText} succeeded but should have failed`
+          );
+        } catch (err) {
+          if (err instanceof AssertFailError) throw err;
+
+          return recursiveFunction(methodIndex + 1, Promise.resolve());
+        }
+      }
 
       if (onReturn) {
-        const result = onReturn(
+        const result = await onReturn(
           await requestInstance,
           await previousReturnValue
         );
 
-        if (result !== undefined) {
-          for (const key in result) {
-            state[key] = result[key];
-          }
-        }
+        saveToState(result);
       }
+
+      if (onEvent) {
+        await requestInstance.then((result) => {
+          const events = mapObject(result.events, ([key, value]) => [
+            key,
+            filterObject(value.returnValues, ([key]) => !/^\d+$/.test(key)),
+          ]);
+
+          return onEvent(events);
+        });
+      }
+
       return recursiveFunction(methodIndex + 1, requestInstance);
     });
 
@@ -97,6 +151,14 @@ const getBalanceOfUser = async (TokenContract, account) => {
   });
 
   return parseInt(balance);
+};
+
+const getBalancesOfUsers = async (TokenContract, accounts) => {
+  const balances = await Promise.all(
+    accounts.map((account) => getBalanceOfUser(TokenContract, account))
+  );
+
+  return balances;
 };
 
 const valuesWithin = (a, b, delta) => Math.abs(a - b) <= delta;
@@ -120,6 +182,7 @@ module.exports = {
   zeroOrOne,
   newArray,
   getBalanceOfUser,
+  getBalancesOfUsers,
   valuesWithin,
   getTaxFunction,
   valuesWithinPercentage,
